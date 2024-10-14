@@ -1,0 +1,18 @@
+name: WIIC
+version: '${version}'
+main: dev.ua.ikeepcalm.wiic.WIIC
+api-version: '1.21'
+depend: [ NBTAPI ]
+commands:
+  wallet:
+    description: Check your wallet debug information
+    usage: /wallet
+    permission: wiic.wallet
+  convert:
+    description: Convert your wallet to a new one
+    usage: /convert
+    permission: wiic.convert
+  shatter:
+    description: Shatter currency to lesser
+    usage: /shatter
+    permission: wiic.shatter
