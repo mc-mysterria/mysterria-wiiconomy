@@ -17,6 +17,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.ArrayList;
@@ -189,6 +190,14 @@ public class WalletGUI {
                                 if (nbtItem.hasTag("type")) {
                                     player.getInventory().removeItem(item);
                                     player.getInventory().addItem(convertGUIItem(item));
+                                }
+                            }
+                            for (GuiItem guiItem : playerInventory.getItems()) {
+                                ItemMeta meta1 = item.getItemMeta();
+                                ItemMeta meta2 = guiItem.getItem().getItemMeta();
+                                if (meta1 != null && meta1.equals(meta2)) {
+                                    meta1.getPersistentDataContainer().remove(guiItem.getKey());
+                                    item.setItemMeta(meta1);
                                 }
                             }
                         }
