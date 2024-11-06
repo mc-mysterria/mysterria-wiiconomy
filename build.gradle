@@ -35,7 +35,7 @@ shadowJar{
 }
 
 dependencies {
-    compileOnly "io.papermc.paper:paper-api:1.21-R0.1-SNAPSHOT"
+    compileOnly "io.papermc.paper:paper-api:1.21.3-R0.1-SNAPSHOT"
     implementation 'com.github.stefvanschie.inventoryframework:IF:0.10.17'
     compileOnly("de.tr7zw:item-nbt-api-plugin:2.13.1")
 }
