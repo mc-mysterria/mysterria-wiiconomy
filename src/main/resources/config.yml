@@ -26,3 +26,4 @@ ores:
   OTHER: 0.0
 
 minimumValue: 0
+dailyLimit: 128

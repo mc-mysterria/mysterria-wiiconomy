@@ -8,6 +8,7 @@ import com.github.stefvanschie.inventoryframework.pane.Pane;
 import de.tr7zw.nbtapi.NBTItem;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
+import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
@@ -30,10 +31,12 @@ public class WalletGUI {
     private boolean actionClose = false;
     private final Appraiser appraiser;
     private final WalletManager walletManager;
+    private final SoldItemsManager soldItemsManager;
 
-    public WalletGUI(Appraiser appraiser, WalletManager walletManager) {
+    public WalletGUI(Appraiser appraiser, WalletManager walletManager, SoldItemsManager soldItemsManager) {
         this.appraiser = appraiser;
         this.walletManager = walletManager;
+        this.soldItemsManager = soldItemsManager;
     }
 
 
@@ -56,7 +59,8 @@ public class WalletGUI {
         List<ItemStack> itemsForSale = new ArrayList<>();
         for (ItemStack item : player.getInventory().getContents()) {
             if (item == null || item.getType() == Material.AIR) continue;
-            if (appraiser.appraise(item) > 0) {
+            int appraisal = appraiser.appraise(item);
+            if (appraisal > 0 && soldItemsManager.getAvailableSellingAmount(player) >= appraisal) {
                 itemsForSale.add(item);
             }
         }
@@ -129,7 +133,7 @@ public class WalletGUI {
                     @Override
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
-                        handleSoldItem(item, data);
+                        handleSoldItem(player, item, data);
                         openVault(player, data);
                     }
 
@@ -238,9 +242,10 @@ public class WalletGUI {
         gui.addPane(right);
     }
 
-    private void handleSoldItem(ItemStack newItem, WalletData data) {
+    private void handleSoldItem(Player player, ItemStack newItem, WalletData data) {
         int appraisal = appraiser.appraise(newItem);
         data.setCoppets(data.getCoppets() + appraisal);
+        soldItemsManager.setSoldValue(player, soldItemsManager.getSoldValue(player) + appraisal);
     }
 
     private void handleWithdrawnItem(ItemStack newItem, WalletData data) {
