@@ -5,6 +5,7 @@ import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
 import com.github.stefvanschie.inventoryframework.pane.OutlinePane;
 import com.github.stefvanschie.inventoryframework.pane.Pane;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
+import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
@@ -23,21 +24,30 @@ public class SellingGUI {
     private final ItemStack item;
     private final ConfirmationCallback callback;
     private final Appraiser appraiser;
+    private final SoldItemsManager soldItemsManager;
 
-    public SellingGUI(Player player, ItemStack item, ConfirmationCallback callback, Appraiser appraiser) {
+    public SellingGUI(
+        Player player,
+        ItemStack item,
+        ConfirmationCallback callback,
+        Appraiser appraiser,
+        SoldItemsManager soldItemsManager
+    ) {
         this.pl = player;
         this.item = item;
         this.callback = callback;
         this.appraiser = appraiser;
+        this.soldItemsManager = soldItemsManager;
     }
 
     public void open() {
         int appraisal = appraiser.appraise(item);
+        int availableAmount = soldItemsManager.getAvailableSellingAmount(pl);
         ChestGui gui = new ChestGui(3, "Підтвердження");
         gui.setOnGlobalClick(event -> event.setCancelled(true));
 
         if (appraisal > 0) {
-            List<Component> details = appraiser.getDetailedAppraisal(item);
+            List<Component> details = appraiser.getDetailedAppraisal(item, availableAmount);
 
             ItemStack detailedItem = createItem(item.getType(), item.getType().name(), details, NamedTextColor.GREEN);
             GuiItem centralItem = new GuiItem(detailedItem);
@@ -52,6 +62,10 @@ public class SellingGUI {
                 callback.onCancel();
             });
 
+            if (appraisal > availableAmount) {
+                confirmGuiItem = cancelGuiItem;
+            }
+
             OutlinePane background = new OutlinePane(0, 0, 9, 3, Pane.Priority.LOWEST);
             background.addItem(new GuiItem(new ItemStack(Material.BLACK_STAINED_GLASS_PANE)));
             background.setRepeat(true);
@@ -65,7 +79,7 @@ public class SellingGUI {
             gui.addPane(navigationPane);
 
         } else {
-            List<Component> details = appraiser.getDetailedAppraisal(item);
+            List<Component> details = appraiser.getDetailedAppraisal(item, availableAmount);
 
             ItemStack detailedItem = createItem(item.getType(), item.getType().name(), details, NamedTextColor.RED);
             GuiItem centralItem = new GuiItem(detailedItem);

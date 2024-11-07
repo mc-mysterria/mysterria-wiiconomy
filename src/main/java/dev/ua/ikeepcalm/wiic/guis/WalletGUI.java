@@ -60,8 +60,7 @@ public class WalletGUI {
         List<ItemStack> itemsForSale = new ArrayList<>();
         for (ItemStack item : player.getInventory().getContents()) {
             if (item == null || item.getType() == Material.AIR) continue;
-            int appraisal = appraiser.appraise(item);
-            if (appraisal > 0 && soldItemsManager.getAvailableSellingAmount(player) >= appraisal) {
+            if (appraiser.appraise(item) > 0) {
                 itemsForSale.add(item);
             }
         }
@@ -143,7 +142,7 @@ public class WalletGUI {
                         gui.update();
                         openVault(player, data);
                     }
-                }, appraiser).open();
+                }, appraiser, soldItemsManager).open();
             }));
         }
 
