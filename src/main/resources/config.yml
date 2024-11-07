@@ -27,3 +27,4 @@ ores:
 
 minimumValue: 0
 dailyLimit: 128
+emeraldsToCoppetsMultiplier: 1.0
