@@ -17,6 +17,7 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 
@@ -99,7 +100,7 @@ public class WalletGUI {
             walletInventory.addItem(new GuiItem(iteItem, event -> {
                 ItemStack item = event.getCurrentItem();
                 actionClose = true;
-                new ActionGUI(player, item, new ActionGUI.ConfirmationCallback() {
+                new ActionGUI(player, item, this, new ActionGUI.ConfirmationCallback() {
                     @Override
                     public void onConfirm(ItemStack item) {
                         if (player.getInventory().firstEmpty() == -1) {
@@ -129,7 +130,7 @@ public class WalletGUI {
                 }
                 ItemStack item = event.getCurrentItem();
                 actionClose = true;
-                new SellingGUI(player, item, new SellingGUI.ConfirmationCallback() {
+                new SellingGUI(player, item, this, new SellingGUI.ConfirmationCallback() {
                     @Override
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
@@ -150,7 +151,7 @@ public class WalletGUI {
             GuiItem guiItem = new GuiItem(iteItem, event -> {
                 ItemStack item = event.getCurrentItem();
                 actionClose = true;
-                new ActionGUI(player, item, new ActionGUI.ConfirmationCallback() {
+                new ActionGUI(player, item, this, new ActionGUI.ConfirmationCallback() {
                     @Override
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
@@ -191,15 +192,8 @@ public class WalletGUI {
                                     player.getInventory().addItem(convertGUIItem(item));
                                 }
                             }
-                            for (GuiItem guiItem : playerInventory.getItems()) {
-                                ItemMeta meta1 = item.getItemMeta();
-                                ItemMeta meta2 = guiItem.getItem().getItemMeta();
-                                if (meta1 != null && meta1.equals(meta2)) {
-                                    meta1.getPersistentDataContainer().remove(guiItem.getKey());
-                                    item.setItemMeta(meta1);
-                                }
-                            }
                         }
+                        removeUUIDTags(player.getInventory());
                     }
                 }.runTaskLaterAsynchronously(WIIC.INSTANCE, 20);
             } else {
@@ -207,6 +201,20 @@ public class WalletGUI {
             }
         });
         gui.show(player);
+    }
+
+    public void removeUUIDTags(PlayerInventory inventory) {
+        for (ItemStack item : inventory) {
+            if (item == null) continue;
+            for (GuiItem guiItem : playerInventory.getItems()) {
+                ItemMeta meta1 = item.getItemMeta();
+                ItemMeta meta2 = guiItem.getItem().getItemMeta();
+                if (meta1 != null && meta1.equals(meta2)) {
+                    meta1.getPersistentDataContainer().remove(guiItem.getKey());
+                    item.setItemMeta(meta1);
+                }
+            }
+        }
     }
 
     private ItemStack convertGUIItem(ItemStack itemStack) {

@@ -12,6 +12,7 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
@@ -22,6 +23,7 @@ public class SellingGUI {
 
     private final Player pl;
     private final ItemStack item;
+    private final WalletGUI walletGUI;
     private final ConfirmationCallback callback;
     private final Appraiser appraiser;
     private final SoldItemsManager soldItemsManager;
@@ -29,12 +31,14 @@ public class SellingGUI {
     public SellingGUI(
         Player player,
         ItemStack item,
+        WalletGUI walletGUI,
         ConfirmationCallback callback,
         Appraiser appraiser,
         SoldItemsManager soldItemsManager
     ) {
         this.pl = player;
         this.item = item;
+        this.walletGUI = walletGUI;
         this.callback = callback;
         this.appraiser = appraiser;
         this.soldItemsManager = soldItemsManager;
@@ -101,6 +105,11 @@ public class SellingGUI {
             navigationPane.addItem(cancelGuiItem);
             gui.addPane(navigationPane);
         }
+        gui.setOnClose(event -> {
+            if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW) {
+                walletGUI.removeUUIDTags(pl.getInventory());
+            }
+        });
         gui.show(pl);
     }
 
