@@ -9,7 +9,7 @@ import de.tr7zw.nbtapi.NBTItem;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
-import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
@@ -79,21 +79,15 @@ public class WalletGUI {
 
         List<ItemStack> itemsInWallet = new ArrayList<>();
         if (data.getVerlDors() > 0) {
-            ItemStack verlDorItem = new ItemStack(Material.GOLD_INGOT, data.getVerlDors());
-            ItemUtil.modifyItem(verlDorItem, "verlDor", "Аур", NamedTextColor.YELLOW, 1);
-            itemsInWallet.add(verlDorItem);
+            itemsInWallet.add(CoinUtil.getVerlDor(data.getVerlDors()));
         }
 
         if (data.getLicks() > 0) {
-            ItemStack lickItem = new ItemStack(Material.GOLD_INGOT, data.getLicks());
-            ItemUtil.modifyItem(lickItem, "lick", "Лік", NamedTextColor.GRAY, 2);
-            itemsInWallet.add(lickItem);
+            itemsInWallet.add(CoinUtil.getLick(data.getLicks()));
         }
 
         if (data.getCoppets() > 0) {
-            ItemStack coppetItem = new ItemStack(Material.GOLD_INGOT, data.getCoppets());
-            ItemUtil.modifyItem(coppetItem, "coppet", "Копійка", NamedTextColor.GOLD, 3);
-            itemsInWallet.add(coppetItem);
+            itemsInWallet.add(CoinUtil.getCoppet(data.getCoppets()));
         }
 
         for (ItemStack iteItem : itemsInWallet) {
@@ -220,21 +214,9 @@ public class WalletGUI {
     private ItemStack convertGUIItem(ItemStack itemStack) {
         NBTItem nbtItem = new NBTItem(itemStack);
         return switch (nbtItem.getString("type")) {
-            case "lick" -> {
-                ItemStack lick = new ItemStack(Material.GOLD_INGOT, itemStack.getAmount());
-                ItemUtil.modifyItem(lick, "lick", "Лік", NamedTextColor.GRAY, 2);
-                yield lick;
-            }
-            case "coppet" -> {
-                ItemStack coppet = new ItemStack(Material.GOLD_INGOT, itemStack.getAmount());
-                ItemUtil.modifyItem(coppet, "coppet", "Копійка", NamedTextColor.GOLD, 3);
-                yield coppet;
-            }
-            case "verlDor" -> {
-                ItemStack verlDor = new ItemStack(Material.GOLD_INGOT, itemStack.getAmount());
-                ItemUtil.modifyItem(verlDor, "verlDor", "Аур", NamedTextColor.YELLOW, 1);
-                yield verlDor;
-            }
+            case "coppet" -> CoinUtil.getCoppet(itemStack.getAmount());
+            case "lick" -> CoinUtil.getLick(itemStack.getAmount());
+            case "verlDor" -> CoinUtil.getVerlDor(itemStack.getAmount());
             default -> throw new IllegalStateException("Unexpected value: " + nbtItem.getString("type"));
         };
     }

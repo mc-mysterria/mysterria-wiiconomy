@@ -38,26 +38,18 @@ public class VillagerListener implements Listener {
         if (ingredients.isEmpty()) {
             int licks = coppets / 64;
             if (licks > 0) {
-                ItemStack licksStack = CoinUtil.getLick();
-                licksStack.setAmount(licks);
-                ingredients.add(licksStack);
+                ingredients.add(CoinUtil.getLick(licks));
             }
 
             coppets = coppets % 64;
             if (coppets > 0) {
-                ItemStack coppetsStack = CoinUtil.getCoppet();
-                coppetsStack.setAmount(coppets);
-                ingredients.add(coppetsStack);
+                ingredients.add(CoinUtil.getCoppet(coppets));
             }
         } else if (ingredients.size() == 1 && coppets > 0) {
             if (coppets < 64) {
-                ItemStack coppetsStack = CoinUtil.getCoppet();
-                coppetsStack.setAmount(coppets);
-                ingredients.addFirst(coppetsStack);
+                ingredients.addFirst(CoinUtil.getCoppet(coppets));
             } else {
-                ItemStack licksStack = CoinUtil.getLick();
-                licksStack.setAmount((int) Math.round(coppets / 64.0));
-                ingredients.addFirst(licksStack);
+                ingredients.addFirst(CoinUtil.getLick((int) Math.round(coppets / 64.0)));
             }
         }
 
@@ -65,11 +57,9 @@ public class VillagerListener implements Listener {
         if (result.getType() == Material.EMERALD) {
             coppets = emeraldsToCoppets(result.getAmount());
             if (coppets >= 64) {
-                result = CoinUtil.getLick();
-                result.setAmount((int) Math.round(coppets / 64.0));
+                result = CoinUtil.getLick((int) Math.round(coppets / 64.0));
             } else {
-                result = CoinUtil.getCoppet();
-                result.setAmount(coppets);
+                result = CoinUtil.getCoppet(coppets);
             }
         }
 

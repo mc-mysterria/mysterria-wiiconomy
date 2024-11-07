@@ -1,7 +1,7 @@
 package dev.ua.ikeepcalm.wiic.commands;
 
 import de.tr7zw.nbtapi.NBTItem;
-import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -28,9 +28,7 @@ public class ShatterCommand implements CommandExecutor {
                                 return true;
                             }
                             player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
-                            ItemStack lick = new ItemStack(Material.GOLD_INGOT, 64);
-                            ItemUtil.modifyItem(lick, "lick", "Лік", NamedTextColor.GRAY, 2);
-                            player.getInventory().addItem(lick);
+                            player.getInventory().addItem(CoinUtil.getLick(64));
                             player.sendMessage(Component.text("Предмет розбитий!").color(NamedTextColor.GREEN));
                         }
                         case "lick" -> {
@@ -39,9 +37,7 @@ public class ShatterCommand implements CommandExecutor {
                                 return true;
                             }
                             player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
-                            ItemStack coppet = new ItemStack(Material.GOLD_INGOT, 64);
-                            ItemUtil.modifyItem(coppet, "coppet", "Копійка", NamedTextColor.GOLD, 3);
-                            player.getInventory().addItem(coppet);
+                            player.getInventory().addItem(CoinUtil.getCoppet(64));
                             player.sendMessage(Component.text("Предмет розбитий!").color(NamedTextColor.GREEN));
                         }
                         default -> {

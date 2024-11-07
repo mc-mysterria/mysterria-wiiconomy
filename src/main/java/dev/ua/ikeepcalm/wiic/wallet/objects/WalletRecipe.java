@@ -1,8 +1,7 @@
 package dev.ua.ikeepcalm.wiic.wallet.objects;
 
 import de.tr7zw.nbtapi.NBT;
-import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
-import net.kyori.adventure.text.format.NamedTextColor;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -43,11 +42,8 @@ public class WalletRecipe {
     }
 
     public void createLickRecipe(JavaPlugin plugin) {
-        ItemStack lick = new ItemStack(Material.GOLD_INGOT, 64);
-        ItemUtil.modifyItem(lick, "lick", "Лік", NamedTextColor.GRAY, 2);
-
-        ItemStack verlDor = new ItemStack(Material.GOLD_INGOT, 1);
-        ItemUtil.modifyItem(verlDor, "verlDor", "Аур", NamedTextColor.YELLOW, 1);
+        ItemStack lick = CoinUtil.getLick(64);
+        ItemStack verlDor = CoinUtil.getVerlDor();
 
         ShapelessRecipe recipe = new ShapelessRecipe(new NamespacedKey(plugin, "lick-item"), lick);
         recipe.addIngredient(new RecipeChoice.ExactChoice(verlDor));
@@ -56,11 +52,8 @@ public class WalletRecipe {
     }
 
     public void createCoppetRecipe(JavaPlugin plugin) {
-        ItemStack coppet = new ItemStack(Material.GOLD_INGOT, 64);
-        ItemUtil.modifyItem(coppet, "coppet", "Копійка", NamedTextColor.GOLD, 3);
-
-        ItemStack lick = new ItemStack(Material.GOLD_INGOT, 64);
-        ItemUtil.modifyItem(lick, "lick", "Лік", NamedTextColor.GRAY, 2);
+        ItemStack coppet = CoinUtil.getCoppet(64);
+        ItemStack lick = CoinUtil.getLick();
 
         ShapelessRecipe recipe = new ShapelessRecipe(new NamespacedKey(plugin, "coppet-item"), coppet);
         recipe.addIngredient(new RecipeChoice.ExactChoice(lick));
