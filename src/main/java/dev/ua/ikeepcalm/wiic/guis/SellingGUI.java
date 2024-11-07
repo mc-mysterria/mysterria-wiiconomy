@@ -47,7 +47,7 @@ public class SellingGUI {
                 callback.onConfirm(item);
             });
 
-            ItemStack cancelItem = createItem(Material.RED_WOOL, "Відмінити", Collections.emptyList(), NamedTextColor.RED);
+            ItemStack cancelItem = createItem(Material.RED_WOOL, "Скасувати", Collections.emptyList(), NamedTextColor.RED);
             GuiItem cancelGuiItem = new GuiItem(cancelItem, event -> {
                 callback.onCancel();
             });
@@ -70,7 +70,7 @@ public class SellingGUI {
             ItemStack detailedItem = createItem(item.getType(), item.getType().name(), details, NamedTextColor.RED);
             GuiItem centralItem = new GuiItem(detailedItem);
 
-            ItemStack cancelItem = createItem(Material.RED_WOOL, "Відмінити", Collections.emptyList(), NamedTextColor.RED);
+            ItemStack cancelItem = createItem(Material.RED_WOOL, "Скасувати", Collections.emptyList(), NamedTextColor.RED);
             GuiItem cancelGuiItem = new GuiItem(cancelItem, event -> {
                 callback.onCancel();
             });

@@ -40,7 +40,7 @@ public class ActionGUI {
             callback.onConfirm(item);
         });
 
-        ItemStack cancelItem = createItem(Material.RED_WOOL, "Відмінити", Collections.emptyList(), NamedTextColor.RED);
+        ItemStack cancelItem = createItem(Material.RED_WOOL, "Скасувати", Collections.emptyList(), NamedTextColor.RED);
         GuiItem cancelGuiItem = new GuiItem(cancelItem, event -> {
             callback.onCancel();
         });
