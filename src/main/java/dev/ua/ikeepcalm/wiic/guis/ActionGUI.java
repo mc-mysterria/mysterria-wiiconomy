@@ -10,6 +10,7 @@ import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
@@ -20,11 +21,13 @@ public class ActionGUI {
 
     private final Player pl;
     private final ItemStack item;
+    private final WalletGUI walletGUI;
     private final ConfirmationCallback callback;
 
-    public ActionGUI(Player player, ItemStack item, ConfirmationCallback callback) {
+    public ActionGUI(Player player, ItemStack item, WalletGUI walletGUI, ConfirmationCallback callback) {
         this.pl = player;
         this.item = item;
+        this.walletGUI = walletGUI;
         this.callback = callback;
     }
 
@@ -40,7 +43,7 @@ public class ActionGUI {
             callback.onConfirm(item);
         });
 
-        ItemStack cancelItem = createItem(Material.RED_WOOL, "Відмінити", Collections.emptyList(), NamedTextColor.RED);
+        ItemStack cancelItem = createItem(Material.RED_WOOL, "Скасувати", Collections.emptyList(), NamedTextColor.RED);
         GuiItem cancelGuiItem = new GuiItem(cancelItem, event -> {
             callback.onCancel();
         });
@@ -56,6 +59,12 @@ public class ActionGUI {
         navigationPane.addItem(centralItem);
         navigationPane.addItem(cancelGuiItem);
         gui.addPane(navigationPane);
+
+        gui.setOnClose(event -> {
+            if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW) {
+                walletGUI.removeUUIDTags(pl.getInventory());
+            }
+        });
 
         gui.show(pl);
     }

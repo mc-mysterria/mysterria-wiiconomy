@@ -8,7 +8,8 @@ import com.github.stefvanschie.inventoryframework.pane.Pane;
 import de.tr7zw.nbtapi.NBTItem;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
-import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
@@ -16,6 +17,8 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
+import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.scheduler.BukkitRunnable;
 
 import java.util.ArrayList;
@@ -30,10 +33,12 @@ public class WalletGUI {
     private boolean actionClose = false;
     private final Appraiser appraiser;
     private final WalletManager walletManager;
+    private final SoldItemsManager soldItemsManager;
 
-    public WalletGUI(Appraiser appraiser, WalletManager walletManager) {
+    public WalletGUI(Appraiser appraiser, WalletManager walletManager, SoldItemsManager soldItemsManager) {
         this.appraiser = appraiser;
         this.walletManager = walletManager;
+        this.soldItemsManager = soldItemsManager;
     }
 
 
@@ -74,28 +79,22 @@ public class WalletGUI {
 
         List<ItemStack> itemsInWallet = new ArrayList<>();
         if (data.getVerlDors() > 0) {
-            ItemStack verlDorItem = new ItemStack(Material.GOLD_INGOT, data.getVerlDors());
-            ItemUtil.modifyItem(verlDorItem, "verlDor", "Аур", NamedTextColor.YELLOW, 1);
-            itemsInWallet.add(verlDorItem);
+            itemsInWallet.add(CoinUtil.getVerlDor(data.getVerlDors()));
         }
 
         if (data.getLicks() > 0) {
-            ItemStack lickItem = new ItemStack(Material.GOLD_INGOT, data.getLicks());
-            ItemUtil.modifyItem(lickItem, "lick", "Лік", NamedTextColor.GRAY, 2);
-            itemsInWallet.add(lickItem);
+            itemsInWallet.add(CoinUtil.getLick(data.getLicks()));
         }
 
         if (data.getCoppets() > 0) {
-            ItemStack coppetItem = new ItemStack(Material.GOLD_INGOT, data.getCoppets());
-            ItemUtil.modifyItem(coppetItem, "coppet", "Копійка", NamedTextColor.GOLD, 3);
-            itemsInWallet.add(coppetItem);
+            itemsInWallet.add(CoinUtil.getCoppet(data.getCoppets()));
         }
 
         for (ItemStack iteItem : itemsInWallet) {
             walletInventory.addItem(new GuiItem(iteItem, event -> {
                 ItemStack item = event.getCurrentItem();
                 actionClose = true;
-                new ActionGUI(player, item, new ActionGUI.ConfirmationCallback() {
+                new ActionGUI(player, item, this, new ActionGUI.ConfirmationCallback() {
                     @Override
                     public void onConfirm(ItemStack item) {
                         if (player.getInventory().firstEmpty() == -1) {
@@ -125,11 +124,11 @@ public class WalletGUI {
                 }
                 ItemStack item = event.getCurrentItem();
                 actionClose = true;
-                new SellingGUI(player, item, new SellingGUI.ConfirmationCallback() {
+                new SellingGUI(player, item, this, new SellingGUI.ConfirmationCallback() {
                     @Override
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
-                        handleSoldItem(item, data);
+                        handleSoldItem(player, item, data);
                         openVault(player, data);
                     }
 
@@ -138,7 +137,7 @@ public class WalletGUI {
                         gui.update();
                         openVault(player, data);
                     }
-                }, appraiser).open();
+                }, appraiser, soldItemsManager).open();
             }));
         }
 
@@ -146,7 +145,7 @@ public class WalletGUI {
             GuiItem guiItem = new GuiItem(iteItem, event -> {
                 ItemStack item = event.getCurrentItem();
                 actionClose = true;
-                new ActionGUI(player, item, new ActionGUI.ConfirmationCallback() {
+                new ActionGUI(player, item, this, new ActionGUI.ConfirmationCallback() {
                     @Override
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
@@ -188,6 +187,7 @@ public class WalletGUI {
                                 }
                             }
                         }
+                        removeUUIDTags(player.getInventory());
                     }
                 }.runTaskLaterAsynchronously(WIIC.INSTANCE, 20);
             } else {
@@ -197,24 +197,26 @@ public class WalletGUI {
         gui.show(player);
     }
 
+    public void removeUUIDTags(PlayerInventory inventory) {
+        for (ItemStack item : inventory) {
+            if (item == null) continue;
+            for (GuiItem guiItem : playerInventory.getItems()) {
+                ItemMeta meta1 = item.getItemMeta();
+                ItemMeta meta2 = guiItem.getItem().getItemMeta();
+                if (meta1 != null && meta1.equals(meta2)) {
+                    meta1.getPersistentDataContainer().remove(guiItem.getKey());
+                    item.setItemMeta(meta1);
+                }
+            }
+        }
+    }
+
     private ItemStack convertGUIItem(ItemStack itemStack) {
         NBTItem nbtItem = new NBTItem(itemStack);
         return switch (nbtItem.getString("type")) {
-            case "lick" -> {
-                ItemStack lick = new ItemStack(Material.GOLD_INGOT, itemStack.getAmount());
-                ItemUtil.modifyItem(lick, "lick", "Лік", NamedTextColor.GRAY, 2);
-                yield lick;
-            }
-            case "coppet" -> {
-                ItemStack coppet = new ItemStack(Material.GOLD_INGOT, itemStack.getAmount());
-                ItemUtil.modifyItem(coppet, "coppet", "Копійка", NamedTextColor.GOLD, 3);
-                yield coppet;
-            }
-            case "verlDor" -> {
-                ItemStack verlDor = new ItemStack(Material.GOLD_INGOT, itemStack.getAmount());
-                ItemUtil.modifyItem(verlDor, "verlDor", "Аур", NamedTextColor.YELLOW, 1);
-                yield verlDor;
-            }
+            case "coppet" -> CoinUtil.getCoppet(itemStack.getAmount());
+            case "lick" -> CoinUtil.getLick(itemStack.getAmount());
+            case "verlDor" -> CoinUtil.getVerlDor(itemStack.getAmount());
             default -> throw new IllegalStateException("Unexpected value: " + nbtItem.getString("type"));
         };
     }
@@ -238,9 +240,10 @@ public class WalletGUI {
         gui.addPane(right);
     }
 
-    private void handleSoldItem(ItemStack newItem, WalletData data) {
+    private void handleSoldItem(Player player, ItemStack newItem, WalletData data) {
         int appraisal = appraiser.appraise(newItem);
         data.setCoppets(data.getCoppets() + appraisal);
+        soldItemsManager.setSoldValue(player, soldItemsManager.getSoldValue(player) + appraisal);
     }
 
     private void handleWithdrawnItem(ItemStack newItem, WalletData data) {

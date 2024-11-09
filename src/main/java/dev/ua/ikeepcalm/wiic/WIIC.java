@@ -4,6 +4,7 @@ import dev.ua.ikeepcalm.wiic.commands.ConvertCommand;
 import dev.ua.ikeepcalm.wiic.commands.ShatterCommand;
 import dev.ua.ikeepcalm.wiic.commands.WalletCommand;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
+import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletRecipe;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.PluginManager;
@@ -24,7 +25,7 @@ public final class WIIC extends JavaPlugin {
             saveDefaultConfig();
         }
         new WalletRecipe(this);
-        registerEvents(new WalletListener());
+        registerEvents(new WalletListener(), new VillagerListener(this));
         Objects.requireNonNull(getCommand("wallet")).setExecutor(new WalletCommand());
         Objects.requireNonNull(getCommand("convert")).setExecutor(new ConvertCommand());
         Objects.requireNonNull(getCommand("shatter")).setExecutor(new ShatterCommand());

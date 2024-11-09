@@ -4,6 +4,7 @@ import de.tr7zw.nbtapi.NBT;
 import de.tr7zw.nbtapi.NBTItem;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
+import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.guis.WalletGUI;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
@@ -27,10 +28,12 @@ public class WalletListener implements Listener {
 
     private final Appraiser appraiser;
     private final WalletManager walletManager;
+    private final SoldItemsManager soldItemsManager;
 
     public WalletListener() {
         this.appraiser = new Appraiser();
         this.walletManager = new WalletManager();
+        this.soldItemsManager = new SoldItemsManager(WIIC.INSTANCE);
     }
 
     @EventHandler
@@ -112,7 +115,7 @@ public class WalletListener implements Listener {
             p.sendMessage(Component.text("Старий варіант гаманця, зконвертуйте його в новий за допомогою `/convert`").color(NamedTextColor.RED));
             return;
         }
-        new WalletGUI(appraiser, walletManager).openVault(p, data);
+        new WalletGUI(appraiser, walletManager, soldItemsManager).openVault(p, data);
     }
 
 

@@ -48,7 +48,7 @@ public class Appraiser {
         return (int) value;
     }
 
-    public List<Component> getDetailedAppraisal(ItemStack itemStack) {
+    public List<Component> getDetailedAppraisal(ItemStack itemStack, int availableAmount) {
         List<Component> details = new ArrayList<>();
 
         double basePrice = getItemCategory(itemStack.getType());
@@ -75,6 +75,10 @@ public class Appraiser {
 
         double value = finalPrice * itemStack.getAmount();
         details.add(Component.text("Фінальна оцінка: " + value).color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false));
+        if ((int) value > availableAmount) {
+            details.add(Component.text("Ви не можете продати ці предмети").color(NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+            details.add(Component.text("Ваш ліміт на сьогодні: " + availableAmount).color(NamedTextColor.RED).decoration(TextDecoration.ITALIC, false));
+        }
         return details;
     }
 
