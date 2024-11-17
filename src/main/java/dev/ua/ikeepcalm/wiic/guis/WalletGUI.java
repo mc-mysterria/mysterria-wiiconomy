@@ -68,12 +68,8 @@ public class WalletGUI {
 
         List<ItemStack> itemsInInventory = new ArrayList<>();
         for (ItemStack item : player.getInventory().getContents()) {
-            if (item == null || item.getType() == Material.AIR) continue;
-            if (item.getType() == Material.GOLD_INGOT && item.hasItemMeta()) {
-                NBTItem nbtItem = new NBTItem(item);
-                if (nbtItem.hasKey("type")) {
-                    itemsInInventory.add(item);
-                }
+            if (CoinUtil.isCoin(item)) {
+                itemsInInventory.add(item);
             }
         }
 
