@@ -25,37 +25,40 @@ public class VillagerListener implements Listener {
     }
 
     private MerchantRecipe convertRecipe(MerchantRecipe recipe) {
-        int emeralds = 0;
-        List<ItemStack> ingredients = recipe.getIngredients();
-        for (ItemStack item : new ArrayList<>(ingredients)) {
-            if (item.getType() == Material.EMERALD) {
-                emeralds += item.getAmount();
-                ingredients.remove(item);
-            }
-        }
-
-        int coppets = emeraldsToCoppets(emeralds);
-        if (ingredients.isEmpty()) {
-            int licks = coppets / 64;
-            if (licks > 0) {
-                ingredients.add(CoinUtil.getLick(licks));
-            }
-
-            coppets = coppets % 64;
-            if (coppets > 0) {
-                ingredients.add(CoinUtil.getCoppet(coppets));
-            }
-        } else if (ingredients.size() == 1 && coppets > 0) {
-            if (coppets < 64) {
-                ingredients.addFirst(CoinUtil.getCoppet(coppets));
-            } else {
-                ingredients.addFirst(CoinUtil.getLick((int) Math.round(coppets / 64.0)));
-            }
-        }
-
         ItemStack result = recipe.getResult();
+        List<ItemStack> ingredients = recipe.getIngredients();
+
+        if (!plugin.getConfig().getBoolean("villagers.useCoinsOnlyForRareItems") || isRare(result.getType())) {
+            int emeralds = 0;
+            for (ItemStack item : new ArrayList<>(ingredients)) {
+                if (item.getType() == Material.EMERALD) {
+                    emeralds += item.getAmount();
+                    ingredients.remove(item);
+                }
+            }
+
+            int coppets = emeraldsToCoppets(emeralds);
+            if (ingredients.isEmpty()) {
+                int licks = coppets / 64;
+                if (licks > 0) {
+                    ingredients.add(CoinUtil.getLick(licks));
+                }
+
+                coppets = coppets % 64;
+                if (coppets > 0) {
+                    ingredients.add(CoinUtil.getCoppet(coppets));
+                }
+            } else if (ingredients.size() == 1 && coppets > 0) {
+                if (coppets < 64) {
+                    ingredients.addFirst(CoinUtil.getCoppet(coppets));
+                } else {
+                    ingredients.addFirst(CoinUtil.getLick((int) Math.round(coppets / 64.0)));
+                }
+            }
+        }
+
         if (plugin.getConfig().getBoolean("villagers.convertTradeResults") && result.getType() == Material.EMERALD) {
-            coppets = emeraldsToCoppets(result.getAmount());
+            int coppets = emeraldsToCoppets(result.getAmount());
             if (coppets >= 64) {
                 result = CoinUtil.getLick((int) Math.round(coppets / 64.0));
             } else {
@@ -88,5 +91,9 @@ public class VillagerListener implements Listener {
             return 1;
         }
         return coppets;
+    }
+
+    private boolean isRare(Material material) {
+        return material == Material.ENCHANTED_BOOK || material.getMaxDurability() != 0;
     }
 }

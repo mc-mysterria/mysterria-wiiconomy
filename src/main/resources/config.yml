@@ -31,3 +31,4 @@ dailyLimit: 128
 villagers:
   emeraldsToCoppetsMultiplier: 1.0
   convertTradeResults: true
+  useCoinsOnlyForRareItems: false
