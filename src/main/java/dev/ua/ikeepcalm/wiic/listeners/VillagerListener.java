@@ -53,7 +53,7 @@ public class VillagerListener implements Listener {
 
                 if (villager.getRecipeCount() > originalCosts.length) {
                     for (int i = originalCosts.length; i < villager.getRecipeCount(); i++) {
-                        saveOriginalCosts(villager, villager.getRecipe(i));
+                        saveOriginalCosts(villager, villager.getRecipe(i), true);
                     }
                     originalCosts = pdc.get(originalCostsKey, PersistentDataType.INTEGER_ARRAY);
                     originalResults = pdc.get(originalResultsKey, PersistentDataType.INTEGER_ARRAY);
@@ -98,6 +98,10 @@ public class VillagerListener implements Listener {
     }
 
     private void saveOriginalCosts(AbstractVillager villager, MerchantRecipe recipe) {
+        saveOriginalCosts(villager, recipe, false);
+    }
+
+    private void saveOriginalCosts(AbstractVillager villager, MerchantRecipe recipe, boolean ignoreCurrentCount) {
         PersistentDataContainer pdc = villager.getPersistentDataContainer();
 
         if (!pdc.has(villagerVersionKey)) {
@@ -107,7 +111,7 @@ public class VillagerListener implements Listener {
         int[] costsArray = pdc.get(originalCostsKey, PersistentDataType.INTEGER_ARRAY);
         int[] resultsArray = pdc.get(originalResultsKey, PersistentDataType.INTEGER_ARRAY);
 
-        if (costsArray != null && resultsArray != null && villager.getRecipeCount() == costsArray.length) {
+        if (costsArray != null && resultsArray != null && (villager.getRecipeCount() == costsArray.length || ignoreCurrentCount)) {
             costsArray = Arrays.copyOf(costsArray, costsArray.length + 1);
             resultsArray = Arrays.copyOf(resultsArray, resultsArray.length + 1);
         } else {
