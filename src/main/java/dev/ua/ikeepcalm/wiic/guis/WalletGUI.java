@@ -68,12 +68,8 @@ public class WalletGUI {
 
         List<ItemStack> itemsInInventory = new ArrayList<>();
         for (ItemStack item : player.getInventory().getContents()) {
-            if (item == null || item.getType() == Material.AIR) continue;
-            if (item.getType() == Material.GOLD_INGOT && item.hasItemMeta()) {
-                NBTItem nbtItem = new NBTItem(item);
-                if (nbtItem.hasKey("type")) {
-                    itemsInInventory.add(item);
-                }
+            if (CoinUtil.isCoin(item)) {
+                itemsInInventory.add(item);
             }
         }
 
@@ -177,16 +173,6 @@ public class WalletGUI {
                 new BukkitRunnable() {
                     @Override
                     public void run() {
-                        for (ItemStack item : player.getInventory()) {
-                            if (item == null || item.getType() == Material.AIR) continue;
-                            if (item.getType() == Material.GOLD_INGOT && item.hasItemMeta()) {
-                                NBTItem nbtItem = new NBTItem(item);
-                                if (nbtItem.hasTag("type")) {
-                                    player.getInventory().removeItem(item);
-                                    player.getInventory().addItem(convertGUIItem(item));
-                                }
-                            }
-                        }
                         removeUUIDTags(player.getInventory());
                     }
                 }.runTaskLaterAsynchronously(WIIC.INSTANCE, 20);
@@ -209,16 +195,6 @@ public class WalletGUI {
                 }
             }
         }
-    }
-
-    private ItemStack convertGUIItem(ItemStack itemStack) {
-        NBTItem nbtItem = new NBTItem(itemStack);
-        return switch (nbtItem.getString("type")) {
-            case "coppet" -> CoinUtil.getCoppet(itemStack.getAmount());
-            case "lick" -> CoinUtil.getLick(itemStack.getAmount());
-            case "verlDor" -> CoinUtil.getVerlDor(itemStack.getAmount());
-            default -> throw new IllegalStateException("Unexpected value: " + nbtItem.getString("type"));
-        };
     }
 
     private void setupBackground() {
