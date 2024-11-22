@@ -107,12 +107,12 @@ public class VillagerListener implements Listener {
         int[] costsArray = pdc.get(originalCostsKey, PersistentDataType.INTEGER_ARRAY);
         int[] resultsArray = pdc.get(originalResultsKey, PersistentDataType.INTEGER_ARRAY);
 
-        if (costsArray == null || resultsArray == null) {
-            costsArray = new int[1];
-            resultsArray = new int[1];
-        } else {
+        if (costsArray != null && resultsArray != null && villager.getRecipeCount() == costsArray.length) {
             costsArray = Arrays.copyOf(costsArray, costsArray.length + 1);
             resultsArray = Arrays.copyOf(resultsArray, resultsArray.length + 1);
+        } else {
+            costsArray = new int[1];
+            resultsArray = new int[1];
         }
 
         for (ItemStack item : recipe.getIngredients()) {
