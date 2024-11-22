@@ -3,25 +3,129 @@ package dev.ua.ikeepcalm.wiic.listeners;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
+import org.bukkit.entity.AbstractVillager;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.VillagerAcquireTradeEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.MerchantRecipe;
+import org.bukkit.persistence.PersistentDataContainer;
+import org.bukkit.persistence.PersistentDataType;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 public class VillagerListener implements Listener {
     private final WIIC plugin;
+    private final NamespacedKey originalCostsKey;
+    private final NamespacedKey originalResultsKey;
+    private final NamespacedKey villagerVersionKey;
 
     public VillagerListener(WIIC plugin) {
         this.plugin = plugin;
+        originalCostsKey = new NamespacedKey(plugin, "original_costs");
+        originalResultsKey = new NamespacedKey(plugin, "original_results");
+        villagerVersionKey = new NamespacedKey(plugin, "version");
     }
 
     @EventHandler
     public void onVillagerAcquireTrade(VillagerAcquireTradeEvent event) {
+        saveOriginalCosts(event.getEntity(), event.getRecipe());
         event.setRecipe(convertRecipe(event.getRecipe()));
+    }
+
+    @EventHandler
+    public void onInteractEntity(PlayerInteractEntityEvent event) {
+        if (event.getRightClicked() instanceof AbstractVillager villager) {
+            int currentVersion = plugin.getConfig().getInt("villagers.version");
+            PersistentDataContainer pdc = villager.getPersistentDataContainer();
+            if (!Integer.valueOf(currentVersion).equals(
+                pdc.get(villagerVersionKey, PersistentDataType.INTEGER)
+            )) {
+                int[] originalCosts = pdc.get(originalCostsKey, PersistentDataType.INTEGER_ARRAY);
+                int[] originalResults = pdc.get(originalResultsKey, PersistentDataType.INTEGER_ARRAY);
+                if (originalCosts == null || originalResults == null) {
+                    return;
+                }
+
+                if (villager.getRecipeCount() > originalCosts.length) {
+                    for (int i = originalCosts.length; i < villager.getRecipeCount(); i++) {
+                        saveOriginalCosts(villager, villager.getRecipe(i));
+                    }
+                    originalCosts = pdc.get(originalCostsKey, PersistentDataType.INTEGER_ARRAY);
+                    originalResults = pdc.get(originalResultsKey, PersistentDataType.INTEGER_ARRAY);
+                }
+
+                for (int i = 0; i < villager.getRecipeCount(); i++) {
+                    MerchantRecipe recipe = villager.getRecipe(i);
+                    List<ItemStack> ingredients = recipe.getIngredients();
+                    ingredients.removeIf(ingredient -> ingredient.getType() == Material.EMERALD || CoinUtil.isCoin(ingredient));
+                    int emeralds = originalCosts[i];
+                    if (emeralds > 64) {
+                        emeralds -= 64;
+                        ingredients.add(new ItemStack(Material.EMERALD, 64));
+                    }
+                    if (emeralds > 0) {
+                        ingredients.add(new ItemStack(Material.EMERALD, emeralds));
+                    }
+                    ItemStack result = recipe.getResult();
+                    if (result.getType() == Material.EMERALD || CoinUtil.isCoin(result)) {
+                        result = new ItemStack(Material.EMERALD, originalResults[i]);
+                    }
+
+                    recipe = new MerchantRecipe(
+                        result,
+                        recipe.getUses(),
+                        recipe.getMaxUses(),
+                        recipe.hasExperienceReward(),
+                        recipe.getVillagerExperience(),
+                        recipe.getPriceMultiplier(),
+                        recipe.getDemand(),
+                        recipe.getSpecialPrice(),
+                        recipe.shouldIgnoreDiscounts()
+                    );
+                    recipe.setIngredients(ingredients);
+
+                    villager.setRecipe(i, convertRecipe(recipe));
+                }
+
+                pdc.set(villagerVersionKey, PersistentDataType.INTEGER, currentVersion);
+            }
+        }
+    }
+
+    private void saveOriginalCosts(AbstractVillager villager, MerchantRecipe recipe) {
+        PersistentDataContainer pdc = villager.getPersistentDataContainer();
+
+        if (!pdc.has(villagerVersionKey)) {
+            pdc.set(villagerVersionKey, PersistentDataType.INTEGER, plugin.getConfig().getInt("villagers.version"));
+        }
+
+        int[] costsArray = pdc.get(originalCostsKey, PersistentDataType.INTEGER_ARRAY);
+        int[] resultsArray = pdc.get(originalResultsKey, PersistentDataType.INTEGER_ARRAY);
+
+        if (costsArray == null || resultsArray == null) {
+            costsArray = new int[1];
+            resultsArray = new int[1];
+        } else {
+            costsArray = Arrays.copyOf(costsArray, costsArray.length + 1);
+            resultsArray = Arrays.copyOf(resultsArray, resultsArray.length + 1);
+        }
+
+        for (ItemStack item : recipe.getIngredients()) {
+            if (item.getType() == Material.EMERALD) {
+                costsArray[costsArray.length - 1] += item.getAmount();
+            }
+        }
+        if (recipe.getResult().getType() == Material.EMERALD) {
+            resultsArray[resultsArray.length - 1] = recipe.getResult().getAmount();
+        }
+
+        pdc.set(originalCostsKey, PersistentDataType.INTEGER_ARRAY, costsArray);
+        pdc.set(originalResultsKey, PersistentDataType.INTEGER_ARRAY, resultsArray);
     }
 
     private MerchantRecipe convertRecipe(MerchantRecipe recipe) {
