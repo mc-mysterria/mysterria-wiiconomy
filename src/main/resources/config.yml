@@ -27,4 +27,6 @@ ores:
 
 minimumValue: 0
 dailyLimit: 128
-emeraldsToCoppetsMultiplier: 1.0
+
+villagers:
+  emeraldsToCoppetsMultiplier: 1.0

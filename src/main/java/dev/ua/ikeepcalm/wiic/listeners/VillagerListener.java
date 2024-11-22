@@ -83,7 +83,7 @@ public class VillagerListener implements Listener {
         if (emeralds == 0) {
             return 0;
         }
-        int coppets = (int) Math.round(emeralds * plugin.getConfig().getDouble("emeraldsToCoppetsMultiplier"));
+        int coppets = (int) Math.round(emeralds * plugin.getConfig().getDouble("villagers.emeraldsToCoppetsMultiplier"));
         if (coppets == 0) {
             return 1;
         }
