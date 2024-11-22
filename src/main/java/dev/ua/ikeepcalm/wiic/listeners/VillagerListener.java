@@ -54,7 +54,7 @@ public class VillagerListener implements Listener {
         }
 
         ItemStack result = recipe.getResult();
-        if (result.getType() == Material.EMERALD) {
+        if (plugin.getConfig().getBoolean("villagers.convertTradeResults") && result.getType() == Material.EMERALD) {
             coppets = emeraldsToCoppets(result.getAmount());
             if (coppets >= 64) {
                 result = CoinUtil.getLick((int) Math.round(coppets / 64.0));
