@@ -58,4 +58,15 @@ public class WalletData {
     public void setOwner(String owner) {
         this.owner = owner;
     }
+
+    public int getTotalCoppets() {
+        return getVerlDors() * 64 * 64 + getLicks() * 64 + getCoppets();
+    }
+
+    public void setTotalCoppets(int totalCoppets) {
+        setVerlDors(totalCoppets / (64 * 64));
+        totalCoppets %= 64 * 64;
+        setLicks(totalCoppets / 64);
+        setCoppets(totalCoppets % 64);
+    }
 }

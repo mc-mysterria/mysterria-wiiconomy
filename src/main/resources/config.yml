@@ -33,3 +33,9 @@ villagers:
   emeraldsToCoppetsMultiplier: 1.0
   convertTradeResults: true
   useCoinsOnlyForRareItems: false
+
+market:
+  groups:
+    default: 2
+    vip: 4
+    mvp: 6

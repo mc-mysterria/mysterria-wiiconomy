@@ -1,0 +1,91 @@
+/*
+ * Decompiled with CFR 0.150.
+ * 
+ * Could not load the following classes:
+ *  org.bukkit.enchantments.Enchantment
+ *  org.bukkit.inventory.ItemFlag
+ *  org.bukkit.inventory.ItemStack
+ *  org.bukkit.inventory.meta.ItemMeta
+ */
+package dev.ua.ikeepcalm.market.util;
+
+import dev.ua.ikeepcalm.wiic.WIIC;
+import org.bukkit.Bukkit;
+import org.bukkit.ChatColor;
+import org.bukkit.Material;
+import org.bukkit.enchantments.Enchantment;
+import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemFlag;
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.meta.ItemMeta;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+public final class ItemStackUtil {
+    public static ItemStack createStack(Material material, boolean glow, String ... strings) {
+        ItemStack itemStack = new ItemStack(material);
+        ItemMeta meta = itemStack.getItemMeta();
+        if (strings.length >= 1) {
+            if (!strings[0].isEmpty()) {
+                meta.setDisplayName(ChatColor.RESET + Translator.translate(strings[0]));
+            }
+        } else {
+            meta.setDisplayName(" ");
+        }
+        if (strings.length >= 2) {
+            List<String> lore = meta.getLore() == null ? new ArrayList<>() : meta.getLore();
+            for (int i = 1; i < strings.length; ++i) {
+                lore.add(Translator.translate(strings[i]));
+            }
+            meta.setLore(lore);
+        }
+        itemStack.setItemMeta(meta);
+        if (glow){
+            ItemStackUtil.addGlow(itemStack);
+        }
+        return itemStack;
+    }
+
+    public static ItemStack addGlow(ItemStack itemStack) {
+        itemStack.addUnsafeEnchantment(Enchantment.CHANNELING, 1);
+        ItemMeta meta = itemStack.getItemMeta();
+        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS);
+        itemStack.setItemMeta(meta);
+        return itemStack;
+    }
+
+    public static ItemStack createStack(ItemStack itemStack, String ... strings) {
+        ItemStack stack = itemStack.clone();
+        ItemMeta meta = stack.getItemMeta();
+        if (strings.length >= 1) {
+            if (!strings[0].isEmpty()) {
+                meta.setDisplayName(ChatColor.RESET + Translator.translate(strings[0]));
+            }
+        } else {
+            meta.setDisplayName(" ");
+        }
+        if (strings.length >= 2) {
+            List<String> lore = meta.getLore() == null ? new ArrayList<>() : meta.getLore();
+            for (int i = 1; i < strings.length; ++i) {
+                lore.add(Translator.translate(strings[i]));
+            }
+            meta.setLore(lore);
+        }
+        stack.setItemMeta(meta);
+        return stack;
+    }
+
+    public static void giveOrDrop(Player player, ItemStack item) {
+        Map<Integer, ItemStack> notGiven = player.getInventory().addItem(item);
+        for (ItemStack itemToDrop : notGiven.values()) {
+            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> player.getWorld().dropItem(player.getLocation(), itemToDrop));
+        }
+    }
+
+    private ItemStackUtil() {
+        throw new UnsupportedOperationException("This is a utility class and cannot be instantiated");
+    }
+}
+
