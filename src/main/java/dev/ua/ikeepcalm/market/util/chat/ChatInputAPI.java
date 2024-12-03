@@ -52,7 +52,7 @@ public class ChatInputAPI {
         public void onPlayerChat(AsyncPlayerChatEvent event) {
             if (event.getPlayer() == chatInputAPI.getPlayer()) {
                 event.setCancelled(true);
-                chatInputAPI.getHandler().accept(new ChatInputEvent(event.getPlayer(), event.getMessage()));
+                Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> chatInputAPI.getHandler().accept(new ChatInputEvent(event.getPlayer(), event.getMessage())));
                 unregister();
             }
         }

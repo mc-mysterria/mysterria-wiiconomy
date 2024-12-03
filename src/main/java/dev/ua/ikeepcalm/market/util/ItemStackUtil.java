@@ -80,7 +80,7 @@ public final class ItemStackUtil {
     public static void giveOrDrop(Player player, ItemStack item) {
         Map<Integer, ItemStack> notGiven = player.getInventory().addItem(item);
         for (ItemStack itemToDrop : notGiven.values()) {
-            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> player.getWorld().dropItem(player.getLocation(), itemToDrop));
+            player.getWorld().dropItem(player.getLocation(), itemToDrop);
         }
     }
 
