@@ -1,5 +1,6 @@
 plugins {
     id 'java'
+    id 'java-library'
     id("io.github.goooler.shadow") version "8.1.8"
     id("xyz.jpenilla.run-paper") version "2.3.0"
 }
@@ -28,6 +29,12 @@ repositories {
     maven {
         url 'https://repo.xenondevs.xyz/releases'
     }
+    maven {
+        url = uri('https://repo.minebench.de/')
+    }
+    maven {
+        url = uri('https://repo.aikar.co/content/groups/aikar/')
+    }
 }
 
 shadowJar{
@@ -35,9 +42,13 @@ shadowJar{
 }
 
 dependencies {
+    api 'de.themoep:inventorygui:1.6.1-SNAPSHOT'
+    api 'com.github.ben-manes.caffeine:caffeine:3.1.8'
+    api 'com.zaxxer:HikariCP:5.0.1'
+    compileOnly 'net.luckperms:api:5.4'
     compileOnly "io.papermc.paper:paper-api:1.21.3-R0.1-SNAPSHOT"
+    compileOnly "de.tr7zw:item-nbt-api-plugin:2.13.1"
     implementation 'com.github.stefvanschie.inventoryframework:IF:0.10.18'
-    compileOnly("de.tr7zw:item-nbt-api-plugin:2.13.1")
 }
 
 def targetJavaVersion = 21

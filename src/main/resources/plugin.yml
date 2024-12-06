@@ -2,7 +2,7 @@ name: WIIC
 version: '${version}'
 main: dev.ua.ikeepcalm.wiic.WIIC
 api-version: '1.21'
-depend: [ NBTAPI ]
+depend: [ NBTAPI, LuckPerms ]
 commands:
   wallet:
     description: Check your wallet debug information
@@ -16,3 +16,7 @@ commands:
     description: Shatter currency to lesser
     usage: /shatter
     permission: wiic.shatter
+  summon-shopkeeper:
+    description: Summon a shopkeeper
+    usage: /summon-shopkeeper
+    permission: wiic.spawnNPCs
