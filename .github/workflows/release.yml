@@ -72,7 +72,7 @@ jobs:
           VERSION=$(grep "^version *= *['\"]" build.gradle | sed -E "s/version *= *['\"]([^'\"]+)['\"]/\1/")
           echo "Version: $VERSION"
           echo "version=$VERSION" >> $GITHUB_ENV
-          SOURCE_FILE="build/libs/WIIC-${VERSION}.jar"
+          SOURCE_FILE="build/libs/WIIC-${VERSION}-all.jar"
           TARGET_FILE="build/libs/WIIC.jar"
           
           if ls "${SOURCE_FILE}" > /dev/null 2>&1; then
