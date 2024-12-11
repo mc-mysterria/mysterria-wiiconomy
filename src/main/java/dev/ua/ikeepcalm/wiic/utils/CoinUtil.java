@@ -1,6 +1,5 @@
 package dev.ua.ikeepcalm.wiic.utils;
 
-import de.tr7zw.nbtapi.NBTItem;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
 import org.bukkit.inventory.ItemStack;
@@ -34,8 +33,7 @@ public class CoinUtil {
         if (item == null || item.getType() != Material.GOLD_INGOT || !item.hasItemMeta()) {
             return false;
         }
-        NBTItem nbtItem = new NBTItem(item);
-        return switch (nbtItem.getString("type")) {
+        return switch (ItemUtil.getType(item)) {
             case "coppet", "lick", "verlDor" -> true;
             default -> false;
         };

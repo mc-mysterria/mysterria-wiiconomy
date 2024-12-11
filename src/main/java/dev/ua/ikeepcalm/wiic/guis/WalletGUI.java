@@ -5,11 +5,11 @@ import com.github.stefvanschie.inventoryframework.gui.GuiItem;
 import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
 import com.github.stefvanschie.inventoryframework.pane.OutlinePane;
 import com.github.stefvanschie.inventoryframework.pane.Pane;
-import de.tr7zw.nbtapi.NBTItem;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
@@ -223,8 +223,7 @@ public class WalletGUI {
     }
 
     private void handleWithdrawnItem(ItemStack newItem, WalletData data) {
-        NBTItem nbtItem = new NBTItem(newItem);
-        switch (nbtItem.getString("type")) {
+        switch (ItemUtil.getType(newItem)) {
             case "verlDor":
                 data.setVerlDors(data.getVerlDors() - newItem.getAmount());
                 break;
@@ -244,8 +243,7 @@ public class WalletGUI {
 
         for (GuiItem item : walletInventory.getItems()) {
             if (item.getItem().getType() == Material.AIR) continue;
-            NBTItem nbtItem = new NBTItem(item.getItem());
-            switch (nbtItem.getString("type")) {
+            switch (ItemUtil.getType(item.getItem())) {
                 case "verlDor":
                     verlDors = (verlDors + item.getItem().getAmount());
                     break;

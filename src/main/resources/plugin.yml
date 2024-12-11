@@ -2,7 +2,7 @@ name: WIIC
 version: '${version}'
 main: dev.ua.ikeepcalm.wiic.WIIC
 api-version: '1.21'
-depend: [ NBTAPI, LuckPerms ]
+depend: [ LuckPerms ]
 commands:
   wallet:
     description: Check your wallet debug information

@@ -16,9 +16,10 @@ import de.themoep.inventorygui.DynamicGuiElement;
 import de.themoep.inventorygui.GuiElementGroup;
 import de.themoep.inventorygui.InventoryGui;
 import de.themoep.inventorygui.StaticGuiElement;
-import de.tr7zw.nbtapi.NBTItem;
 import dev.ua.ikeepcalm.market.util.*;
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import org.bukkit.Bukkit;
@@ -57,13 +58,12 @@ public class MyItemsInventoryManager {
                         inventoryGui.show(player);
                         return;
                     }
-                    NBTItem nbtItem = new NBTItem(event.item());
-                    if (event.item().getType() != Material.GLOWSTONE_DUST || !nbtItem.getString("type").equals("wallet")) {
+                    if (!WalletUtil.isWallet(event.item())) {
                         ItemStackUtil.giveOrDrop(player, event.item());
                         inventoryGui.show(player);
                         return;
                     }
-                    UUID walletId = nbtItem.getUUID("id");
+                    String walletId = WalletUtil.getWalletId(event.item());
                     if (walletId == null) {
                         ItemStackUtil.giveOrDrop(player, event.item());
                         inventoryGui.show(player);
