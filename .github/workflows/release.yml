@@ -1,0 +1,94 @@
+name: Build, ShadowJar, and Release
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    outputs:
+      VERSION: ${{ steps.get_version.outputs.VERSION }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Gradle 8.8
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.8"
+
+      - name: Extract Gradle Version
+        id: get_version
+        run: |
+          VERSION=$(gradle properties -q | grep '^version:' | awk '{ print $2 }')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "::set-output name=VERSION::$VERSION"
+
+      - name: Build with Gradle
+        run: gradle shadowJar
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions: write-all
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+
+      - name: Build with Gradle
+        run: gradle shadowJar
+
+      - name: Create Release
+        uses: marvinpinto/action-automatic-releases@latest
+        with:
+          repo_token: "${{ secrets.GITHUB_TOKEN }}"
+          automatic_release_tag: "v${{ needs.build.outputs.VERSION }}"
+          title: "Release ${{ needs.build.outputs.VERSION }}"
+          prerelease: true
+          files: |
+            # LICENSE.md
+            build/libs/*.jar
+
+      - name: Get project version
+        id: get_version
+        run: |
+          VERSION=$(grep "^version *= *['\"]" build.gradle | sed -E "s/version *= *['\"]([^'\"]+)['\"]/\1/")
+          echo "Version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_ENV
+          SOURCE_FILE="build/libs/WIIC-${VERSION}.jar"
+          TARGET_FILE="build/libs/WIIC.jar"
+          
+          if ls "${SOURCE_FILE}" > /dev/null 2>&1; then
+            mv "${SOURCE_FILE}" "${TARGET_FILE}"
+            echo "Renamed file to ${TARGET_FILE}"
+          else
+            echo "Source file not found: ${SOURCE_FILE}"
+            exit 1
+          fi
+
+      - name: Deploy to Pterodactyl
+        uses: rexlmanu/pterodactyl-upload-action@v2.4
+        with:
+          panel-host: ${{ secrets.PTERODACTYL_URL }}
+          api-key: ${{ secrets.PTERODACTYL_API_KEY }}
+          server-id: ${{ secrets.SERVER_ID }}
+          source: "build/libs/WIIC.jar"
+          target: "plugins/WIIC.jar"
+          restart: false
