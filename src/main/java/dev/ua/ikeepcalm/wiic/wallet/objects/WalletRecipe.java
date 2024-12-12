@@ -1,7 +1,7 @@
 package dev.ua.ikeepcalm.wiic.wallet.objects;
 
-import de.tr7zw.nbtapi.NBT;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
@@ -21,14 +21,7 @@ public class WalletRecipe {
     }
 
     public void createWalletRecipe(JavaPlugin plugin) {
-        ItemStack wallet = new ItemStack(Material.GLOWSTONE_DUST, 1);
-        NBT.modify(wallet, nbt -> {
-            nbt.setString("type", "wallet");
-            nbt.modifyMeta((readableNBT, meta) -> {
-                meta.setDisplayName(ChatColor.RESET + "" + ChatColor.AQUA + "Гаманець");
-                meta.setCustomModelData(1488);
-            });
-        });
+        ItemStack wallet = WalletUtil.getWallet();
 
         ShapedRecipe recipe = new ShapedRecipe(new NamespacedKey(plugin, "wallet-item"), wallet).shape(
                 "LLL",

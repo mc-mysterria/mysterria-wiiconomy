@@ -18,10 +18,11 @@ package dev.ua.ikeepcalm.market.auction.inventories;
 
 
 import de.themoep.inventorygui.*;
-import de.tr7zw.nbtapi.NBTItem;
 import dev.ua.ikeepcalm.market.util.*;
 import dev.ua.ikeepcalm.market.util.chat.ChatInputAPI;
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
@@ -62,20 +63,13 @@ public class SalesInventoryManager {
                         open(player, filter, recentlyListed, typeFilter);
                         return;
                     }
-                    NBTItem nbtItem = new NBTItem(event.item());
-                    if (event.item().getType() != Material.GLOWSTONE_DUST || !nbtItem.getString("type").equals("wallet")) {
-                        ItemStackUtil.giveOrDrop(player, event.item());
-                        open(player, filter, recentlyListed, typeFilter);
-                        return;
-                    }
-                    UUID walletId = nbtItem.getUUID("id");
-                    if (walletId == null) {
+                    if (!WalletUtil.isWallet(event.item())) {
                         ItemStackUtil.giveOrDrop(player, event.item());
                         open(player, filter, recentlyListed, typeFilter);
                         return;
                     }
                     WalletManager walletManager = new WalletManager();
-                    WalletData walletData = walletManager.getWallet(walletId);
+                    WalletData walletData = walletManager.getWallet(WalletUtil.getWalletId(event.item()));
                     if (walletData == null) {
                         ItemStackUtil.giveOrDrop(player, event.item());
                         open(player, filter, recentlyListed, typeFilter);

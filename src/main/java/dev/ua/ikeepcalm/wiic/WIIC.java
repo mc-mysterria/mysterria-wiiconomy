@@ -5,7 +5,6 @@ import dev.ua.ikeepcalm.market.npc.commands.SpawnNpcCommand;
 import dev.ua.ikeepcalm.market.npc.listeners.NpcListener;
 import dev.ua.ikeepcalm.market.util.AuctionUtil;
 import dev.ua.ikeepcalm.market.util.PendingMoneyManager;
-import dev.ua.ikeepcalm.wiic.commands.ConvertCommand;
 import dev.ua.ikeepcalm.wiic.commands.ShatterCommand;
 import dev.ua.ikeepcalm.wiic.commands.WalletCommand;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
@@ -40,7 +39,6 @@ public final class WIIC extends JavaPlugin {
         NpcListener npcListener = new NpcListener();
         registerEvents(new WalletListener(), new VillagerListener(this), npcListener, new JoinListener());
         Objects.requireNonNull(getCommand("wallet")).setExecutor(new WalletCommand());
-        Objects.requireNonNull(getCommand("convert")).setExecutor(new ConvertCommand());
         Objects.requireNonNull(getCommand("shatter")).setExecutor(new ShatterCommand());
         Objects.requireNonNull(getCommand("summon-shopkeeper")).setExecutor(new SpawnNpcCommand(npcListener));
 

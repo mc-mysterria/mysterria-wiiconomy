@@ -21,8 +21,8 @@ public class WalletManager {
         }
     }
 
-    public WalletData getWallet(UUID id) {
-        File walletFile = new File(walletDirectory, id.toString() + ".json");
+    public WalletData getWallet(String id) {
+        File walletFile = new File(walletDirectory, id + ".json");
         if (walletFile.exists()) {
             try (FileReader reader = new FileReader(walletFile)) {
                 Gson gson = new Gson();

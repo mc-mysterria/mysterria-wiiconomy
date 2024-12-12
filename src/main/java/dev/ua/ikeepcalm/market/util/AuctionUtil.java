@@ -274,7 +274,7 @@ public class AuctionUtil {
         if (verlDors > 0) {
             result = verlDors + " аур " + result;
         }
-        return result;
+        return result.strip();
     }
 
     public HikariDataSource getDataSource() {

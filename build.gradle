@@ -47,8 +47,7 @@ dependencies {
     api 'com.zaxxer:HikariCP:5.0.1'
     compileOnly 'net.luckperms:api:5.4'
     compileOnly "io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT"
-    compileOnly "de.tr7zw:item-nbt-api-plugin:2.13.1"
-    implementation 'com.github.stefvanschie.inventoryframework:IF:0.10.18'
+    implementation 'com.github.stefvanschie.inventoryframework:IF:0.10.19'
 }
 
 def targetJavaVersion = 21
@@ -82,7 +81,7 @@ tasks {
     runServer {
         minecraftVersion("1.21")
         downloadPlugins{
-            modrinth("nbtapi", "2.13.1")
+            url("https://download.luckperms.net/1552/bukkit/loader/LuckPerms-Bukkit-5.4.137.jar")
         }
     }
 }
