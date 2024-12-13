@@ -7,7 +7,7 @@ import org.bukkit.inventory.ItemStack;
 public class CoinUtil {
     public static ItemStack getVerlDor(int amount) {
         ItemStack verlDor = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItem(verlDor, "verlDor", "Аур", NamedTextColor.YELLOW, 1);
+        ItemUtil.modifyItem(verlDor, "verlDor", "Аур", NamedTextColor.YELLOW);
         return verlDor;
     }
 
@@ -15,7 +15,7 @@ public class CoinUtil {
 
     public static ItemStack getLick(int amount) {
         ItemStack lick = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItem(lick, "lick", "Лік", NamedTextColor.GRAY, 2);
+        ItemUtil.modifyItem(lick, "lick", "Лік", NamedTextColor.GRAY);
         return lick;
     }
 
@@ -23,7 +23,7 @@ public class CoinUtil {
 
     public static ItemStack getCoppet(int amount) {
         ItemStack coppet = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItem(coppet, "coppet", "Копійка", NamedTextColor.GOLD, 3);
+        ItemUtil.modifyItem(coppet, "coppet", "Копійка", NamedTextColor.GOLD);
         return coppet;
     }
 
