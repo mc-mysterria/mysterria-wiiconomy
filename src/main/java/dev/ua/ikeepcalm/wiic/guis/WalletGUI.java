@@ -4,6 +4,7 @@ import com.github.stefvanschie.inventoryframework.adventuresupport.ComponentHold
 import com.github.stefvanschie.inventoryframework.gui.GuiItem;
 import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
 import com.github.stefvanschie.inventoryframework.pane.OutlinePane;
+import dev.ua.ikeepcalm.market.util.AuctionUtil;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
@@ -40,7 +41,7 @@ public class WalletGUI {
 
         final OutlinePane menu = new OutlinePane(4, 1, 3, 2);
         menu.addItem(new GuiItem(getDonateInfoItem(player), click -> click.setCancelled(true)));
-        menu.addItem(new GuiItem(getConverterItem(), click -> {
+        menu.addItem(new GuiItem(getConverterItem(data), click -> {
             click.setCancelled(true);
             new VaultGUI(appraiser, walletManager, soldItemsManager).openVault(player, data);
         }));
@@ -72,10 +73,12 @@ public class WalletGUI {
         return 0;
     }
 
-    private static ItemStack getConverterItem() {
+    private static ItemStack getConverterItem(WalletData data) {
         ItemStack item = new ItemStack(Material.GOLD_INGOT);
         ItemMeta meta = item.getItemMeta();
-        meta.itemName(Component.text("Зняти/поповнити").color(NamedTextColor.GOLD));
+        meta.itemName(Component.text("Ігрова валюта").color(NamedTextColor.GOLD));
+        meta.lore(List.of(Component.text("Поточний рахунок: " + AuctionUtil.getFormattedPrice(data.getTotalCoppets()))
+                .color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)));
         item.setItemMeta(meta);
         return item;
     }
