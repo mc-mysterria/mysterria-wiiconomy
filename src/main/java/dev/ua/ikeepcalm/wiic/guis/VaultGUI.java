@@ -42,7 +42,7 @@ public class VaultGUI {
     }
 
 
-    public void openVault(Player player, WalletData data) {
+    public void openVault(Player player, WalletData data, Runnable onClose) {
         gui = new ChestGui(4, ComponentHolder.of(Component.text("Зняття/поповнення").color(NamedTextColor.DARK_GREEN)));
         setupBackground();
         walletInventory = new OutlinePane(1, 1, 7, 3, Pane.Priority.HIGH);
@@ -100,13 +100,13 @@ public class VaultGUI {
                         player.getInventory().addItem(item);
                         handleWithdrawnItem(item, data);
                         gui.update();
-                        openVault(player, data);
+                        openVault(player, data, onClose);
                     }
 
                     @Override
                     public void onCancel() {
                         gui.update();
-                        openVault(player, data);
+                        openVault(player, data, onClose);
                     }
                 }).open();
             }));
@@ -125,13 +125,13 @@ public class VaultGUI {
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
                         handleSoldItem(player, item, data);
-                        openVault(player, data);
+                        openVault(player, data, onClose);
                     }
 
                     @Override
                     public void onCancel() {
                         gui.update();
-                        openVault(player, data);
+                        openVault(player, data, onClose);
                     }
                 }, appraiser, soldItemsManager).open();
             }));
@@ -148,13 +148,13 @@ public class VaultGUI {
                         walletInventory.addItem(new GuiItem(item));
                         updateWalletData(data);
                         gui.update();
-                        openVault(player, data);
+                        openVault(player, data, onClose);
                     }
 
                     @Override
                     public void onCancel() {
                         gui.update();
-                        openVault(player, data);
+                        openVault(player, data, onClose);
                     }
                 }).open();
             });
@@ -174,6 +174,7 @@ public class VaultGUI {
                     @Override
                     public void run() {
                         removeUUIDTags(player.getInventory());
+                        onClose.run();
                     }
                 }.runTaskLaterAsynchronously(WIIC.INSTANCE, 20);
             } else {

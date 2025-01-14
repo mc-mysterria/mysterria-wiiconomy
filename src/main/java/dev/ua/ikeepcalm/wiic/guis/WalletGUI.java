@@ -25,6 +25,7 @@ public class WalletGUI {
     private final Appraiser appraiser;
     private final WalletManager walletManager;
     private final SoldItemsManager soldItemsManager;
+    private boolean callOnClose = true;
 
     public WalletGUI(Appraiser appraiser, WalletManager walletManager, SoldItemsManager soldItemsManager) {
         this.appraiser = appraiser;
@@ -32,7 +33,7 @@ public class WalletGUI {
         this.soldItemsManager = soldItemsManager;
     }
 
-    public void open(Player player, WalletData data) {
+    public void open(Player player, WalletData data, Runnable onClose) {
         gui = new ChestGui(3, ComponentHolder.of(Component.text("\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3206").color(NamedTextColor.WHITE)));
 
         final OutlinePane head = new OutlinePane(1, 1, 1,1);
@@ -43,9 +44,14 @@ public class WalletGUI {
         menu.addItem(new GuiItem(getDonateInfoItem(player), click -> click.setCancelled(true)));
         menu.addItem(new GuiItem(getConverterItem(data), click -> {
             click.setCancelled(true);
-            new VaultGUI(appraiser, walletManager, soldItemsManager).openVault(player, data);
+            callOnClose = false;
+            new VaultGUI(appraiser, walletManager, soldItemsManager).openVault(player, data, onClose);
         }));
         gui.addPane(menu);
+
+        gui.setOnClose(event -> {
+            if (callOnClose) onClose.run();
+        });
 
         gui.show(player);
     }
