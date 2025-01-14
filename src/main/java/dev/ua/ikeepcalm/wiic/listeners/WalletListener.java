@@ -4,7 +4,6 @@ import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.guis.WalletGUI;
-import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
@@ -93,7 +92,7 @@ public class WalletListener implements Listener {
             p.sendMessage(Component.text("Виникла помилка! Зверніться до адміністратора.").color(NamedTextColor.RED));
             return;
         }
-        new WalletGUI(appraiser, walletManager, soldItemsManager).openVault(p, data);
+        new WalletGUI(appraiser, walletManager, soldItemsManager).open(p, data);
     }
 
 
