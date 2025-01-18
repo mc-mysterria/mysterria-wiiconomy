@@ -23,7 +23,7 @@ public class SellingGUI {
 
     private final Player pl;
     private final ItemStack item;
-    private final WalletGUI walletGUI;
+    private final VaultGUI vaultGUI;
     private final ConfirmationCallback callback;
     private final Appraiser appraiser;
     private final SoldItemsManager soldItemsManager;
@@ -31,14 +31,14 @@ public class SellingGUI {
     public SellingGUI(
         Player player,
         ItemStack item,
-        WalletGUI walletGUI,
+        VaultGUI vaultGUI,
         ConfirmationCallback callback,
         Appraiser appraiser,
         SoldItemsManager soldItemsManager
     ) {
         this.pl = player;
         this.item = item;
-        this.walletGUI = walletGUI;
+        this.vaultGUI = vaultGUI;
         this.callback = callback;
         this.appraiser = appraiser;
         this.soldItemsManager = soldItemsManager;
@@ -107,7 +107,7 @@ public class SellingGUI {
         }
         gui.setOnClose(event -> {
             if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW) {
-                walletGUI.removeUUIDTags(pl.getInventory());
+                vaultGUI.removeUUIDTags(pl.getInventory());
             }
         });
         gui.show(pl);

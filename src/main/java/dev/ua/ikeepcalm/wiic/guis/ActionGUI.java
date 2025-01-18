@@ -21,13 +21,13 @@ public class ActionGUI {
 
     private final Player pl;
     private final ItemStack item;
-    private final WalletGUI walletGUI;
+    private final VaultGUI vaultGUI;
     private final ConfirmationCallback callback;
 
-    public ActionGUI(Player player, ItemStack item, WalletGUI walletGUI, ConfirmationCallback callback) {
+    public ActionGUI(Player player, ItemStack item, VaultGUI vaultGUI, ConfirmationCallback callback) {
         this.pl = player;
         this.item = item;
-        this.walletGUI = walletGUI;
+        this.vaultGUI = vaultGUI;
         this.callback = callback;
     }
 
@@ -62,7 +62,7 @@ public class ActionGUI {
 
         gui.setOnClose(event -> {
             if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW) {
-                walletGUI.removeUUIDTags(pl.getInventory());
+                vaultGUI.removeUUIDTags(pl.getInventory());
             }
         });
 
