@@ -10,6 +10,7 @@ import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
@@ -21,10 +22,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.Recipe;
-
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Arrays;
 import java.util.UUID;
 
 
@@ -58,14 +56,22 @@ public class WalletListener implements Listener {
 
     @EventHandler
     private void playerCraftEvent(CraftItemEvent event) {
-        Recipe recipe = event.getRecipe();
-        ItemStack result = recipe.getResult();
-        if (WalletUtil.isWallet(result)) {
-            UUID id = UUID.randomUUID();
-            WalletUtil.setWalletData(result, id, event.getWhoClicked().getName());
-            walletManager.createWallet(id, event.getWhoClicked().getName());
-        }
+        ItemStack result = event.getInventory().getResult();
+        createWallet(result, event.getWhoClicked().getName());
         event.getInventory().setResult(result);
+        Bukkit.getScheduler().runTaskLater(WIIC.INSTANCE, () -> event.getWhoClicked().getInventory().setContents(
+                Arrays.stream(event.getWhoClicked().getInventory().getContents())
+                        .peek(item -> createWallet(item, event.getWhoClicked().getName()))
+                        .toArray(ItemStack[]::new)
+        ), 1);
+    }
+
+    private void createWallet(ItemStack wallet, String playerName) {
+        if (WalletUtil.isWallet(wallet) && WalletUtil.getWalletId(wallet) == null) {
+            UUID id = UUID.randomUUID();
+            WalletUtil.setWalletData(wallet, id, playerName);
+            walletManager.createWallet(id, playerName);
+        }
     }
 
     @EventHandler
