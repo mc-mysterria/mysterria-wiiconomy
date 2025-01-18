@@ -14,7 +14,7 @@ import java.util.UUID;
 public class WalletUtil {
     public static ItemStack getWallet() {
         ItemStack wallet = new ItemStack(Material.GLOWSTONE_DUST, 1);
-        ItemUtil.modifyItem(wallet, "wallet", "Гаманець", NamedTextColor.AQUA, 1488);
+        ItemUtil.modifyItem(wallet, "wallet", "Гаманець", NamedTextColor.AQUA);
         return wallet;
     }
 

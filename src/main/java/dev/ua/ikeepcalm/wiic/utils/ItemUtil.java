@@ -24,13 +24,13 @@ public class ItemUtil {
         return item.getItemMeta().getPersistentDataContainer().get(getTypeKey(), PersistentDataType.STRING);
     }
 
-    public static void modifyItem(ItemStack item, String type, String displayName, NamedTextColor color, int customModelData) {
+    public static void modifyItem(ItemStack item, String type, String displayName, NamedTextColor color) {
         if (item == null) return;
         if (item.getAmount() > 0) {
             setType(item, type);
             ItemMeta meta = item.getItemMeta();
             meta.displayName(Component.text(displayName).color(color).decoration(TextDecoration.ITALIC, false));
-            meta.setCustomModelData(customModelData);
+            meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, type));
             item.setItemMeta(meta);
         }
     }
