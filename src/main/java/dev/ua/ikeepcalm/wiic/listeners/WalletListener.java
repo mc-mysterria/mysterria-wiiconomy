@@ -53,8 +53,7 @@ public class WalletListener implements Listener {
 
     @EventHandler
     private void playerCraftEvent(CraftItemEvent event) {
-        Recipe recipe = event.getRecipe();
-        ItemStack result = recipe.getResult();
+        ItemStack result = event.getInventory().getResult();
         if (WalletUtil.isWallet(result)) {
             UUID id = UUID.randomUUID();
             WalletUtil.setWalletData(result, id, event.getWhoClicked().getName());
