@@ -4,12 +4,12 @@ import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.guis.WalletGUI;
-import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -19,8 +19,8 @@ import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.Recipe;
 
+import java.util.Arrays;
 import java.util.UUID;
 
 
@@ -54,12 +54,21 @@ public class WalletListener implements Listener {
     @EventHandler
     private void playerCraftEvent(CraftItemEvent event) {
         ItemStack result = event.getInventory().getResult();
-        if (WalletUtil.isWallet(result)) {
-            UUID id = UUID.randomUUID();
-            WalletUtil.setWalletData(result, id, event.getWhoClicked().getName());
-            walletManager.createWallet(id, event.getWhoClicked().getName());
-        }
+        createWallet(result, event.getWhoClicked().getName());
         event.getInventory().setResult(result);
+        Bukkit.getScheduler().runTaskLater(WIIC.INSTANCE, () -> event.getWhoClicked().getInventory().setContents(
+                Arrays.stream(event.getWhoClicked().getInventory().getContents())
+                        .peek(item -> createWallet(item, event.getWhoClicked().getName()))
+                        .toArray(ItemStack[]::new)
+        ), 1);
+    }
+
+    private void createWallet(ItemStack wallet, String playerName) {
+        if (WalletUtil.isWallet(wallet) && WalletUtil.getWalletId(wallet) == null) {
+            UUID id = UUID.randomUUID();
+            WalletUtil.setWalletData(wallet, id, playerName);
+            walletManager.createWallet(id, playerName);
+        }
     }
 
     @EventHandler
