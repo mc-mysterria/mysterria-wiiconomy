@@ -5,6 +5,7 @@ import com.github.stefvanschie.inventoryframework.gui.GuiItem;
 import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
 import com.github.stefvanschie.inventoryframework.pane.OutlinePane;
 import dev.ua.ikeepcalm.market.util.AuctionUtil;
+import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
@@ -13,6 +14,7 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
@@ -71,6 +73,7 @@ public class WalletGUI {
         meta.itemName(Component.text("Донатна валюта").color(NamedTextColor.BLUE));
         meta.lore(List.of(Component.text("Поточний рахунок: " + getDonateBalance(player))
                 .color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)));
+        meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, "donate"));
         item.setItemMeta(meta);
         return item;
     }
@@ -85,6 +88,7 @@ public class WalletGUI {
         meta.itemName(Component.text("Ігрова валюта").color(NamedTextColor.GOLD));
         meta.lore(List.of(Component.text("Поточний рахунок: " + AuctionUtil.getFormattedPrice(data.getTotalCoppets()))
                 .color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)));
+        meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, "game_money"));
         item.setItemMeta(meta);
         return item;
     }
