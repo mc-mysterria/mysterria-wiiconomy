@@ -2,7 +2,6 @@ package dev.ua.ikeepcalm.wiic.wallet.objects;
 
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
-import net.md_5.bungee.api.ChatColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -29,7 +28,7 @@ public class WalletRecipe {
                 "LLL");
         recipe.setIngredient('L', Material.LEATHER);
         recipe.setIngredient('D', Material.PAPER);
-        recipe.setIngredient('I', Material.WITHER_ROSE);
+        recipe.setIngredient('I', Material.ECHO_SHARD);
 
         Bukkit.getServer().addRecipe(recipe);
     }
