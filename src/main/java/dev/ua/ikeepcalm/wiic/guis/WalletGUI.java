@@ -55,6 +55,8 @@ public class WalletGUI {
             if (callOnClose) onClose.run();
         });
 
+        gui.setOnGlobalClick(click -> click.setCancelled(true));
+
         gui.show(player);
     }
 
