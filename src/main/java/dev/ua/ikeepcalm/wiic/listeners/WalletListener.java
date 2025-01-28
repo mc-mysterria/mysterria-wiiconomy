@@ -11,9 +11,7 @@ import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.Bukkit;
-import org.bukkit.Material;
-import org.bukkit.Sound;
+import org.bukkit.*;
 import org.bukkit.block.Crafter;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -26,6 +24,8 @@ import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.Recipe;
+
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -69,9 +69,13 @@ public class WalletListener implements Listener {
         return false;
     }
 
+    private boolean isNotSpecialRecipe(Recipe recipe) {
+        return !(recipe instanceof Keyed keyed) || !keyed.getKey().getNamespace().equals(WIIC.getNamespace());
+    }
+
     @EventHandler
     private void prepareCraftEvent(PrepareItemCraftEvent event) {
-        if (containsSpecialItem(event.getInventory().getContents())) {
+        if (containsSpecialItem(event.getInventory().getMatrix()) && isNotSpecialRecipe(event.getRecipe())) {
             event.getInventory().setResult(null);
         }
     }
@@ -85,7 +89,7 @@ public class WalletListener implements Listener {
 
     @EventHandler
     private void playerCraftEvent(CraftItemEvent event) {
-        if (containsSpecialItem(event.getInventory().getContents())) {
+        if (containsSpecialItem(event.getInventory().getMatrix()) && isNotSpecialRecipe(event.getRecipe())) {
             event.setCancelled(true);
             return;
         }

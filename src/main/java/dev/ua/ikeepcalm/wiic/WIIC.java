@@ -12,6 +12,7 @@ import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletRecipe;
 import net.luckperms.api.LuckPerms;
 import org.bukkit.Bukkit;
+import org.bukkit.NamespacedKey;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -27,10 +28,13 @@ public final class WIIC extends JavaPlugin {
     private AuctionUtil auctionUtil;
     private static LuckPerms luckPerms;
     private static PendingMoneyManager pendingMoneyManager;
+    private static String pluginNamespace;
 
     @Override
     public void onEnable() {
         INSTANCE = this;
+        pluginNamespace = new NamespacedKey(this, "dummy").getNamespace();
+
         getLogger().info("WIIC plugin enabled...");
         if (!new File(getDataFolder() + File.separator + "config.yml").exists()) {
             saveDefaultConfig();
@@ -70,6 +74,10 @@ public final class WIIC extends JavaPlugin {
         if (provider != null) {
             luckPerms = provider.getProvider();
         }
+    }
+
+    public static String getNamespace() {
+        return pluginNamespace;
     }
 
     public AuctionUtil getAuctionUtil() {
