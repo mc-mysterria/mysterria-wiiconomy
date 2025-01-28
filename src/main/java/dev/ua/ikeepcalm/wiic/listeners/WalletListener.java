@@ -5,6 +5,8 @@ import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.guis.WalletGUI;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
@@ -13,13 +15,16 @@ import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.Sound;
+import org.bukkit.block.Crafter;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
+import org.bukkit.event.block.CrafterCraftEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.CraftItemEvent;
+import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import java.util.Arrays;
@@ -56,8 +61,36 @@ public class WalletListener implements Listener {
         }
     }
 
+    private boolean containsSpecialItem(ItemStack[] items) {
+        for (ItemStack item : items) {
+            if (item != null && item.hasItemMeta() && ItemUtil.getType(item) != null) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @EventHandler
+    private void prepareCraftEvent(PrepareItemCraftEvent event) {
+        if (containsSpecialItem(event.getInventory().getContents())) {
+            event.getInventory().setResult(null);
+        }
+    }
+
+    @EventHandler
+    private void onCrafterCraft(CrafterCraftEvent event) {
+        if (containsSpecialItem(((Crafter) event.getBlock().getState()).getInventory().getContents())) {
+            event.setCancelled(true);
+        }
+    }
+
     @EventHandler
     private void playerCraftEvent(CraftItemEvent event) {
+        if (containsSpecialItem(event.getInventory().getContents())) {
+            event.setCancelled(true);
+            return;
+        }
+
         ItemStack result = event.getInventory().getResult();
         createWallet(result, event.getWhoClicked().getName());
         event.getInventory().setResult(result);
