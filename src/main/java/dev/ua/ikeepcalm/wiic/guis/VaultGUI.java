@@ -14,6 +14,7 @@ import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -170,10 +171,12 @@ public class VaultGUI {
             updateWalletData(data);
             walletManager.updateWallet(data);
             if (!actionClose) {
+                for (int i = 1; i <= 20; i++) {
+                    Bukkit.getScheduler().runTaskLaterAsynchronously(WIIC.INSTANCE, () -> removeUUIDTags(player.getInventory()), i);
+                }
                 new BukkitRunnable() {
                     @Override
                     public void run() {
-                        removeUUIDTags(player.getInventory());
                         onClose.run();
                     }
                 }.runTaskLaterAsynchronously(WIIC.INSTANCE, 20);
