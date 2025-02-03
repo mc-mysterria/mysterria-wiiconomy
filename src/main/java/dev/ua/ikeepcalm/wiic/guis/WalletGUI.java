@@ -20,7 +20,9 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.SkullMeta;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 public class WalletGUI {
     ChestGui gui;
@@ -28,6 +30,9 @@ public class WalletGUI {
     private final WalletManager walletManager;
     private final SoldItemsManager soldItemsManager;
     private boolean callOnClose = true;
+
+    public final static Set<Player> playersWithOpenWallets = new HashSet<>();
+
 
     public WalletGUI(Appraiser appraiser, WalletManager walletManager, SoldItemsManager soldItemsManager) {
         this.appraiser = appraiser;
@@ -52,11 +57,15 @@ public class WalletGUI {
         gui.addPane(menu);
 
         gui.setOnClose(event -> {
-            if (callOnClose) onClose.run();
+            if (callOnClose) {
+                playersWithOpenWallets.remove(player);
+                onClose.run();
+            }
         });
 
         gui.setOnGlobalClick(click -> click.setCancelled(true));
 
+        playersWithOpenWallets.add(player);
         gui.show(player);
     }
 

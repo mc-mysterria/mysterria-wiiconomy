@@ -171,13 +171,16 @@ public class VaultGUI {
             updateWalletData(data);
             walletManager.updateWallet(data);
             if (!actionClose) {
+                WalletGUI.playersWithOpenWallets.remove(player);
                 for (int i = 1; i <= 20; i++) {
                     Bukkit.getScheduler().runTaskLaterAsynchronously(WIIC.INSTANCE, () -> removeUUIDTags(player.getInventory()), i);
                 }
                 new BukkitRunnable() {
                     @Override
                     public void run() {
-                        onClose.run();
+                        if (!WalletGUI.playersWithOpenWallets.contains(player)) {
+                            onClose.run();
+                        }
                     }
                 }.runTaskLaterAsynchronously(WIIC.INSTANCE, 20);
             } else {
