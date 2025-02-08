@@ -20,7 +20,7 @@ public class AuctionData {
     private final ItemStack item;
 
     public String getFormattedPrice() {
-        return WIIC.INSTANCE.getAuctionUtil().getFormattedPrice(this.price);
+        return AuctionUtil.getFormattedPrice(this.price);
     }
 
     public UUID getId() {

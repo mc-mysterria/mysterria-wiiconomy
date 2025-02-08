@@ -68,7 +68,7 @@ public class AuctionUtil {
 
     private void createTableIfNotExists() {
         try (Connection connection = this.dataSource.getConnection();
-             PreparedStatement statement = connection.prepareStatement("CREATE TABLE IF NOT EXISTS " + this.tableName + " (UUID TEXT PRIMARY KEY,Buyer TEXT,TimeStamp LONG,Price INTEGER,Seller TEXT,Item TEXT);");){
+             PreparedStatement statement = connection.prepareStatement("CREATE TABLE IF NOT EXISTS " + this.tableName + " (UUID TEXT PRIMARY KEY,Buyer TEXT,TimeStamp LONG,Price INTEGER,Seller TEXT,Item TEXT);")){
             statement.executeUpdate();
         }
         catch (SQLException e) {
@@ -84,7 +84,7 @@ public class AuctionUtil {
             String query = "SELECT * FROM " + this.tableName + " WHERE TimeStamp > " + timestampTwentyFourHoursAgo + ";";
             try (Connection connection = this.dataSource.getConnection();
                  PreparedStatement statement = connection.prepareStatement(query);
-                 ResultSet resultSet = statement.executeQuery();){
+                 ResultSet resultSet = statement.executeQuery()){
                 while (resultSet.next()) {
                     UUID id = UUID.fromString(resultSet.getString("UUID"));
                     long timeStamp = resultSet.getLong("TimeStamp");
@@ -116,7 +116,7 @@ public class AuctionUtil {
         CompletableFuture.runAsync(() -> {
             String updateQuery = "UPDATE " + this.tableName + " SET Buyer = ? WHERE UUID = ?;";
             try (Connection connection = this.dataSource.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(updateQuery);){
+                 PreparedStatement statement = connection.prepareStatement(updateQuery)){
                 statement.setString(1, buyerName);
                 statement.setString(2, uuid.toString());
                 statement.executeUpdate();
@@ -212,7 +212,7 @@ public class AuctionUtil {
             String serializedItem = BukkitSerialization.itemStackArrayToBase64(new ItemStack[]{data.getItem()});
             String insertQuery = "INSERT INTO " + this.tableName + " (UUID, Buyer, TimeStamp, Price, Seller, Item) VALUES (?, ?, ?, ?, ?, ?);";
             try (Connection connection = this.dataSource.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(insertQuery);){
+                 PreparedStatement statement = connection.prepareStatement(insertQuery)){
                 statement.setString(1, data.getId().toString());
                 statement.setString(2, data.getBuyer());
                 statement.setLong(3, data.getTimeStamp());
@@ -232,7 +232,7 @@ public class AuctionUtil {
         CompletableFuture.runAsync(() -> {
             String deleteQuery = "DELETE FROM " + this.tableName + " WHERE UUID = ?;";
             try (Connection connection = this.dataSource.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(deleteQuery);){
+                 PreparedStatement statement = connection.prepareStatement(deleteQuery)){
                 statement.setString(1, uuid.toString());
                 statement.executeUpdate();
                 this.itemDataCache.invalidate(uuid);
@@ -247,7 +247,7 @@ public class AuctionUtil {
         CompletableFuture.runAsync(() -> {
             String deleteQuery = "DELETE FROM " + this.tableName + " WHERE UUID = ?;";
             try (Connection connection = this.dataSource.getConnection();
-                 PreparedStatement statement = connection.prepareStatement(deleteQuery);){
+                 PreparedStatement statement = connection.prepareStatement(deleteQuery)){
                 statement.setString(1, uuid.toString());
                 statement.executeUpdate();
                 this.itemDataCache.invalidate(uuid);

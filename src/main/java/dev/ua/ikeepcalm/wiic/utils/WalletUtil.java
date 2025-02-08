@@ -21,6 +21,12 @@ public class WalletUtil {
         return wallet;
     }
 
+    public static boolean hasWalletData(ItemStack wallet) {
+        ItemMeta meta = wallet.getItemMeta();
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        return pdc.has(getWalletIdKey(), PersistentDataType.STRING) && pdc.has(getWalletOwnerKey(), PersistentDataType.STRING);
+    }
+
     private static NamespacedKey getWalletIdKey() {
         return new NamespacedKey(WIIC.INSTANCE, "id");
     }

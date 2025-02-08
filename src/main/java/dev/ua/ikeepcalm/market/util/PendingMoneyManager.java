@@ -9,12 +9,10 @@ import java.io.IOException;
 import java.util.UUID;
 
 public class PendingMoneyManager {
-    private final WIIC plugin;
     private final File pendingMoneyFile;
     private final FileConfiguration pendingMoneyConfig;
 
     public PendingMoneyManager(WIIC plugin) {
-        this.plugin = plugin;
         pendingMoneyFile = new File(plugin.getDataFolder(), "pendingMoney.yml");
         if (!pendingMoneyFile.exists()) {
             pendingMoneyFile.getParentFile().mkdirs();

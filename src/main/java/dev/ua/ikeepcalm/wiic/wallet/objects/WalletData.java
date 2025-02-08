@@ -1,9 +1,13 @@
 package dev.ua.ikeepcalm.wiic.wallet.objects;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.UUID;
 
+@Setter
+@Getter
 public class WalletData {
-
 
     private int verlDors;
     private int licks;
@@ -16,46 +20,6 @@ public class WalletData {
         this.verlDors = 0;
         this.licks = 0;
         this.coppets = 0;
-        this.owner = owner;
-    }
-
-    public int getVerlDors() {
-        return verlDors;
-    }
-
-    public void setVerlDors(int verlDors) {
-        this.verlDors = verlDors;
-    }
-
-    public int getLicks() {
-        return licks;
-    }
-
-    public void setLicks(int licks) {
-        this.licks = licks;
-    }
-
-    public int getCoppets() {
-        return coppets;
-    }
-
-    public void setCoppets(int coppets) {
-        this.coppets = coppets;
-    }
-
-    public UUID getId() {
-        return id;
-    }
-
-    public void setId(UUID id) {
-        this.id = id;
-    }
-
-    public String getOwner() {
-        return owner;
-    }
-
-    public void setOwner(String owner) {
         this.owner = owner;
     }
 
