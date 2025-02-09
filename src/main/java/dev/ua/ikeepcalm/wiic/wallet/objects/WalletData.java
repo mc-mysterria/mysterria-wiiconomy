@@ -3,8 +3,6 @@ package dev.ua.ikeepcalm.wiic.wallet.objects;
 import lombok.Getter;
 import lombok.Setter;
 
-import java.util.UUID;
-
 @Setter
 @Getter
 public class WalletData {
@@ -12,15 +10,9 @@ public class WalletData {
     private int verlDors;
     private int licks;
     private int coppets;
-    private UUID id;
-    private String owner;
 
-    public WalletData(UUID id, String owner) {
-        this.id = id;
-        this.verlDors = 0;
-        this.licks = 0;
-        this.coppets = 0;
-        this.owner = owner;
+    public WalletData(int totalCoppets) {
+        setTotalCoppets(totalCoppets);
     }
 
     public int getTotalCoppets() {

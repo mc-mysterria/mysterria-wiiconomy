@@ -11,7 +11,10 @@ import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import org.bukkit.*;
+import org.bukkit.Bukkit;
+import org.bukkit.Keyed;
+import org.bukkit.Material;
+import org.bukkit.Sound;
 import org.bukkit.block.Crafter;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -26,6 +29,7 @@ import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Recipe;
 
+import java.math.BigDecimal;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -52,11 +56,13 @@ public class WalletListener implements Listener {
         if (event.getAction().equals(Action.LEFT_CLICK_AIR) || event.getAction().equals(Action.LEFT_CLICK_BLOCK))
             return;
         if (WalletUtil.isWallet(item)) {
-            if (p.getInventory().getItemInOffHand().getType() != Material.AIR) {
-                offhandItems.put(p, p.getInventory().getItemInOffHand());
-                p.getInventory().setItemInOffHand(null);
+            if (WalletUtil.wasBound(item)) {
+                if (p.getInventory().getItemInOffHand().getType() != Material.AIR) {
+                    offhandItems.put(p, p.getInventory().getItemInOffHand());
+                    p.getInventory().setItemInOffHand(null);
+                }
+                openVaultInventory(p);
             }
-            openVaultInventory(p, WalletUtil.getWalletId(item));
         }
     }
 
@@ -95,7 +101,6 @@ public class WalletListener implements Listener {
         }
 
         ItemStack result = event.getInventory().getResult();
-        createWallet(result, event.getWhoClicked().getName());
         event.getInventory().setResult(result);
         Bukkit.getScheduler().runTaskLater(WIIC.INSTANCE, () -> event.getWhoClicked().getInventory().setContents(
                 Arrays.stream(event.getWhoClicked().getInventory().getContents())
@@ -108,7 +113,6 @@ public class WalletListener implements Listener {
         if (WalletUtil.isWallet(wallet) && WalletUtil.getWalletId(wallet) == null) {
             UUID id = UUID.randomUUID();
             WalletUtil.setWalletData(wallet, id, playerName);
-            walletManager.createWallet(id, playerName);
         }
     }
 
@@ -132,16 +136,15 @@ public class WalletListener implements Listener {
     }
 
     // Function to open the vault inventory
-    private void openVaultInventory(Player p, String id) {
-        WalletData data = walletManager.getWallet(id);
-        if (data == null) {
-            WIIC.INSTANCE.getLogger().info(p.getName() + " tried to open a wallet that doesn't exist");
-            WIIC.INSTANCE.getLogger().info("Wallet ID: " + id);
-            p.sendMessage(Component.text("Виникла помилка! Зверніться до адміністратора.").color(NamedTextColor.RED));
-            return;
+    private void openVaultInventory(Player p) {
+        if (WIIC.getEcon().hasAccount(p.getUniqueId())) {
+            BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", p.getUniqueId());
+            WalletData data = new WalletData(balance.intValue());
+            p.playSound(p.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1, 1);
+            new WalletGUI(appraiser, walletManager, soldItemsManager).open(p, data, () -> returnOffhandItem(p));
+        } else {
+            p.sendMessage(Component.text("Не ініціалізовано. Потримай гаманець у руках декілька секунд, і спробуй ще раз!").color(NamedTextColor.RED));
         }
-        p.playSound(p.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1, 1);
-        new WalletGUI(appraiser, walletManager, soldItemsManager).open(p, data, () -> returnOffhandItem(p));
     }
 
     private void returnOffhandItem(Player player) {

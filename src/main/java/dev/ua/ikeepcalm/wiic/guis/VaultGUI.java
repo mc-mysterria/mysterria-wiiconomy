@@ -10,7 +10,7 @@ import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
-import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
+import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -33,17 +33,16 @@ public class VaultGUI {
 
     private boolean actionClose = false;
     private final Appraiser appraiser;
-    private final WalletManager walletManager;
     private final SoldItemsManager soldItemsManager;
 
-    public VaultGUI(Appraiser appraiser, WalletManager walletManager, SoldItemsManager soldItemsManager) {
+    public VaultGUI(Appraiser appraiser, SoldItemsManager soldItemsManager) {
         this.appraiser = appraiser;
-        this.walletManager = walletManager;
         this.soldItemsManager = soldItemsManager;
     }
 
 
-    public void openVault(Player player, WalletData data, Runnable onClose) {
+    public void openVault(Player player, Runnable onClose) {
+        WalletData data = VaultUtil.getWalletData(player.getUniqueId());
         gui = new ChestGui(4, ComponentHolder.of(Component.text("Зняття/поповнення").color(NamedTextColor.DARK_GREEN)));
         setupBackground();
         walletInventory = new OutlinePane(1, 1, 7, 3, Pane.Priority.HIGH);
@@ -99,15 +98,15 @@ public class VaultGUI {
                             return;
                         }
                         player.getInventory().addItem(item);
-                        handleWithdrawnItem(item, data);
+                        handleWithdrawnItem(player, item);
                         gui.update();
-                        openVault(player, data, onClose);
+                        openVault(player, onClose);
                     }
 
                     @Override
                     public void onCancel() {
                         gui.update();
-                        openVault(player, data, onClose);
+                        openVault(player, onClose);
                     }
                 }).open();
             }));
@@ -125,14 +124,14 @@ public class VaultGUI {
                     @Override
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
-                        handleSoldItem(player, item, data);
-                        openVault(player, data, onClose);
+                        handleSoldItem(player, item);
+                        openVault(player, onClose);
                     }
 
                     @Override
                     public void onCancel() {
                         gui.update();
-                        openVault(player, data, onClose);
+                        openVault(player, onClose);
                     }
                 }, appraiser, soldItemsManager).open();
             }));
@@ -147,15 +146,15 @@ public class VaultGUI {
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
                         walletInventory.addItem(new GuiItem(item));
-                        updateWalletData(data);
+                        handleTransferredItem(player, item);
                         gui.update();
-                        openVault(player, data, onClose);
+                        openVault(player, onClose);
                     }
 
                     @Override
                     public void onCancel() {
                         gui.update();
-                        openVault(player, data, onClose);
+                        openVault(player, onClose);
                     }
                 }).open();
             });
@@ -168,8 +167,7 @@ public class VaultGUI {
         gui.setOnGlobalClick(event -> event.setCancelled(true));
 
         gui.setOnClose(event -> {
-            updateWalletData(data);
-            walletManager.updateWallet(data);
+            //updateWalletData(player, data);
             if (!actionClose) {
                 WalletGUI.playersWithOpenWallets.remove(player);
                 for (int i = 1; i <= 20; i++) {
@@ -223,58 +221,38 @@ public class VaultGUI {
         gui.addPane(right);
     }
 
-    private void handleSoldItem(Player player, ItemStack newItem, WalletData data) {
+
+    private void handleTransferredItem(Player player, ItemStack newItem) {
+        switch (ItemUtil.getType(newItem)) {
+            case "verlDor":
+                VaultUtil.deposit(player.getUniqueId(), newItem.getAmount() * 64 * 64);
+                break;
+            case "lick":
+                VaultUtil.deposit(player.getUniqueId(), newItem.getAmount() * 64);
+                break;
+            case "coppet":
+                VaultUtil.deposit(player.getUniqueId(), newItem.getAmount());
+                break;
+        }
+    }
+
+    private void handleSoldItem(Player player, ItemStack newItem) {
         int appraisal = appraiser.appraise(newItem);
-        data.setCoppets(data.getCoppets() + appraisal);
+        VaultUtil.deposit(player.getUniqueId(), appraisal);
         soldItemsManager.setSoldValue(player, soldItemsManager.getSoldValue(player) + appraisal);
     }
 
-    private void handleWithdrawnItem(ItemStack newItem, WalletData data) {
+    private void handleWithdrawnItem(Player player, ItemStack newItem) {
         switch (ItemUtil.getType(newItem)) {
             case "verlDor":
-                data.setVerlDors(data.getVerlDors() - newItem.getAmount());
+                VaultUtil.withdraw(player.getUniqueId(), newItem.getAmount() * 64 * 64);
                 break;
             case "lick":
-                data.setLicks(data.getLicks() - newItem.getAmount());
+                VaultUtil.withdraw(player.getUniqueId(), newItem.getAmount() * 64);
                 break;
             case "coppet":
-                data.setCoppets(data.getCoppets() - newItem.getAmount());
+                VaultUtil.withdraw(player.getUniqueId(), newItem.getAmount());
                 break;
         }
-    }
-
-    private void updateWalletData(WalletData data) {
-        int verlDors = 0;
-        int licks = 0;
-        int coppets = 0;
-
-        for (GuiItem item : walletInventory.getItems()) {
-            if (item.getItem().getType() == Material.AIR) continue;
-            switch (ItemUtil.getType(item.getItem())) {
-                case "verlDor":
-                    verlDors = (verlDors + item.getItem().getAmount());
-                    break;
-                case "lick":
-                    licks = (licks + item.getItem().getAmount());
-                    break;
-                case "coppet":
-                    coppets = (coppets + item.getItem().getAmount());
-                    break;
-            }
-        }
-
-        while (coppets >= 64) {
-            coppets -= 64;
-            licks++;
-        }
-
-        while (licks >= 64) {
-            licks -= 64;
-            verlDors++;
-        }
-
-        data.setVerlDors(verlDors);
-        data.setLicks(licks);
-        data.setCoppets(coppets);
     }
 }

@@ -39,35 +39,4 @@ public class WalletManager {
         return walletFile.exists();
     }
 
-    public void createWallet(UUID id, String name) {
-        if (!isDuplicate(id)) {
-            WalletData wallet = new WalletData(id, name);
-            saveWallet(wallet);
-        } else {
-            throw new IllegalArgumentException("Wallet already exists");
-        }
-    }
-
-    public void updateWallet(WalletData wallet) {
-        if (wallet.getId() != null) {
-            File walletFile = new File(walletDirectory, wallet.getId().toString() + ".json");
-            if (walletFile.exists()) {
-                saveWallet(wallet);
-            } else {
-                throw new IllegalArgumentException("Wallet not found");
-            }
-        } else {
-            throw new IllegalArgumentException("Wallet ID cannot be null");
-        }
-    }
-
-    private void saveWallet(WalletData wallet) {
-        File walletFile = new File(walletDirectory, wallet.getId().toString() + ".json");
-        try (FileWriter writer = new FileWriter(walletFile)) {
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            gson.toJson(wallet, writer);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
 }

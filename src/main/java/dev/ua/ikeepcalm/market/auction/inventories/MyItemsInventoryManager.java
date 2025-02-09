@@ -1,6 +1,6 @@
 /*
  * Decompiled with CFR 0.150.
- * 
+ *
  * Could not load the following classes:
  *  org.bukkit.Bukkit
  *  org.bukkit.entity.HumanEntity
@@ -18,7 +18,7 @@ import de.themoep.inventorygui.InventoryGui;
 import de.themoep.inventorygui.StaticGuiElement;
 import dev.ua.ikeepcalm.market.util.*;
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
@@ -26,8 +26,6 @@ import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.scheduler.BukkitTask;
-
-import java.util.UUID;
 
 public class MyItemsInventoryManager {
     private final String[] setup = new String[]{"aaaaaaaaa", "aaaaaaaaa", "aaaaaaaaa", "aaaaaaaaa", "aaaaaaaaa", "b   t    "};
@@ -63,22 +61,8 @@ public class MyItemsInventoryManager {
                         inventoryGui.show(player);
                         return;
                     }
-                    String walletId = WalletUtil.getWalletId(event.item());
-                    if (walletId == null) {
-                        ItemStackUtil.giveOrDrop(player, event.item());
-                        inventoryGui.show(player);
-                        return;
-                    }
-                    WalletManager walletManager = new WalletManager();
-                    WalletData walletData = walletManager.getWallet(walletId);
-                    if (walletData == null) {
-                        ItemStackUtil.giveOrDrop(player, event.item());
-                        inventoryGui.show(player);
-                        return;
-                    }
                     PendingMoneyManager pmm = WIIC.getPendingMoneyManager();
-                    walletData.setTotalCoppets(walletData.getTotalCoppets() + pmm.getPendingMoney(player.getUniqueId()));
-                    walletManager.updateWallet(walletData);
+                    VaultUtil.deposit(player.getUniqueId(), pmm.getPendingMoney(player.getUniqueId()));
                     pmm.setPendingMoney(player.getUniqueId(), 0);
                     player.sendMessage(Translator.translate("&aВи успішно зняли кошти"));
                     ItemStackUtil.giveOrDrop(player, event.item());

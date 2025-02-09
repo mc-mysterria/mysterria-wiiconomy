@@ -1,6 +1,6 @@
 /*
  * Decompiled with CFR 0.150.
- * 
+ *
  * Could not load the following classes:
  *  net.md_5.bungee.api.ChatMessageType
  *  net.md_5.bungee.api.chat.TextComponent
@@ -17,14 +17,15 @@
 package dev.ua.ikeepcalm.market.auction.inventories;
 
 
-import de.themoep.inventorygui.*;
+import de.themoep.inventorygui.DynamicGuiElement;
+import de.themoep.inventorygui.GuiElementGroup;
+import de.themoep.inventorygui.InventoryGui;
+import de.themoep.inventorygui.StaticGuiElement;
 import dev.ua.ikeepcalm.market.util.*;
 import dev.ua.ikeepcalm.market.util.chat.ChatInputAPI;
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
-import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
-import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.luckperms.api.model.user.User;
@@ -56,7 +57,8 @@ public class SalesInventoryManager {
             dataCollection.sort(timestampComparator.reversed());
         }
         for (AuctionData auctionData : dataCollection) {
-            if (auctionData.getBuyer() != null || System.currentTimeMillis() - auctionData.getTimeStamp() >= 86400000L) continue;
+            if (auctionData.getBuyer() != null || System.currentTimeMillis() - auctionData.getTimeStamp() >= 86400000L)
+                continue;
             group.addElement(new DynamicGuiElement('a', viewer -> new StaticGuiElement('a', ItemStackUtil.createStack(auctionData.getItem().clone(), "", "&#f2e40c&l\u25cf &fПродавець: &#f2e40c" + auctionData.getSeller(), "&#f2e40c&l\u25cf &fЧас: &#f2e40c" + TimeStampUtil.getCountdown(auctionData.getTimeStamp(), 86400L), "&#f2e40c&l\u25cf &fЦіна: &#f2e40c" + auctionData.getFormattedPrice()), click -> {
                 new InteractiveSlotInventory("Покладіть гаманець", auctionData.getItem(), event -> {
                     if (event.item() == null) {
@@ -68,20 +70,16 @@ public class SalesInventoryManager {
                         open(player, filter, recentlyListed, typeFilter);
                         return;
                     }
-                    WalletManager walletManager = new WalletManager();
-                    WalletData walletData = walletManager.getWallet(WalletUtil.getWalletId(event.item()));
-                    if (walletData == null) {
-                        ItemStackUtil.giveOrDrop(player, event.item());
-                        open(player, filter, recentlyListed, typeFilter);
-                        return;
-                    }
-                    if (walletData.getTotalCoppets() < auctionData.getPrice()) {
+
+                    double price = auctionData.getPrice();
+                    double balance = VaultUtil.getBalance(player.getUniqueId());
+                    if (balance < price) {
                         ItemStackUtil.giveOrDrop(player, event.item());
                         player.sendMessage(Component.text("Недостатньо коштів!", NamedTextColor.RED));
                         return;
                     }
-                    walletData.setTotalCoppets(walletData.getTotalCoppets() - auctionData.getPrice());
-                    walletManager.updateWallet(walletData);
+
+                    VaultUtil.withdraw(player.getUniqueId(), auctionData.getPrice());
                     auctionUtil.addBuyer(auctionData.getId(), player.getName());
                     player.sendMessage(Translator.translate("&aВи купили " + auctionData.getItem().getType().name() + " за " + auctionData.getFormattedPrice()));
                     UUID sellerId = Bukkit.getOfflinePlayer(auctionData.getSeller()).getUniqueId();
@@ -107,7 +105,7 @@ public class SalesInventoryManager {
 
         inventoryGui.addElement(new DynamicGuiElement('p', (viewer) -> new StaticGuiElement('p', new ItemStack(Material.ARROW),
                 click -> {
-                    if (inventoryGui.getPageNumber(player) != 0){
+                    if (inventoryGui.getPageNumber(player) != 0) {
                         inventoryGui.setPageNumber(player, inventoryGui.getPageNumber(player) - 1);
                         click.getGui().draw();
                     }
@@ -117,7 +115,7 @@ public class SalesInventoryManager {
 
         inventoryGui.addElement(new DynamicGuiElement('n', (viewer) -> new StaticGuiElement('n', new ItemStack(Material.ARROW),
                 click -> {
-                    if (inventoryGui.getPageNumber(player)+1 != inventoryGui.getPageAmount(player)){
+                    if (inventoryGui.getPageNumber(player) + 1 != inventoryGui.getPageAmount(player)) {
                         inventoryGui.setPageNumber(player, inventoryGui.getPageNumber(player) + 1);
                         click.getGui().draw();
                     }
@@ -166,7 +164,8 @@ public class SalesInventoryManager {
                 target,
                 Component.text("Введіть текст для пошуку в чат", NamedTextColor.GREEN),
                 event -> this.open(target, event.message(), false, typeFilter),
-                event -> {}
+                event -> {
+                }
         ).listen();
     }
 
@@ -179,7 +178,7 @@ public class SalesInventoryManager {
         if (groupsSection != null) {
             for (String groupName : groupsSection.getKeys(false)) {
                 int groupValue = groupsSection.getInt(groupName);
-                if (group.equals(groupName)){
+                if (group.equals(groupName)) {
                     slotLimit = groupValue;
                 }
             }

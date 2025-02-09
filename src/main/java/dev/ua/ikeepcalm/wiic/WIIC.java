@@ -5,11 +5,13 @@ import dev.ua.ikeepcalm.market.npc.commands.SpawnNpcCommand;
 import dev.ua.ikeepcalm.market.npc.listeners.NpcListener;
 import dev.ua.ikeepcalm.market.util.AuctionUtil;
 import dev.ua.ikeepcalm.market.util.PendingMoneyManager;
+import dev.ua.ikeepcalm.wiic.commands.BindCommand;
 import dev.ua.ikeepcalm.wiic.commands.ShatterCommand;
 import dev.ua.ikeepcalm.wiic.commands.WalletCommand;
 import dev.ua.ikeepcalm.wiic.economy.VaultAdapter;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
+import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletRecipe;
 import lombok.Getter;
 import lombok.Setter;
@@ -58,6 +60,7 @@ public final class WIIC extends JavaPlugin {
         Objects.requireNonNull(getCommand("wallet")).setExecutor(new WalletCommand());
         Objects.requireNonNull(getCommand("shatter")).setExecutor(new ShatterCommand());
         Objects.requireNonNull(getCommand("shopkeeper")).setExecutor(new SpawnNpcCommand(npcListener));
+        Objects.requireNonNull(getCommand("bind")).setExecutor(new BindCommand(new WalletManager()));
 
         try {
             this.auctionUtil = new AuctionUtil(this.getDataFolder().toPath());
@@ -71,8 +74,9 @@ public final class WIIC extends JavaPlugin {
             return;
         }
 
-        vaultAdapter = new VaultAdapter();
-        vaultAdapter.runTaskTimer(this, 0, 100);
+        // Enable if
+//        vaultAdapter = new VaultAdapter();
+//        vaultAdapter.runTaskTimer(this, 0, 100);
         pendingMoneyManager = new PendingMoneyManager(this);
     }
 

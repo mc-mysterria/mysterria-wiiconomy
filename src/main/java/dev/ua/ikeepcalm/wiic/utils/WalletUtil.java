@@ -12,6 +12,7 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.UUID;
 
 public class WalletUtil {
+
     public static ItemStack getWallet() {
         ItemStack wallet = new ItemStack(Material.GLOWSTONE_DUST, 1);
         ItemMeta meta = wallet.getItemMeta();
@@ -19,6 +20,19 @@ public class WalletUtil {
         wallet.setItemMeta(meta);
         ItemUtil.modifyItem(wallet, "wallet", "Гаманець", NamedTextColor.AQUA);
         return wallet;
+    }
+
+    public static void bindWallet(ItemStack wallet) {
+        ItemMeta meta = wallet.getItemMeta();
+        PersistentDataContainer pdc = meta.getPersistentDataContainer();
+        pdc.remove(getWalletOwnerKey());
+        pdc.remove(getWalletIdKey());
+        pdc.set(getBoundKey(), PersistentDataType.STRING, "true");
+        wallet.setItemMeta(meta);
+    }
+
+    public static boolean wasBound(ItemStack wallet) {
+        return wallet.getItemMeta().getPersistentDataContainer().has(getBoundKey(), PersistentDataType.STRING);
     }
 
     public static boolean hasWalletData(ItemStack wallet) {
@@ -33,6 +47,10 @@ public class WalletUtil {
 
     private static NamespacedKey getWalletOwnerKey() {
         return new NamespacedKey(WIIC.INSTANCE, "owner");
+    }
+
+    private static NamespacedKey getBoundKey() {
+        return new NamespacedKey(WIIC.INSTANCE, "bound");
     }
 
     public static void setWalletData(ItemStack wallet, UUID id, String owner) {

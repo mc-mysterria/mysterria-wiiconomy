@@ -8,6 +8,10 @@ commands:
     description: Check your wallet debug information
     usage: /wallet
     permission: wiic.wallet
+  bind:
+    description: Bind wallet item to player
+    usage: /bind
+    permission: wiic.bind
   shatter:
     description: Shatter currency to lesser
     usage: /shatter

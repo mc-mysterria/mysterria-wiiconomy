@@ -30,9 +30,7 @@ public class WalletGUI {
     private final WalletManager walletManager;
     private final SoldItemsManager soldItemsManager;
     private boolean callOnClose = true;
-
     public final static Set<Player> playersWithOpenWallets = new HashSet<>();
-
 
     public WalletGUI(Appraiser appraiser, WalletManager walletManager, SoldItemsManager soldItemsManager) {
         this.appraiser = appraiser;
@@ -52,7 +50,7 @@ public class WalletGUI {
         menu.addItem(new GuiItem(getConverterItem(data), click -> {
             click.setCancelled(true);
             callOnClose = false;
-            new VaultGUI(appraiser, walletManager, soldItemsManager).openVault(player, data, onClose);
+            new VaultGUI(appraiser, soldItemsManager).openVault(player, onClose);
         }));
         gui.addPane(menu);
 
