@@ -28,7 +28,6 @@ public class ItemUtil {
         if (item == null) return;
         if (item.getAmount() > 0) {
             setType(item, type);
-            WalletUtil.bindWallet(item);
             ItemMeta meta = item.getItemMeta();
             meta.displayName(Component.text(displayName).color(color).decoration(TextDecoration.ITALIC, false));
             meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, type));

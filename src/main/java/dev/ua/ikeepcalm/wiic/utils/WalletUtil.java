@@ -19,6 +19,7 @@ public class WalletUtil {
         meta.setMaxStackSize(1);
         wallet.setItemMeta(meta);
         ItemUtil.modifyItem(wallet, "wallet", "Гаманець", NamedTextColor.AQUA);
+        WalletUtil.bindWallet(wallet);
         return wallet;
     }
 
