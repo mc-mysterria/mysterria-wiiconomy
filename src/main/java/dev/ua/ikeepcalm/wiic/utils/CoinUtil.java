@@ -33,7 +33,9 @@ public class CoinUtil {
         if (item == null || item.getType() != Material.GOLD_INGOT || !item.hasItemMeta()) {
             return false;
         }
-        return switch (ItemUtil.getType(item)) {
+        final String type = ItemUtil.getType(item);
+        if (type == null) return false;
+        return switch (type) {
             case "coppet", "lick", "verlDor" -> true;
             default -> false;
         };
