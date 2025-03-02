@@ -39,6 +39,8 @@ public class WalletGUI {
     }
 
     public void open(Player player, WalletData data, Runnable onClose) {
+        if (playersWithOpenWallets.contains(player)) return;
+
         gui = new ChestGui(3, ComponentHolder.of(Component.text("\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3206").color(NamedTextColor.WHITE)));
 
         final OutlinePane head = new OutlinePane(1, 1, 1,1);
