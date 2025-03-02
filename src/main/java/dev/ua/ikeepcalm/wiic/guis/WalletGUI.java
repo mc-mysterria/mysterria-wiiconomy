@@ -50,6 +50,7 @@ public class WalletGUI {
         menu.addItem(new GuiItem(getConverterItem(data), click -> {
             click.setCancelled(true);
             callOnClose = false;
+            player.closeInventory();
             new VaultGUI(appraiser, soldItemsManager).openVault(player, onClose);
         }));
         gui.addPane(menu);
