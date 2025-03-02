@@ -101,6 +101,7 @@ public class VaultGUI {
                             return;
                         }
                         player.getInventory().addItem(item);
+                        player.closeInventory();
                         Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
                             handleWithdrawnItem(player, item);
                             gui.update();
@@ -129,6 +130,7 @@ public class VaultGUI {
                     @Override
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
+                        player.closeInventory();
                         Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
                             handleSoldItem(player, item);
                             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
@@ -153,6 +155,7 @@ public class VaultGUI {
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
                         walletInventory.addItem(new GuiItem(item));
+                        player.closeInventory();
                         Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
                             handleTransferredItem(player, item);
                             gui.update();
