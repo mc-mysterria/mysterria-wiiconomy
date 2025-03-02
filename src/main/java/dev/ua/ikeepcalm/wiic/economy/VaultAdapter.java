@@ -28,7 +28,7 @@ public class VaultAdapter extends BukkitRunnable {
                         if (WalletUtil.hasWalletData(item)) {
                             Economy economy = WIIC.getEcon();
                             if (economy.hasAccount(player.getUniqueId())) {
-                                if (VaultUtil.getBalance(player.getUniqueId()) == 0) {
+                                if (VaultUtil.getBalance(player.getUniqueId()).join() == 0) {
                                     WalletData walletData = walletManager.getWallet(WalletUtil.getWalletId(item));
                                     if (!WalletUtil.wasBound(item)) {
                                         WalletUtil.bindWallet(item);

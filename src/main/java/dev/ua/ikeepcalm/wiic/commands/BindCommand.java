@@ -6,6 +6,7 @@ import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.milkbowl.vault2.economy.Economy;
+import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
@@ -30,19 +31,21 @@ public class BindCommand implements CommandExecutor {
                 if (item != null && item.getType() == Material.GLOWSTONE_DUST) {
                     if (item.hasItemMeta()) {
                         if (WalletUtil.hasWalletData(item)) {
-                            Economy economy = WIIC.getEcon();
-                            if (economy.hasAccount(player.getUniqueId())) {
-                                if (VaultUtil.getBalance(player.getUniqueId()) == 0) {
-                                    WalletData walletData = walletManager.getWallet(WalletUtil.getWalletId(item));
-                                    if (!WalletUtil.wasBound(item)) {
-                                        WalletUtil.bindWallet(item);
-                                        VaultUtil.deposit(player.getUniqueId(), walletData.getTotalCoppets());
-                                        player.sendMessage("§aГаманець прив'язаний!");
+                            Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
+                                Economy economy = WIIC.getEcon();
+                                if (economy.hasAccount(player.getUniqueId())) {
+                                    if (VaultUtil.getBalance(player.getUniqueId()).join() == 0) {
+                                        WalletData walletData = walletManager.getWallet(WalletUtil.getWalletId(item));
+                                        if (!WalletUtil.wasBound(item)) {
+                                            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> WalletUtil.bindWallet(item));
+                                            VaultUtil.deposit(player.getUniqueId(), walletData.getTotalCoppets());
+                                            player.sendMessage("§aГаманець прив'язаний!");
+                                        }
+                                    } else {
+                                        player.sendMessage("§cВи вже маєте гаманець!");
                                     }
-                                } else {
-                                    player.sendMessage("§cВи вже маєте гаманець!");
                                 }
-                            }
+                            });
                         } else {
                             player.sendMessage("§cЦей гаманець вже був прив'язаний!");
                         }

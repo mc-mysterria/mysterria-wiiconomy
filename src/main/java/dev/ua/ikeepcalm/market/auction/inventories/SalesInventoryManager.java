@@ -72,25 +72,29 @@ public class SalesInventoryManager {
                     }
 
                     double price = auctionData.getPrice();
-                    double balance = VaultUtil.getBalance(player.getUniqueId());
-                    if (balance < price) {
-                        ItemStackUtil.giveOrDrop(player, event.item());
-                        player.sendMessage(Component.text("Недостатньо коштів!", NamedTextColor.RED));
-                        return;
-                    }
+                    VaultUtil.getBalance(player.getUniqueId()).thenApplyAsync(balance -> {
+                        if (balance < price) {
+                            ItemStackUtil.giveOrDrop(player, event.item());
+                            player.sendMessage(Component.text("Недостатньо коштів!", NamedTextColor.RED));
+                            return null;
+                        }
 
-                    VaultUtil.withdraw(player.getUniqueId(), auctionData.getPrice());
-                    auctionUtil.addBuyer(auctionData.getId(), player.getName());
-                    player.sendMessage(Translator.translate("&aВи купили " + auctionData.getItem().getType().name() + " за " + auctionData.getFormattedPrice()));
-                    UUID sellerId = Bukkit.getOfflinePlayer(auctionData.getSeller()).getUniqueId();
-                    PendingMoneyManager pmm = WIIC.getPendingMoneyManager();
-                    pmm.setPendingMoney(sellerId, pmm.getPendingMoney(sellerId) + auctionData.getPrice());
-                    Player seller = Bukkit.getPlayer(auctionData.getSeller());
-                    if (seller != null) {
-                        seller.sendMessage(Translator.translate("&aВаш " + auctionData.getItem().getType().name() + " був проданий за " + auctionData.getFormattedPrice()));
-                    }
-                    ItemStackUtil.giveOrDrop(player, event.item());
-                    ItemStackUtil.giveOrDrop(player, auctionData.getItem().clone());
+                        VaultUtil.withdraw(player.getUniqueId(), auctionData.getPrice());
+                        auctionUtil.addBuyer(auctionData.getId(), player.getName());
+                        player.sendMessage(Translator.translate("&aВи купили " + auctionData.getItem().getType().name() + " за " + auctionData.getFormattedPrice()));
+                        UUID sellerId = Bukkit.getOfflinePlayer(auctionData.getSeller()).getUniqueId();
+                        PendingMoneyManager pmm = WIIC.getPendingMoneyManager();
+                        pmm.setPendingMoney(sellerId, pmm.getPendingMoney(sellerId) + auctionData.getPrice());
+                        Player seller = Bukkit.getPlayer(auctionData.getSeller());
+                        if (seller != null) {
+                            seller.sendMessage(Translator.translate("&aВаш " + auctionData.getItem().getType().name() + " був проданий за " + auctionData.getFormattedPrice()));
+                        }
+                        Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
+                            ItemStackUtil.giveOrDrop(player, event.item());
+                            ItemStackUtil.giveOrDrop(player, auctionData.getItem().clone());
+                        });
+                        return null;
+                    });
                 }).open(player);
                 return true;
             })));

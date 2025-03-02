@@ -3,10 +3,12 @@ package dev.ua.ikeepcalm.wiic.utils;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.milkbowl.vault2.economy.Economy;
+import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
 
 import java.math.BigDecimal;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public class VaultUtil {
 
@@ -20,11 +22,13 @@ public class VaultUtil {
         economy.withdraw("iConomyUnlocked", player, BigDecimal.valueOf(amount));
     }
 
-    public static double getBalance(UUID player) {
-        return economy.balance("iConomyUnlocked", player).doubleValue();
+    public static CompletableFuture<Double> getBalance(UUID player) {
+        final CompletableFuture<Double> result = new CompletableFuture<>();
+        Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> result.complete(economy.balance("iConomyUnlocked", player).doubleValue()));
+        return result;
     }
 
-    public static WalletData getWalletData(@NotNull UUID uniqueId) {
-        return new WalletData((int) getBalance(uniqueId));
+    public static CompletableFuture<WalletData> getWalletData(@NotNull UUID uniqueId) {
+        return getBalance(uniqueId).thenApplyAsync(value -> new WalletData(value.intValue()));
     }
 }

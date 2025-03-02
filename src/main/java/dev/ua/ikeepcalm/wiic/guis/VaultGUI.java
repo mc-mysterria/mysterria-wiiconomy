@@ -40,9 +40,12 @@ public class VaultGUI {
         this.soldItemsManager = soldItemsManager;
     }
 
-
     public void openVault(Player player, Runnable onClose) {
-        WalletData data = VaultUtil.getWalletData(player.getUniqueId());
+        Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> openVaultSync(player, onClose));
+    }
+
+    public void openVaultSync(Player player, Runnable onClose) {
+        WalletData data = VaultUtil.getWalletData(player.getUniqueId()).join();
         gui = new ChestGui(4, ComponentHolder.of(Component.text("Зняття/поповнення").color(NamedTextColor.DARK_GREEN)));
         setupBackground();
         walletInventory = new OutlinePane(1, 1, 7, 3, Pane.Priority.HIGH);
@@ -98,9 +101,11 @@ public class VaultGUI {
                             return;
                         }
                         player.getInventory().addItem(item);
-                        handleWithdrawnItem(player, item);
-                        gui.update();
-                        openVault(player, onClose);
+                        Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
+                            handleWithdrawnItem(player, item);
+                            gui.update();
+                            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
+                        });
                     }
 
                     @Override
@@ -124,8 +129,10 @@ public class VaultGUI {
                     @Override
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
-                        handleSoldItem(player, item);
-                        openVault(player, onClose);
+                        Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
+                            handleSoldItem(player, item);
+                            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
+                        });
                     }
 
                     @Override
@@ -146,9 +153,11 @@ public class VaultGUI {
                     public void onConfirm(ItemStack item) {
                         player.getInventory().removeItem(item);
                         walletInventory.addItem(new GuiItem(item));
-                        handleTransferredItem(player, item);
-                        gui.update();
-                        openVault(player, onClose);
+                        Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
+                            handleTransferredItem(player, item);
+                            gui.update();
+                            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
+                        });
                     }
 
                     @Override
@@ -185,7 +194,7 @@ public class VaultGUI {
                 actionClose = false;
             }
         });
-        gui.show(player);
+        Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> gui.show(player));
     }
 
     public void removeUUIDTags(PlayerInventory inventory) {
