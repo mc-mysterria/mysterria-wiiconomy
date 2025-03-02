@@ -104,8 +104,10 @@ public class VaultGUI {
                         player.closeInventory();
                         Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
                             handleWithdrawnItem(player, item);
-                            gui.update();
-                            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
+                            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
+                                gui.update();
+                                openVault(player, onClose);
+                            });
                         });
                     }
 
@@ -158,8 +160,10 @@ public class VaultGUI {
                         player.closeInventory();
                         Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
                             handleTransferredItem(player, item);
-                            gui.update();
-                            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
+                            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
+                                gui.update();
+                                openVault(player, onClose);
+                            });
                         });
                     }
 
