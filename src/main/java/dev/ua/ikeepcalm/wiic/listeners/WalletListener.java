@@ -61,7 +61,7 @@ public class WalletListener implements Listener {
                     offhandItems.put(p, p.getInventory().getItemInOffHand());
                     p.getInventory().setItemInOffHand(null);
                 }
-                openVaultInventory(p);
+                Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> openVaultInventory(p));
             }
         }
     }
@@ -141,7 +141,11 @@ public class WalletListener implements Listener {
             BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", p.getUniqueId());
             WalletData data = new WalletData(balance.intValue());
             p.playSound(p.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1, 1);
-            new WalletGUI(appraiser, walletManager, soldItemsManager).open(p, data, () -> returnOffhandItem(p));
+            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> new WalletGUI(
+                    appraiser,
+                    walletManager,
+                    soldItemsManager
+            ).open(p, data, () -> returnOffhandItem(p)));
         } else {
             p.sendMessage(Component.text("Не ініціалізовано. Потримай гаманець у руках декілька секунд, і спробуй ще раз!").color(NamedTextColor.RED));
         }
