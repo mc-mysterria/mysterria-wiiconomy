@@ -152,7 +152,10 @@ public class WalletListener implements Listener {
                     appraiser,
                     walletManager,
                     soldItemsManager
-            ).open(p, data, () -> returnOffhandItem(p)));
+            ).open(p, data, () -> {
+                returnOffhandItem(p);
+                WalletGUI.playersWithOpenWallets.remove(p);
+            }));
         } else {
             p.sendMessage(Component.text("Не ініціалізовано. Потримай гаманець у руках декілька секунд, і спробуй ще раз!").color(NamedTextColor.RED));
         }

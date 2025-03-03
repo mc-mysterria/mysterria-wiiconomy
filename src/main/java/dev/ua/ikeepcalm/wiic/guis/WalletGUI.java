@@ -59,7 +59,6 @@ public class WalletGUI {
 
         gui.setOnClose(event -> {
             if (callOnClose) {
-                playersWithOpenWallets.remove(player);
                 onClose.run();
             }
         });

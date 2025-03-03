@@ -116,7 +116,7 @@ public class VaultGUI {
                         gui.update();
                         openVault(player, onClose);
                     }
-                }).open();
+                }, onClose).open();
             }));
         }
 
@@ -144,7 +144,7 @@ public class VaultGUI {
                         gui.update();
                         openVault(player, onClose);
                     }
-                }, appraiser, soldItemsManager).open();
+                }, appraiser, soldItemsManager, onClose).open();
             }));
         }
 
@@ -172,7 +172,7 @@ public class VaultGUI {
                         gui.update();
                         openVault(player, onClose);
                     }
-                }).open();
+                }, onClose).open();
             });
             playerInventory.addItem(guiItem);
         }
@@ -185,16 +185,13 @@ public class VaultGUI {
         gui.setOnClose(event -> {
             //updateWalletData(player, data);
             if (!actionClose) {
-                WalletGUI.playersWithOpenWallets.remove(player);
                 for (int i = 1; i <= 20; i++) {
                     Bukkit.getScheduler().runTaskLaterAsynchronously(WIIC.INSTANCE, () -> removeUUIDTags(player.getInventory()), i);
                 }
                 new BukkitRunnable() {
                     @Override
                     public void run() {
-                        if (!WalletGUI.playersWithOpenWallets.contains(player)) {
-                            onClose.run();
-                        }
+                        onClose.run();
                     }
                 }.runTaskLaterAsynchronously(WIIC.INSTANCE, 20);
             } else {

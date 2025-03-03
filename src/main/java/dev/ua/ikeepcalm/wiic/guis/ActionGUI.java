@@ -23,12 +23,14 @@ public class ActionGUI {
     private final ItemStack item;
     private final VaultGUI vaultGUI;
     private final ConfirmationCallback callback;
+    private final Runnable onClose;
 
-    public ActionGUI(Player player, ItemStack item, VaultGUI vaultGUI, ConfirmationCallback callback) {
+    public ActionGUI(Player player, ItemStack item, VaultGUI vaultGUI, ConfirmationCallback callback, Runnable onClose) {
         this.pl = player;
         this.item = item;
         this.vaultGUI = vaultGUI;
         this.callback = callback;
+        this.onClose = onClose;
     }
 
     public void open() {
@@ -61,8 +63,9 @@ public class ActionGUI {
         gui.addPane(navigationPane);
 
         gui.setOnClose(event -> {
-            if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW) {
+            if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW && event.getReason() != InventoryCloseEvent.Reason.PLUGIN) {
                 vaultGUI.removeUUIDTags(pl.getInventory());
+                onClose.run();
             }
         });
 

@@ -27,6 +27,7 @@ public class SellingGUI {
     private final ConfirmationCallback callback;
     private final Appraiser appraiser;
     private final SoldItemsManager soldItemsManager;
+    private final Runnable onClose;
 
     public SellingGUI(
         Player player,
@@ -34,7 +35,8 @@ public class SellingGUI {
         VaultGUI vaultGUI,
         ConfirmationCallback callback,
         Appraiser appraiser,
-        SoldItemsManager soldItemsManager
+        SoldItemsManager soldItemsManager,
+        Runnable onClose
     ) {
         this.pl = player;
         this.item = item;
@@ -42,6 +44,7 @@ public class SellingGUI {
         this.callback = callback;
         this.appraiser = appraiser;
         this.soldItemsManager = soldItemsManager;
+        this.onClose = onClose;
     }
 
     public void open() {
@@ -106,8 +109,9 @@ public class SellingGUI {
             gui.addPane(navigationPane);
         }
         gui.setOnClose(event -> {
-            if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW) {
+            if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW && event.getReason() != InventoryCloseEvent.Reason.PLUGIN) {
                 vaultGUI.removeUUIDTags(pl.getInventory());
+                onClose.run();
             }
         });
         gui.show(pl);
