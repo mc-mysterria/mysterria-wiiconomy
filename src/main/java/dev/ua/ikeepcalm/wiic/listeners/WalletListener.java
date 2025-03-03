@@ -26,6 +26,7 @@ import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.CraftItemEvent;
 import org.bukkit.event.inventory.PrepareItemCraftEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Recipe;
 
@@ -133,6 +134,12 @@ public class WalletListener implements Listener {
                 event.getDrops().add(offhandItems.remove(event.getPlayer()));
             }
         } else returnOffhandItem(event.getPlayer());
+    }
+
+    @EventHandler
+    public void onQuit(PlayerQuitEvent event) {
+        WalletGUI.playersWithOpenWallets.remove(event.getPlayer());
+        returnOffhandItem(event.getPlayer());
     }
 
     // Function to open the vault inventory
