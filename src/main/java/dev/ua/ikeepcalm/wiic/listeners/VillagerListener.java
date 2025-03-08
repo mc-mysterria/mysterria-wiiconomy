@@ -72,7 +72,7 @@ public class VillagerListener implements Listener {
                         ingredients.add(new ItemStack(Material.EMERALD, emeralds));
                     }
                     ItemStack result = recipe.getResult();
-                    if (result.getType() == Material.EMERALD || CoinUtil.isCoin(result)) {
+                    if ((result.getType() == Material.EMERALD || CoinUtil.isCoin(result)) && originalResults[i] > 0) {
                         result = new ItemStack(Material.EMERALD, originalResults[i]);
                     }
 
