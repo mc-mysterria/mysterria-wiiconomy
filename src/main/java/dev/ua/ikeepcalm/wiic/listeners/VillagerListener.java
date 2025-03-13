@@ -48,7 +48,8 @@ public class VillagerListener implements Listener {
                 int[] originalCosts = pdc.get(originalCostsKey, PersistentDataType.INTEGER_ARRAY);
                 int[] originalResults = pdc.get(originalResultsKey, PersistentDataType.INTEGER_ARRAY);
                 if (originalCosts == null || originalResults == null) {
-                    return;
+                    originalCosts = new int[0];
+                    originalResults = new int[0];
                 }
 
                 if (villager.getRecipeCount() > originalCosts.length) {
