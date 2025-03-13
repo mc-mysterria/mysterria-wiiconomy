@@ -2,6 +2,7 @@ package dev.ua.ikeepcalm.wiic.listeners;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.AbstractVillager;
@@ -124,13 +125,9 @@ public class VillagerListener implements Listener {
         }
 
         for (ItemStack item : recipe.getIngredients()) {
-            if (item.getType() == Material.EMERALD) {
-                costsArray[costsArray.length - 1] += item.getAmount();
-            }
+            costsArray[costsArray.length - 1] += convertToEmeralds(item);
         }
-        if (recipe.getResult().getType() == Material.EMERALD) {
-            resultsArray[resultsArray.length - 1] = recipe.getResult().getAmount();
-        }
+        resultsArray[resultsArray.length - 1] = convertToEmeralds(recipe.getResult());
 
         pdc.set(originalCostsKey, PersistentDataType.INTEGER_ARRAY, costsArray);
         pdc.set(originalResultsKey, PersistentDataType.INTEGER_ARRAY, resultsArray);
@@ -203,6 +200,19 @@ public class VillagerListener implements Listener {
             return 1;
         }
         return coppets;
+    }
+
+    private int convertToEmeralds(ItemStack item) {
+        if (item.getType() == Material.EMERALD) {
+            return item.getAmount();
+        }
+        if ("coppet".equals(ItemUtil.getType(item))) {
+            return (int) Math.round(item.getAmount() / plugin.getConfig().getDouble("villagers.emeraldsToCoppetsMultiplier"));
+        }
+        if ("lick".equals(ItemUtil.getType(item))) {
+            return (int) Math.round(item.getAmount() * 64 / plugin.getConfig().getDouble("villagers.emeraldsToCoppetsMultiplier"));
+        }
+        return 0;
     }
 
     private boolean isRare(Material material) {

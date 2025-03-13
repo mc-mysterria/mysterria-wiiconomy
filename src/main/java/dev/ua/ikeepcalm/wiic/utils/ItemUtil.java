@@ -8,6 +8,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
+import org.jetbrains.annotations.Nullable;
 
 public class ItemUtil {
     private static NamespacedKey getTypeKey() {
@@ -20,7 +21,7 @@ public class ItemUtil {
         item.setItemMeta(meta);
     }
 
-    public static String getType(ItemStack item) {
+    public static @Nullable String getType(ItemStack item) {
         return item.getItemMeta().getPersistentDataContainer().get(getTypeKey(), PersistentDataType.STRING);
     }
 
