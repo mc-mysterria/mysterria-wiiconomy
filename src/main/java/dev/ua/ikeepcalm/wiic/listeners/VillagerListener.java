@@ -65,7 +65,7 @@ public class VillagerListener implements Listener {
                     List<ItemStack> ingredients = recipe.getIngredients();
                     ingredients.removeIf(ingredient -> ingredient.getType() == Material.EMERALD || CoinUtil.isCoin(ingredient));
                     int emeralds = originalCosts[i];
-                    if (emeralds == 0 && ingredients.size() == 1 || ingredients.getFirst().getType().equals(Material.BOOK)) {
+                    if (emeralds == 0 && ingredients.size() == 1 && ingredients.getFirst().getType().equals(Material.BOOK)) {
                         emeralds = 64;
                     }
                     if (emeralds > 64) {
