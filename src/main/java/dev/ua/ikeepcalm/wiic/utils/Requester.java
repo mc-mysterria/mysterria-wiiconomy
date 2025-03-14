@@ -3,6 +3,7 @@ package dev.ua.ikeepcalm.wiic.utils;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.ua.ikeepcalm.wiic.WIIC;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
@@ -22,7 +23,7 @@ import java.util.Map;
 
 public class Requester {
 
-    private static final String AUTH_TOKEN = System.getenv("AUTH_TOKEN");
+    private static final String AUTH_TOKEN = WIIC.INSTANCE.getConfig().getString("auth-token");
     private static final HttpClient CLIENT = HttpClient.newHttpClient();
     private static final ObjectMapper MAPPER = new ObjectMapper();
 
