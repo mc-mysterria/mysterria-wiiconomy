@@ -1,0 +1,7 @@
+title: Example
+rows: 5
+items:
+  test:
+    id: test
+    price: 30
+    description: Example description

@@ -5,12 +5,11 @@ import dev.ua.ikeepcalm.market.npc.commands.SpawnNpcCommand;
 import dev.ua.ikeepcalm.market.npc.listeners.NpcListener;
 import dev.ua.ikeepcalm.market.util.AuctionUtil;
 import dev.ua.ikeepcalm.market.util.PendingMoneyManager;
-import dev.ua.ikeepcalm.wiic.commands.BindCommand;
-import dev.ua.ikeepcalm.wiic.commands.ShatterCommand;
-import dev.ua.ikeepcalm.wiic.commands.WalletCommand;
+import dev.ua.ikeepcalm.wiic.commands.*;
 import dev.ua.ikeepcalm.wiic.economy.VaultAdapter;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
+import dev.ua.ikeepcalm.wiic.utils.ShopItemsUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletRecipe;
 import lombok.Getter;
@@ -34,6 +33,8 @@ public final class WIIC extends JavaPlugin {
 
     public static WIIC INSTANCE;
     private AuctionUtil auctionUtil;
+    @Getter
+    private ShopItemsUtil shopItemsUtil;
     @Getter
     private static LuckPerms luckPerms;
     @Getter
@@ -61,12 +62,15 @@ public final class WIIC extends JavaPlugin {
         Objects.requireNonNull(getCommand("shatter")).setExecutor(new ShatterCommand());
         Objects.requireNonNull(getCommand("shopkeeper")).setExecutor(new SpawnNpcCommand(npcListener));
         Objects.requireNonNull(getCommand("bind")).setExecutor(new BindCommand(new WalletManager()));
+        Objects.requireNonNull(getCommand("save-shop-item")).setExecutor(new SaveShopItemCommand());
+        Objects.requireNonNull(getCommand("open-shop")).setExecutor(new OpenShopCommand());
 
         try {
             this.auctionUtil = new AuctionUtil(this.getDataFolder().toPath());
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+        shopItemsUtil = new ShopItemsUtil(this);
         setupLuckPerms();
         if (!setupEconomy()) {
             getLogger().severe(String.format("[%s] - Disabled due to no Vault dependency found!", getDescription().getName()));
