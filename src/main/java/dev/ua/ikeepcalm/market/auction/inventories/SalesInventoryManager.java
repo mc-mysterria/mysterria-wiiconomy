@@ -28,7 +28,6 @@ import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.luckperms.api.model.user.User;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.configuration.Configuration;
@@ -36,7 +35,6 @@ import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.scheduler.BukkitTask;
 
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
@@ -116,7 +114,6 @@ public class SalesInventoryManager {
         }
 
         inventoryGui.addElement(group);
-        BukkitTask task = Bukkit.getScheduler().runTaskTimer(WIIC.INSTANCE, () -> inventoryGui.draw(), 0L, 20L);
         inventoryGui.addElement(new StaticGuiElement('b', ItemStackUtil.createStack(Material.BARRIER, false, "&#f10203&lВИЙТИ", "&fНатисніть, щоб повернутися"), click -> {
             new MarketInventory().open(player);
             return true;
@@ -169,10 +166,7 @@ public class SalesInventoryManager {
             }
             return true;
         }));
-        inventoryGui.setCloseAction(close -> {
-            task.cancel();
-            return false;
-        });
+        inventoryGui.setCloseAction(close -> false);
         inventoryGui.draw(player);
     }
 

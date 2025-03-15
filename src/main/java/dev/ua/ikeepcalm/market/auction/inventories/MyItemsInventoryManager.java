@@ -20,12 +20,8 @@ import dev.ua.ikeepcalm.market.util.*;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
-import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
-import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
-import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.entity.Player;
-import org.bukkit.scheduler.BukkitTask;
 
 public class MyItemsInventoryManager {
     private final String[] setup = new String[]{"aaaaaaaaa", "aaaaaaaaa", "aaaaaaaaa", "aaaaaaaaa", "aaaaaaaaa", "b   t    "};
@@ -69,11 +65,7 @@ public class MyItemsInventoryManager {
                 }).open(player);
                 return true;
             }));
-            BukkitTask task = Bukkit.getScheduler().runTaskTimer(WIIC.INSTANCE, () -> inventoryGui.draw(), 0L, 20L);
-            inventoryGui.setCloseAction(close -> {
-                task.cancel();
-                return false;
-            });
+            inventoryGui.setCloseAction(close -> false);
             inventoryGui.show(player);
         });
     }
