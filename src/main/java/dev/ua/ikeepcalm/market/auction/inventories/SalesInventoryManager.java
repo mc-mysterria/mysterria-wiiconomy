@@ -43,6 +43,21 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 
 public class SalesInventoryManager {
+    private static final List<Map.Entry<String, Integer>> slotLimits = new ArrayList<>();
+
+    static {
+        Configuration configuration = WIIC.INSTANCE.getConfig();
+        ConfigurationSection groupsSection = configuration.getConfigurationSection("market.groups");
+
+        if (groupsSection != null) {
+            for (String groupName : groupsSection.getKeys(false)) {
+                int groupValue = groupsSection.getInt(groupName);
+                slotLimits.add(Map.entry(groupName, groupValue));
+            }
+            slotLimits.sort(Comparator.comparingInt(entry -> -entry.getValue()));
+        }
+    }
+
     public void open(Player player, String filter, boolean recentlyListed, ShopItemType typeFilter) {
         InventoryGui inventoryGui = new InventoryGui(WIIC.INSTANCE, "Аукціон", new String[]{"aaaaaaaaa", "aaaaaaaaa", "aaaaaaaaa", "aaaaaaaaa", "aaaaaaaaa", "b  pfn  c"});
         Bukkit.getScheduler().runTask(WIIC.INSTANCE, worker -> inventoryGui.show(player));
@@ -135,8 +150,7 @@ public class SalesInventoryManager {
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
-            User user = WIIC.getLuckPerms().getPlayerAdapter(Player.class).getUser(player);
-            int slotLimit = getSlotLimit(user);
+            int slotLimit = getSlotLimit(player);
 
             if (slotLimit <= onSale) {
                 player.closeInventory();
@@ -173,21 +187,13 @@ public class SalesInventoryManager {
         ).listen();
     }
 
-    private static int getSlotLimit(User user) {
-        String group = user.getPrimaryGroup();
-        int slotLimit = 0;
-        Configuration configuration = WIIC.INSTANCE.getConfig();
-        ConfigurationSection groupsSection = configuration.getConfigurationSection("market.groups");
-
-        if (groupsSection != null) {
-            for (String groupName : groupsSection.getKeys(false)) {
-                int groupValue = groupsSection.getInt(groupName);
-                if (group.equals(groupName)) {
-                    slotLimit = groupValue;
-                }
+    private static int getSlotLimit(Player player) {
+        for (Map.Entry<String, Integer> entry : slotLimits) {
+            if (player.hasPermission("group." + entry.getKey())) {
+                return entry.getValue();
             }
         }
-        return slotLimit;
+        return 0;
     }
 }
 
