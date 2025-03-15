@@ -20,3 +20,15 @@ commands:
     description: Summon a shopkeeper
     usage: /shopkeeper
     permission: wiic.spawnNPCs
+  save-shop-item:
+    description: Saves the item in your hand to config
+    usage: /save-shop-item <id>
+    permission: wiic.save-shop-item
+  open-shop:
+    description: Opens shop for player
+    usage: /open-shop <player> <shop>
+    permission: wiic.open-shop
+  open-auction:
+    description: Opens auction for player
+    usage: /open-auction <player>
+    permission: wiic.open-auction

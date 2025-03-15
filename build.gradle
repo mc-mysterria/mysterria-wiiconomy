@@ -51,6 +51,7 @@ dependencies {
     compileOnly "io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT"
     compileOnly "net.milkbowl.vault:VaultUnlockedAPI:2.9"
     implementation 'com.github.stefvanschie.inventoryframework:IF:0.10.19'
+    implementation "com.fasterxml.jackson.core:jackson-databind:2.18.2"
     compileOnly 'org.projectlombok:lombok:1.18.36'
     annotationProcessor 'org.projectlombok:lombok:1.18.36'
 }

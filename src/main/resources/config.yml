@@ -4,6 +4,8 @@
 # Made by ikeepcalm for UAPROJECT
 # -----------------------------
 
+auth-token: ""
+
 # Multipliers for each rarity
 rarities:
   COMMON: 1.0
