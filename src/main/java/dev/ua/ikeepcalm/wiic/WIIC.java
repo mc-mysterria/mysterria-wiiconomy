@@ -64,6 +64,7 @@ public final class WIIC extends JavaPlugin {
         Objects.requireNonNull(getCommand("bind")).setExecutor(new BindCommand(new WalletManager()));
         Objects.requireNonNull(getCommand("save-shop-item")).setExecutor(new SaveShopItemCommand());
         Objects.requireNonNull(getCommand("open-shop")).setExecutor(new OpenShopCommand());
+        Objects.requireNonNull(getCommand("open-auction")).setExecutor(new OpenAuctionCommand());
 
         try {
             this.auctionUtil = new AuctionUtil(this.getDataFolder().toPath());

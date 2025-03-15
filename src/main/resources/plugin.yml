@@ -28,3 +28,7 @@ commands:
     description: Opens shop for player
     usage: /open-shop <player> <shop>
     permission: wiic.open-shop
+  open-auction:
+    description: Opens auction for player
+    usage: /open-auction <player>
+    permission: wiic.open-auction
