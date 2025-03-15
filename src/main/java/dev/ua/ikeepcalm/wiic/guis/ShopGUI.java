@@ -79,4 +79,8 @@ public class ShopGUI {
         Bukkit.getScheduler().runTask(plugin, () -> ItemStackUtil.giveOrDrop(player, item));
         player.sendMessage(Component.text("Ви успішно придбали предмет!").color(NamedTextColor.GREEN));
     }
+
+    public static void clearShopCache() {
+        shopCache.clear();
+    }
 }
