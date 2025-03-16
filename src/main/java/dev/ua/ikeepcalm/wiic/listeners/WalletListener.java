@@ -54,6 +54,10 @@ public class WalletListener implements Listener {
     public void onWalletInventoryClick(PlayerInteractEvent event) {
         Player p = event.getPlayer();
         ItemStack item = event.getItem();
+        if (WalletGUI.playersWithOpenWallets.contains(p)) {
+            event.setCancelled(true);
+            return;
+        }
         if (event.getAction().equals(Action.LEFT_CLICK_AIR) || event.getAction().equals(Action.LEFT_CLICK_BLOCK))
             return;
         if (WalletUtil.isWallet(item)) {
