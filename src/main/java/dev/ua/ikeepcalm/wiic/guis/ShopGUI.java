@@ -51,7 +51,7 @@ public class ShopGUI {
             final ItemStack item = shopItem.item().clone();
             final ItemMeta meta = item.getItemMeta();
             meta.lore(List.of(
-                    Component.text("Ціна: " + shopItem.price()).color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false),
+                    Component.text("Ціна: " + shopItem.price() + " UNI").color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false),
                     Component.text(shopItem.description()).decoration(TextDecoration.ITALIC, false)
             ));
             item.setItemMeta(meta);
