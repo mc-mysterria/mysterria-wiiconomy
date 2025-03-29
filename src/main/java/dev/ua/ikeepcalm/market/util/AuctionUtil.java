@@ -79,8 +79,8 @@ public class AuctionUtil {
     private void loadData() {
         CompletableFuture.runAsync(() -> {
             LocalDateTime now = LocalDateTime.now();
-            LocalDateTime twentyFourHoursAgo = now.minusHours(24L);
-            long timestampTwentyFourHoursAgo = twentyFourHoursAgo.toEpochSecond(ZoneOffset.UTC);
+            LocalDateTime seventyTwoHoursAgo = now.minusHours(72L);
+            long timestampTwentyFourHoursAgo = seventyTwoHoursAgo.toEpochSecond(ZoneOffset.UTC);
             String query = "SELECT * FROM " + this.tableName + " WHERE TimeStamp > " + timestampTwentyFourHoursAgo + ";";
             try (Connection connection = this.dataSource.getConnection();
                  PreparedStatement statement = connection.prepareStatement(query);
@@ -172,8 +172,8 @@ public class AuctionUtil {
     public CompletableFuture<Map<UUID, AuctionData>> getExpiredItemsByPlayerName(String playerName) {
         return CompletableFuture.supplyAsync(() -> {
             LocalDateTime now = LocalDateTime.now();
-            LocalDateTime twentyFourHoursAgo = now.minusHours(24L);
-            long timestampTwentyFourHoursAgo = twentyFourHoursAgo.toEpochSecond(ZoneOffset.UTC);
+            LocalDateTime seventyTwoHoursAgo = now.minusHours(72L);
+            long timestampTwentyFourHoursAgo = seventyTwoHoursAgo.toEpochSecond(ZoneOffset.UTC);
             HashMap<UUID, AuctionData> expiredItems = new HashMap<>();
             for (Map.Entry<UUID, AuctionData> entry : this.itemDataCache.asMap().entrySet()) {
                 AuctionData data = entry.getValue();

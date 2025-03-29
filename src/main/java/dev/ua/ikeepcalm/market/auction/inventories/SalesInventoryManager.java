@@ -70,9 +70,9 @@ public class SalesInventoryManager {
             dataCollection.sort(timestampComparator.reversed());
         }
         for (AuctionData auctionData : dataCollection) {
-            if (auctionData.getBuyer() != null || System.currentTimeMillis() - auctionData.getTimeStamp() >= 86400000L)
+            if (auctionData.getBuyer() != null || System.currentTimeMillis() - auctionData.getTimeStamp() >= 259200000L)
                 continue;
-            group.addElement(new DynamicGuiElement('a', viewer -> new StaticGuiElement('a', ItemStackUtil.createStack(auctionData.getItem().clone(), "", "&#f2e40c&l\u25cf &fПродавець: &#f2e40c" + auctionData.getSeller(), "&#f2e40c&l\u25cf &fЧас: &#f2e40c" + TimeStampUtil.getCountdown(auctionData.getTimeStamp(), 86400L), "&#f2e40c&l\u25cf &fЦіна: &#f2e40c" + auctionData.getFormattedPrice()), click -> {
+            group.addElement(new DynamicGuiElement('a', viewer -> new StaticGuiElement('a', ItemStackUtil.createStack(auctionData.getItem().clone(), "", "&#f2e40c&l\u25cf &fПродавець: &#f2e40c" + auctionData.getSeller(), "&#f2e40c&l\u25cf &fЧас: &#f2e40c" + TimeStampUtil.getCountdown(auctionData.getTimeStamp(), 259200L), "&#f2e40c&l\u25cf &fЦіна: &#f2e40c" + auctionData.getFormattedPrice()), click -> {
                 new InteractiveSlotInventory("Покладіть гаманець", auctionData.getItem(), event -> {
                     if (event.item() == null) {
                         open(player, filter, recentlyListed, typeFilter);

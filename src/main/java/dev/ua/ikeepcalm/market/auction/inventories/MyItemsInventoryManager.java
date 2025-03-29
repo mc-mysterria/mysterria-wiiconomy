@@ -33,7 +33,7 @@ public class MyItemsInventoryManager {
         auctionUtil.getPlayerSellingItems(player.getName()).thenAccept(uuidAuctionDataMap -> {
             for (AuctionData auctionData : uuidAuctionDataMap.values()) {
                 if (auctionData.getBuyer() != null) continue;
-                group.addElement(new DynamicGuiElement('a', viewer -> new StaticGuiElement('a', ItemStackUtil.createStack(auctionData.getItem().clone(), "", "&#f2e40c&l\u25cf &fПродавець: &#f2e40c" + auctionData.getSeller(), "&#f2e40c&l\u25cf &fЧас: &#f2e40c" + TimeStampUtil.getCountdown(auctionData.getTimeStamp(), 86400L), "&#f2e40c&l\u25cf &fЦіна: &#f2e40c" + auctionData.getFormattedPrice()), click -> {
+                group.addElement(new DynamicGuiElement('a', viewer -> new StaticGuiElement('a', ItemStackUtil.createStack(auctionData.getItem().clone(), "", "&#f2e40c&l\u25cf &fПродавець: &#f2e40c" + auctionData.getSeller(), "&#f2e40c&l\u25cf &fЧас: &#f2e40c" + TimeStampUtil.getCountdown(auctionData.getTimeStamp(), 259200L), "&#f2e40c&l\u25cf &fЦіна: &#f2e40c" + auctionData.getFormattedPrice()), click -> {
                     if (auctionUtil.getItemDataCache().getIfPresent(auctionData.getId()) != null) {
                         ItemStackUtil.giveOrDrop(player, auctionData.getItem().clone());
                         auctionUtil.removeAuctionData(auctionData.getId(), this, player);
