@@ -23,7 +23,7 @@ public class OpenShopCommand implements CommandExecutor {
             return true;
         }
 
-        new ShopGUI(WIIC.INSTANCE, player, args[1]).open();
+        new ShopGUI(WIIC.INSTANCE, player, args[1]).open(false);
 
         return true;
     }
