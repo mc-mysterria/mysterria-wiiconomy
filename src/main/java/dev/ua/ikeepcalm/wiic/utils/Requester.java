@@ -49,7 +49,7 @@ public class Requester {
         }
     }
 
-    public static Balance fetchBalance(int userId) throws Exception {
+    public static Balance fetchBalance(long userId) throws Exception {
         String url = String.format("%s/%d", "https://api.uaproject.xyz/api/v2/payments/balances/users", userId);
 
         HttpRequest request = HttpRequest.newBuilder()
@@ -153,7 +153,7 @@ public class Requester {
         }
     }
 
-    public static Balance modifyBalance(int userId, int recipientId, double amount, String description) throws Exception {
+    public static Balance modifyBalance(long userId, long recipientId, double amount, String description) throws Exception {
         String url;
         String type;
         double absAmount = Math.abs(amount);
@@ -213,7 +213,7 @@ public class Requester {
     @Setter
     @ToString
     public static class User {
-        public int id;
+        public long id;
         public long discord_id;
         public String minecraft_nickname;
         public boolean is_superuser;
@@ -225,7 +225,7 @@ public class Requester {
     @Setter
     @ToString
     public static class Balance {
-        public int id;
+        public long id;
         public int user_id;
         public String identifier;
         public String amount;
@@ -244,8 +244,8 @@ public class Requester {
         public String useful_skills;
         public String conflict_reaction;
         public String quiz_answer;
-        public int id;
-        public int user_id;
+        public long id;
+        public long user_id;
         public String status;
         public List<String> editable_fields;
         public String created_at;
