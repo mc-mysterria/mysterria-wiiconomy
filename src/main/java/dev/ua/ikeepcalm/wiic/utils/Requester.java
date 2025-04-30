@@ -1,5 +1,6 @@
 package dev.ua.ikeepcalm.wiic.utils;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -212,6 +213,7 @@ public class Requester {
     @Getter
     @Setter
     @ToString
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class User {
         public long id;
         public long discord_id;
@@ -224,6 +226,7 @@ public class Requester {
     @Getter
     @Setter
     @ToString
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Balance {
         public long id;
         public int user_id;
@@ -236,6 +239,7 @@ public class Requester {
     @Getter
     @Setter
     @ToString
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Application {
         public String birth_date;
         public String launcher;
