@@ -42,7 +42,7 @@ public class Requester {
         HttpResponse<String> response = CLIENT.send(request, HttpResponse.BodyHandlers.ofString());
 
         if (response.statusCode() == 200) {
-            List<User> userList = MAPPER.readValue(response.body(), new TypeReference<List<User>>() {
+            List<User> userList = MAPPER.readValue(response.body(), new TypeReference<>() {
             });
             return userList.getFirst();
         } else {
@@ -50,8 +50,8 @@ public class Requester {
         }
     }
 
-    public static Balance fetchBalance(long userId) throws Exception {
-        String url = String.format("%s/%d", "https://api.uaproject.xyz/api/v2/payments/balances/users", userId);
+    public static Balance fetchBalance(String userId) throws Exception {
+        String url = String.format("%s/%s", "https://api.uaproject.xyz/api/v2/payments/balances/users", userId);
 
         HttpRequest request = HttpRequest.newBuilder()
                 .uri(URI.create(url))
@@ -154,7 +154,7 @@ public class Requester {
         }
     }
 
-    public static Balance modifyBalance(long userId, long recipientId, double amount, String description) throws Exception {
+    public static Balance modifyBalance(String userId, String recipientId, double amount, String description) throws Exception {
         String url;
         String type;
         double absAmount = Math.abs(amount);
@@ -194,7 +194,7 @@ public class Requester {
         }
     }
 
-    public static void resetBalance(int userId) {
+    public static void resetBalance(String userId) {
         try {
             Balance balance = fetchBalance(userId);
             if (balance.getAmount().equals("0.00")) {
@@ -215,8 +215,8 @@ public class Requester {
     @ToString
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class User {
-        public long id;
-        public long discord_id;
+        public String id;
+        public String discord_id;
         public String minecraft_nickname;
         public boolean is_superuser;
         public String created_at;
@@ -228,8 +228,8 @@ public class Requester {
     @ToString
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Balance {
-        public long id;
-        public int user_id;
+        public String id;
+        public String user_id;
         public String identifier;
         public String amount;
         public String created_at;
@@ -248,8 +248,8 @@ public class Requester {
         public String useful_skills;
         public String conflict_reaction;
         public String quiz_answer;
-        public long id;
-        public long user_id;
+        public String id;
+        public String user_id;
         public String status;
         public List<String> editable_fields;
         public String created_at;
