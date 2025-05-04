@@ -90,7 +90,7 @@ public class ShopGUI {
         plugin.getLogger().info(player.getName() + " has bought " + itemName + " for " + price);
         if (!useCoppets) {
             try {
-                long userId = Requester.fetchUser(player.getName()).getId();
+                String userId = Requester.fetchUser(player.getName()).getId();
                 Requester.modifyBalance(userId, userId, -price, "Купівля предмета: " + itemName);
             } catch (Exception e) {
                 e.printStackTrace();
