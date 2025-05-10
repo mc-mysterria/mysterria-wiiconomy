@@ -54,6 +54,12 @@ public class WalletListener implements Listener {
     public void onWalletInventoryClick(PlayerInteractEvent event) {
         Player p = event.getPlayer();
         ItemStack item = event.getItem();
+
+        ItemStack offHand = p.getInventory().getItemInOffHand();
+        if (offHand.getType() != Material.AIR) {
+            return;
+        }
+
         if (WalletGUI.playersWithOpenWallets.contains(p)) {
             event.setCancelled(true);
             return;
