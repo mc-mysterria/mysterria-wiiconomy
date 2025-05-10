@@ -23,10 +23,10 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.Action;
 import org.bukkit.event.block.CrafterCraftEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
-import org.bukkit.event.inventory.CraftItemEvent;
-import org.bukkit.event.inventory.PrepareItemCraftEvent;
+import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Recipe;
 
@@ -55,12 +55,7 @@ public class WalletListener implements Listener {
         Player p = event.getPlayer();
         ItemStack item = event.getItem();
 
-        ItemStack offHand = p.getInventory().getItemInOffHand();
-        if (offHand.getType() != Material.AIR) {
-            return;
-        }
-
-        if (WalletGUI.playersWithOpenWallets.contains(p)) {
+        if (WalletGUI.playersWithOpenWallets.contains(p) || WalletUtil.isWallet(p.getInventory().getItemInOffHand())) {
             event.setCancelled(true);
             return;
         }
@@ -74,6 +69,23 @@ public class WalletListener implements Listener {
                 }
                 Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> openVaultInventory(p));
             }
+        }
+    }
+
+    @EventHandler
+    public void onItemsSwap(PlayerSwapHandItemsEvent event) {
+        if (WalletGUI.playersWithOpenWallets.contains(event.getPlayer())) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler
+    public void onInventoryClick(InventoryClickEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (!WalletGUI.playersWithOpenWallets.contains(player)) return;
+        // cancel putting item in offhand
+        if (event.getInventory().getType() == InventoryType.CRAFTING && (event.getSlot() == 40 || event.getAction() == InventoryAction.HOTBAR_SWAP)) {
+            event.setCancelled(true);
         }
     }
 
