@@ -8,6 +8,7 @@ import dev.ua.ikeepcalm.market.util.AuctionUtil;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.utils.Requester;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
@@ -86,8 +87,13 @@ public class WalletGUI {
         return item;
     }
 
-    private static int getDonateBalance(Player player) {
-        return 0;
+    private static String getDonateBalance(Player player) {
+        try {
+            String userId = Requester.fetchUser(player.getName()).getId();
+            return Requester.fetchBalance(userId).amount + " UNI";
+        } catch (Exception e) {
+            return "невідомо";
+        }
     }
 
     private static ItemStack getConverterItem(WalletData data) {
