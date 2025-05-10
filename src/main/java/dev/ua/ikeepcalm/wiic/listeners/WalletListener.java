@@ -63,13 +63,19 @@ public class WalletListener implements Listener {
             return;
         if (WalletUtil.isWallet(item)) {
             if (WalletUtil.wasBound(item)) {
-                if (p.getInventory().getItemInOffHand().getType() != Material.AIR) {
-                    offhandItems.put(p, p.getInventory().getItemInOffHand());
-                    p.getInventory().setItemInOffHand(null);
-                }
-                Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> openVaultInventory(p));
+                startOpeningVault(p);
             }
         }
+    }
+
+    public void startOpeningVault(Player p) {
+        if (WalletGUI.playersWithOpenWallets.contains(p)) return;
+        WalletGUI.playersWithOpenWallets.add(p);
+        if (p.getInventory().getItemInOffHand().getType() != Material.AIR) {
+            offhandItems.put(p, p.getInventory().getItemInOffHand());
+            p.getInventory().setItemInOffHand(null);
+        }
+        Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> openVaultInventory(p));
     }
 
     @EventHandler
@@ -180,6 +186,8 @@ public class WalletListener implements Listener {
             }));
         } else {
             p.sendMessage(Component.text("Не ініціалізовано. Потримай гаманець у руках декілька секунд, і спробуй ще раз!").color(NamedTextColor.RED));
+            returnOffhandItem(p);
+            WalletGUI.playersWithOpenWallets.remove(p);
         }
     }
 

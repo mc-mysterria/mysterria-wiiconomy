@@ -45,6 +45,8 @@ public final class WIIC extends JavaPlugin {
     @Getter
     private static Economy econ = null;
     private VaultAdapter vaultAdapter;
+    @Getter
+    private WalletListener walletListener;
 
     @Override
     public void onEnable() {
@@ -57,7 +59,8 @@ public final class WIIC extends JavaPlugin {
         }
         new WalletRecipe(this);
         NpcListener npcListener = new NpcListener();
-        registerEvents(new WalletListener(), new VillagerListener(this), npcListener, new JoinListener());
+        walletListener = new WalletListener();
+        registerEvents(walletListener, new VillagerListener(this), npcListener, new JoinListener());
         Objects.requireNonNull(getCommand("wallet")).setExecutor(new WalletCommand());
         Objects.requireNonNull(getCommand("shatter")).setExecutor(new ShatterCommand());
         Objects.requireNonNull(getCommand("shopkeeper")).setExecutor(new SpawnNpcCommand(npcListener));
