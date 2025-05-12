@@ -7,7 +7,7 @@ import org.bukkit.inventory.ItemStack;
 public class CoinUtil {
     public static ItemStack getVerlDor(int amount) {
         ItemStack verlDor = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItem(verlDor, "verlDor", "Аур", NamedTextColor.YELLOW);
+        ItemUtil.modifyItem(verlDor, "goldcoin", "Аур", NamedTextColor.YELLOW, "verlDor");
         return verlDor;
     }
 
@@ -15,7 +15,7 @@ public class CoinUtil {
 
     public static ItemStack getLick(int amount) {
         ItemStack lick = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItem(lick, "lick", "Лік", NamedTextColor.GRAY);
+        ItemUtil.modifyItem(lick, "silvercoin", "Лік", NamedTextColor.GRAY, "lick");
         return lick;
     }
 
@@ -23,21 +23,22 @@ public class CoinUtil {
 
     public static ItemStack getCoppet(int amount) {
         ItemStack coppet = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItem(coppet, "coppet", "Копійка", NamedTextColor.GOLD);
+        ItemUtil.modifyItem(coppet, "coppercoin", "Копійка", NamedTextColor.GOLD, "coppet");
         return coppet;
     }
 
     public static ItemStack getCoppet() { return getCoppet(1); }
 
-    public static boolean isCoin(ItemStack item) {
+    public static CoinType getCoinType(ItemStack item) {
         if (item == null || item.getType() != Material.GOLD_INGOT || !item.hasItemMeta()) {
-            return false;
+            return CoinType.NONE;
         }
         final String type = ItemUtil.getType(item);
-        if (type == null) return false;
+        if (type == null) return CoinType.NONE;
         return switch (type) {
-            case "coppet", "lick", "verlDor" -> true;
-            default -> false;
+            case "coppet", "lick", "verlDor" -> CoinType.OLD;
+            case "coppercoin", "silvercoin", "goldcoin" -> CoinType.NEW;
+            default -> CoinType.NONE;
         };
     }
 }

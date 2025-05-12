@@ -2,8 +2,10 @@ package dev.ua.ikeepcalm.wiic.utils;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
 import net.kyori.adventure.text.format.NamedTextColor;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -18,7 +20,7 @@ public class WalletUtil {
         ItemMeta meta = wallet.getItemMeta();
         meta.setMaxStackSize(1);
         wallet.setItemMeta(meta);
-        ItemUtil.modifyItem(wallet, "wallet", "Гаманець", NamedTextColor.AQUA);
+        ItemUtil.modifyItem(wallet, "wallet", "Гаманець", NamedTextColor.AQUA, "wallet");
         WalletUtil.bindWallet(wallet);
         return wallet;
     }
@@ -75,5 +77,13 @@ public class WalletUtil {
             return false;
         }
         return "wallet".equals(ItemUtil.getType(item));
+    }
+
+    public static void logConversion(Player player, String type, int amount) {
+        final Location loc = player.getLocation();
+        WIIC.INSTANCE.getConversionLogWriter().write(
+                player.getName() + " converted " + amount + " coins of type " + type
+                        + " at " + loc.getWorld().getName() + " " + loc.getBlockX() + " " + loc.getBlockY() + " " + loc.getBlockZ()
+        );
     }
 }

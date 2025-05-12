@@ -1,7 +1,9 @@
 package dev.ua.ikeepcalm.wiic.commands;
 
+import dev.ua.ikeepcalm.wiic.utils.CoinType;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Material;
@@ -18,20 +20,24 @@ public class ShatterCommand implements CommandExecutor {
     public boolean onCommand(@NotNull CommandSender commandSender, @NotNull Command command, @NotNull String s, @NotNull String[] strings) {
         if (commandSender instanceof Player player && command.getName().equalsIgnoreCase("shatter")) {
             ItemStack item = player.getInventory().getItemInMainHand();
-            if (CoinUtil.isCoin(item)) {
+            final CoinType coinType = CoinUtil.getCoinType(item);
+            if (coinType != CoinType.NONE) {
                 if (item.getAmount() > 1) {
                     player.sendMessage(Component.text("Візьміть одну штуку у головну руку!").color(NamedTextColor.RED));
                     return true;
                 }
-                switch (ItemUtil.getType(item)) {
-                    case "verlDor" -> {
+                final String type = ItemUtil.getType(item);
+                switch (type) {
+                    case "verlDor", "goldcoin" -> {
                         player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
                         player.getInventory().addItem(CoinUtil.getLick(64));
+                        if (coinType == CoinType.OLD) WalletUtil.logConversion(player, type, 1);
                         player.sendMessage(Component.text("Предмет розбитий!").color(NamedTextColor.GREEN));
                     }
-                    case "lick" -> {
+                    case "lick", "silvercoin" -> {
                         player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
                         player.getInventory().addItem(CoinUtil.getCoppet(64));
+                        if (coinType == CoinType.OLD) WalletUtil.logConversion(player, type, 1);
                         player.sendMessage(Component.text("Предмет розбитий!").color(NamedTextColor.GREEN));
                     }
                     default -> {

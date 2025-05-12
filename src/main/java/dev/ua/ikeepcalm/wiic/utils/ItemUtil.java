@@ -25,13 +25,13 @@ public class ItemUtil {
         return item.getItemMeta().getPersistentDataContainer().get(getTypeKey(), PersistentDataType.STRING);
     }
 
-    public static void modifyItem(ItemStack item, String type, String displayName, NamedTextColor color) {
+    public static void modifyItem(ItemStack item, String type, String displayName, NamedTextColor color, String model) {
         if (item == null) return;
         if (item.getAmount() > 0) {
             setType(item, type);
             ItemMeta meta = item.getItemMeta();
             meta.displayName(Component.text(displayName).color(color).decoration(TextDecoration.ITALIC, false));
-            meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, type));
+            meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, model));
             item.setItemMeta(meta);
         }
     }

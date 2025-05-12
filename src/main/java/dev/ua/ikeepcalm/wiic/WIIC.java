@@ -9,6 +9,7 @@ import dev.ua.ikeepcalm.wiic.commands.*;
 import dev.ua.ikeepcalm.wiic.economy.VaultAdapter;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
+import dev.ua.ikeepcalm.wiic.utils.LogWriter;
 import dev.ua.ikeepcalm.wiic.utils.ShopItemsUtil;
 import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletRecipe;
@@ -47,6 +48,9 @@ public final class WIIC extends JavaPlugin {
     private VaultAdapter vaultAdapter;
     @Getter
     private WalletListener walletListener;
+
+    @Getter
+    private LogWriter conversionLogWriter;
 
     @Override
     public void onEnable() {
@@ -87,6 +91,8 @@ public final class WIIC extends JavaPlugin {
 //        vaultAdapter = new VaultAdapter();
 //        vaultAdapter.runTaskTimer(this, 0, 100);
         pendingMoneyManager = new PendingMoneyManager(this);
+
+        conversionLogWriter = new LogWriter(new File(getDataFolder(), "conversions.log"));
     }
 
     private boolean setupEconomy() {
@@ -104,6 +110,12 @@ public final class WIIC extends JavaPlugin {
     @Override
     public void onDisable() {
         auctionUtil.close();
+        try {
+            conversionLogWriter.close();
+        } catch (IOException e) {
+            getLogger().severe("Error closing conversionLogWriter");
+            e.printStackTrace();
+        }
         getLogger().info("WIIC plugin disabled...");
     }
 

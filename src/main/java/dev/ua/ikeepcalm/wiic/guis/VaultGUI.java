@@ -8,9 +8,7 @@ import com.github.stefvanschie.inventoryframework.pane.Pane;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.economy.Appraiser;
 import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
-import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
-import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
-import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
+import dev.ua.ikeepcalm.wiic.utils.*;
 import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -71,7 +69,7 @@ public class VaultGUI {
 
         List<ItemStack> itemsInInventory = new ArrayList<>();
         for (ItemStack item : player.getInventory().getContents()) {
-            if (CoinUtil.isCoin(item)) {
+            if (CoinUtil.getCoinType(item) != CoinType.NONE) {
                 itemsInInventory.add(item);
             }
         }
@@ -236,16 +234,20 @@ public class VaultGUI {
 
 
     private void handleTransferredItem(Player player, ItemStack newItem) {
-        switch (ItemUtil.getType(newItem)) {
-            case "verlDor":
+        final String type = ItemUtil.getType(newItem);
+        switch (type) {
+            case "verlDor", "goldcoin":
                 VaultUtil.deposit(player.getUniqueId(), newItem.getAmount() * 64 * 64);
                 break;
-            case "lick":
+            case "lick", "silvercoin":
                 VaultUtil.deposit(player.getUniqueId(), newItem.getAmount() * 64);
                 break;
-            case "coppet":
+            case "coppet", "coppercoin":
                 VaultUtil.deposit(player.getUniqueId(), newItem.getAmount());
                 break;
+        }
+        if (CoinUtil.getCoinType(newItem) == CoinType.OLD) {
+            WalletUtil.logConversion(player, type, newItem.getAmount());
         }
     }
 
@@ -257,13 +259,13 @@ public class VaultGUI {
 
     private void handleWithdrawnItem(Player player, ItemStack newItem) {
         switch (ItemUtil.getType(newItem)) {
-            case "verlDor":
+            case "goldcoin":
                 VaultUtil.withdraw(player.getUniqueId(), newItem.getAmount() * 64 * 64);
                 break;
-            case "lick":
+            case "silvercoin":
                 VaultUtil.withdraw(player.getUniqueId(), newItem.getAmount() * 64);
                 break;
-            case "coppet":
+            case "coppercoin":
                 VaultUtil.withdraw(player.getUniqueId(), newItem.getAmount());
                 break;
         }
