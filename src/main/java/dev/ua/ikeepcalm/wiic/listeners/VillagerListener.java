@@ -207,10 +207,11 @@ public class VillagerListener implements Listener {
         if (item.getType() == Material.EMERALD) {
             return item.getAmount();
         }
-        if ("coppet".equals(ItemUtil.getType(item))) {
+        final String coinType = ItemUtil.getType(item);
+        if ("coppet".equals(coinType) || "coppercoin".equals(coinType)) {
             return (int) Math.round(item.getAmount() / plugin.getConfig().getDouble("villagers.emeraldsToCoppetsMultiplier"));
         }
-        if ("lick".equals(ItemUtil.getType(item))) {
+        if ("lick".equals(coinType) || "silvercoin".equals(coinType)) {
             return (int) Math.round(item.getAmount() * 64 / plugin.getConfig().getDouble("villagers.emeraldsToCoppetsMultiplier"));
         }
         return 0;
