@@ -48,9 +48,9 @@ dependencies {
     api 'com.github.ben-manes.caffeine:caffeine:3.1.8'
     api 'com.zaxxer:HikariCP:5.0.1'
     compileOnly 'net.luckperms:api:5.4'
-    compileOnly "io.papermc.paper:paper-api:1.21.4-R0.1-SNAPSHOT"
+    compileOnly "io.papermc.paper:paper-api:1.21.5-R0.1-SNAPSHOT"
     compileOnly "net.milkbowl.vault:VaultUnlockedAPI:2.9"
-    implementation 'com.github.stefvanschie.inventoryframework:IF:0.10.19'
+    implementation 'com.github.stefvanschie.inventoryframework:IF:0.11.1'
     implementation "com.fasterxml.jackson.core:jackson-databind:2.18.2"
     compileOnly 'org.projectlombok:lombok:1.18.36'
     annotationProcessor 'org.projectlombok:lombok:1.18.36'
