@@ -31,13 +31,7 @@ minimumValue: 0
 dailyLimit: 128
 
 villagers:
-  version: 0
+  version: 1
   emeraldsToCoppetsMultiplier: 1.0
   convertTradeResults: true
   useCoinsOnlyForRareItems: false
-
-market:
-  groups:
-    default: 2
-    vip: 4
-    mvp: 6

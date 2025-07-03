@@ -16,10 +16,6 @@ commands:
     description: Shatter currency to lesser
     usage: /shatter
     permission: wiic.shatter
-  shopkeeper:
-    description: Summon a shopkeeper
-    usage: /shopkeeper
-    permission: wiic.spawnNPCs
   save-shop-item:
     description: Saves the item in your hand to config
     usage: /save-shop-item <id>
@@ -28,10 +24,6 @@ commands:
     description: Opens shop for player
     usage: /open-shop <player> <shop>
     permission: wiic.open-shop
-  open-auction:
-    description: Opens auction for player
-    usage: /open-auction <player>
-    permission: wiic.open-auction
   reload-shops:
     description: Reload all shops
     usage: /reload-shops

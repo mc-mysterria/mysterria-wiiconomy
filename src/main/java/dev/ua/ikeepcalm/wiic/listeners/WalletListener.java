@@ -1,14 +1,13 @@
 package dev.ua.ikeepcalm.wiic.listeners;
 
-import dev.ua.ikeepcalm.market.util.ItemStackUtil;
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.economy.Appraiser;
-import dev.ua.ikeepcalm.wiic.economy.SoldItemsManager;
-import dev.ua.ikeepcalm.wiic.guis.WalletGUI;
-import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
-import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
-import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
-import dev.ua.ikeepcalm.wiic.wallet.objects.WalletData;
+import dev.ua.ikeepcalm.wiic.economy.services.Appraiser;
+import dev.ua.ikeepcalm.wiic.economy.services.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.guis.currency.WalletGUI;
+import dev.ua.ikeepcalm.wiic.utils.item.LegacyItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.item.ItemUtil;
+import dev.ua.ikeepcalm.wiic.currency.utils.WalletUtil;
+import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.Bukkit;
@@ -40,13 +39,11 @@ import java.util.UUID;
 public class WalletListener implements Listener {
 
     private final Appraiser appraiser;
-    private final WalletManager walletManager;
     private final SoldItemsManager soldItemsManager;
     private final Map<Player, ItemStack> offhandItems = new HashMap<>();
 
     public WalletListener() {
         this.appraiser = new Appraiser();
-        this.walletManager = new WalletManager();
         this.soldItemsManager = new SoldItemsManager(WIIC.INSTANCE);
     }
 
@@ -178,7 +175,6 @@ public class WalletListener implements Listener {
             p.playSound(p.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1, 1);
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> new WalletGUI(
                     appraiser,
-                    walletManager,
                     soldItemsManager
             ).open(p, data, () -> {
                 returnOffhandItem(p);
@@ -196,7 +192,7 @@ public class WalletListener implements Listener {
             if (player.getInventory().getItemInOffHand().getType().equals(Material.AIR)) {
                 player.getInventory().setItemInOffHand(offhandItems.remove(player));
             } else {
-                ItemStackUtil.giveOrDrop(player, offhandItems.remove(player));
+                LegacyItemUtil.giveOrDrop(player, offhandItems.remove(player));
             }
         }
     }

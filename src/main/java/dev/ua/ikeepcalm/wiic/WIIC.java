@@ -1,18 +1,18 @@
 package dev.ua.ikeepcalm.wiic;
 
-import dev.ua.ikeepcalm.market.auction.listeners.JoinListener;
-import dev.ua.ikeepcalm.market.npc.commands.SpawnNpcCommand;
-import dev.ua.ikeepcalm.market.npc.listeners.NpcListener;
-import dev.ua.ikeepcalm.market.util.AuctionUtil;
-import dev.ua.ikeepcalm.market.util.PendingMoneyManager;
-import dev.ua.ikeepcalm.wiic.commands.*;
-import dev.ua.ikeepcalm.wiic.economy.VaultAdapter;
+import dev.ua.ikeepcalm.wiic.commands.economy.BindCommand;
+import dev.ua.ikeepcalm.wiic.commands.economy.ShatterCommand;
+import dev.ua.ikeepcalm.wiic.commands.economy.WalletCommand;
+import dev.ua.ikeepcalm.wiic.commands.shop.OpenShopCommand;
+import dev.ua.ikeepcalm.wiic.commands.shop.ReloadShopsCommand;
+import dev.ua.ikeepcalm.wiic.commands.shop.SaveShopItemCommand;
+import dev.ua.ikeepcalm.wiic.economy.vault.VaultAdapter;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
-import dev.ua.ikeepcalm.wiic.utils.LogWriter;
-import dev.ua.ikeepcalm.wiic.utils.ShopItemsUtil;
-import dev.ua.ikeepcalm.wiic.wallet.WalletManager;
-import dev.ua.ikeepcalm.wiic.wallet.objects.WalletRecipe;
+import dev.ua.ikeepcalm.wiic.utils.common.LogWriter;
+import dev.ua.ikeepcalm.wiic.utils.item.ShopItemsUtil;
+import dev.ua.ikeepcalm.wiic.currency.services.WalletManager;
+import dev.ua.ikeepcalm.wiic.currency.models.WalletRecipe;
 import lombok.Getter;
 import lombok.Setter;
 import net.luckperms.api.LuckPerms;
@@ -33,19 +33,17 @@ import java.util.Objects;
 public final class WIIC extends JavaPlugin {
 
     public static WIIC INSTANCE;
-    private AuctionUtil auctionUtil;
+
     @Getter
     private ShopItemsUtil shopItemsUtil;
     @Getter
     private static LuckPerms luckPerms;
-    @Getter
-    private static PendingMoneyManager pendingMoneyManager;
     private static String pluginNamespace;
 
-    // Vault implementation
     @Getter
     private static Economy econ = null;
     private VaultAdapter vaultAdapter;
+
     @Getter
     private WalletListener walletListener;
 
@@ -62,23 +60,15 @@ public final class WIIC extends JavaPlugin {
             saveDefaultConfig();
         }
         new WalletRecipe(this);
-        NpcListener npcListener = new NpcListener();
         walletListener = new WalletListener();
-        registerEvents(walletListener, new VillagerListener(this), npcListener, new JoinListener());
+        registerEvents(walletListener, new VillagerListener(this));
         Objects.requireNonNull(getCommand("wallet")).setExecutor(new WalletCommand());
         Objects.requireNonNull(getCommand("shatter")).setExecutor(new ShatterCommand());
-        Objects.requireNonNull(getCommand("shopkeeper")).setExecutor(new SpawnNpcCommand(npcListener));
         Objects.requireNonNull(getCommand("bind")).setExecutor(new BindCommand(new WalletManager()));
         Objects.requireNonNull(getCommand("save-shop-item")).setExecutor(new SaveShopItemCommand());
         Objects.requireNonNull(getCommand("open-shop")).setExecutor(new OpenShopCommand());
-        Objects.requireNonNull(getCommand("open-auction")).setExecutor(new OpenAuctionCommand());
         Objects.requireNonNull(getCommand("reload-shops")).setExecutor(new ReloadShopsCommand());
 
-        try {
-            this.auctionUtil = new AuctionUtil(this.getDataFolder().toPath());
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
         shopItemsUtil = new ShopItemsUtil(this);
         setupLuckPerms();
         if (!setupEconomy()) {
@@ -87,10 +77,9 @@ public final class WIIC extends JavaPlugin {
             return;
         }
 
-        // Enable if
+// Enable if
 //        vaultAdapter = new VaultAdapter();
 //        vaultAdapter.runTaskTimer(this, 0, 100);
-        pendingMoneyManager = new PendingMoneyManager(this);
 
         conversionLogWriter = new LogWriter(new File(getDataFolder(), "conversions.log"));
     }
@@ -109,7 +98,6 @@ public final class WIIC extends JavaPlugin {
 
     @Override
     public void onDisable() {
-        auctionUtil.close();
         try {
             conversionLogWriter.close();
         } catch (IOException e) {

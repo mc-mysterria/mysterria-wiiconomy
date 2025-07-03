@@ -1,9 +1,9 @@
 package dev.ua.ikeepcalm.wiic.listeners;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.utils.CoinType;
-import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
-import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.currency.models.CoinType;
+import dev.ua.ikeepcalm.wiic.currency.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.item.ItemUtil;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.AbstractVillager;
@@ -145,6 +145,14 @@ public class VillagerListener implements Listener {
                     emeralds += item.getAmount();
                     ingredients.remove(item);
                 }
+            }
+
+            if (emeralds > 0) {
+                float priceMultiplier = recipe.getPriceMultiplier();
+                int demand = recipe.getDemand();
+                int specialPrice = recipe.getSpecialPrice();
+                
+                emeralds = Math.max(1, Math.round(emeralds * priceMultiplier + demand + specialPrice));
             }
 
             int coppets = emeraldsToCoppets(emeralds);
