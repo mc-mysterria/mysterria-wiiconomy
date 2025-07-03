@@ -147,13 +147,13 @@ public class VillagerListener implements Listener {
                 }
             }
 
-            if (emeralds > 0) {
-                float priceMultiplier = recipe.getPriceMultiplier();
-                int demand = recipe.getDemand();
-                int specialPrice = recipe.getSpecialPrice();
-                
-                emeralds = Math.max(1, Math.round(emeralds * priceMultiplier + demand + specialPrice));
-            }
+//            if (emeralds > 0) {
+//                float priceMultiplier = recipe.getPriceMultiplier();
+//                int demand = recipe.getDemand();
+//                int specialPrice = recipe.getSpecialPrice();
+//
+//                emeralds = Math.max(1, Math.round(emeralds * priceMultiplier + demand + specialPrice));
+//            }
 
             int coppets = emeraldsToCoppets(emeralds);
             if (ingredients.isEmpty()) {
