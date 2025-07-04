@@ -6,6 +6,7 @@ import dev.ua.ikeepcalm.wiic.commands.economy.WalletCommand;
 import dev.ua.ikeepcalm.wiic.commands.shop.OpenShopCommand;
 import dev.ua.ikeepcalm.wiic.commands.shop.ReloadShopsCommand;
 import dev.ua.ikeepcalm.wiic.commands.shop.SaveShopItemCommand;
+import dev.ua.ikeepcalm.wiic.commands.debug.VillagerDebugCommand;
 import dev.ua.ikeepcalm.wiic.economy.vault.VaultAdapter;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
@@ -68,6 +69,7 @@ public final class WIIC extends JavaPlugin {
         Objects.requireNonNull(getCommand("save-shop-item")).setExecutor(new SaveShopItemCommand());
         Objects.requireNonNull(getCommand("open-shop")).setExecutor(new OpenShopCommand());
         Objects.requireNonNull(getCommand("reload-shops")).setExecutor(new ReloadShopsCommand());
+        Objects.requireNonNull(getCommand("villager-debug")).setExecutor(new VillagerDebugCommand(this));
 
         shopItemsUtil = new ShopItemsUtil(this);
         setupLuckPerms();
