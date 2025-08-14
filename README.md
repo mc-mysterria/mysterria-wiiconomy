@@ -29,13 +29,11 @@
 - **Visual Wallet GUI** - Intuitive currency management
 - **Binding System** - Secure item → currency conversion
 - **Daily Limits** - Configurable sell restrictions
-- **Transaction Logging** - Complete audit trail
 
 ## ⚙️ **Administration**
 - **Hot Reload** - Runtime configuration updates
 - **Vault Integration** - Compatible with economy plugins
-- **LuckPerms Support** - Permission-based features
-- **Multi-language** - Ukrainian locale support
+- **Multi-language** - English and Ukrainian locale support
 
 ---
 
@@ -46,10 +44,9 @@
 | Command | Description | Permission |
 |---------|-------------|------------|
 | `/wallet` | Open wallet GUI | `wiic.wallet` |
-| `/bind` | Bind items to currency | `wiic.bind` |
 | `/shatter` | Convert items to coins | `wiic.shatter` |
-| `/open-shop` | Access marketplace | `wiic.shop` |
-| `/reload-shops` | Reload configuration | `wiic.reload` |
+
+</div>
 
 ### 🔧 **Installation**
 
@@ -57,16 +54,17 @@
 2. Place `WIIC.jar` in your `plugins/` folder
 3. Restart your server
 4. Configure `config.yml` to your needs
-5. Use `/reload-shops` to apply changes
 
 ### 📊 **Requirements**
 
-- **Minecraft**: 1.20+
+- **Minecraft**: 1.21+
 - **Server**: Spigot/Paper
-- **Dependencies**: Vault, LuckPerms (optional)
+- **Dependencies**: Vault, iConomy
 
 ---
 
-*Made with ❤️ by [ikeepcalm](https://github.com/ikeepcalm) for UAPROJECT*
+<div align="center">
+
+*Made with ❤️ by [ikeepcalm](https://github.com/ikeepcalm)*
 
 </div>

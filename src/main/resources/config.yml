@@ -1,10 +1,8 @@
 # -----------------------------
 #            W I I C
 # -----------------------------
-# Made by ikeepcalm for UAPROJECT
+# Made by ikeepcalm
 # -----------------------------
-
-auth-token: ""
 
 # Multipliers for each rarity
 rarities:

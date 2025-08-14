@@ -8,27 +8,7 @@ commands:
     description: Check your wallet debug information
     usage: /wallet
     permission: wiic.wallet
-  bind:
-    description: Bind wallet item to player
-    usage: /bind
-    permission: wiic.bind
   shatter:
     description: Shatter currency to lesser
     usage: /shatter
     permission: wiic.shatter
-  save-shop-item:
-    description: Saves the item in your hand to config
-    usage: /save-shop-item <id>
-    permission: wiic.save-shop-item
-  open-shop:
-    description: Opens shop for player
-    usage: /open-shop <player> <shop>
-    permission: wiic.open-shop
-  reload-shops:
-    description: Reload all shops
-    usage: /reload-shops
-    permission: wiic.reload-shops
-  villager-debug:
-    description: Debug villager conversion and discount issues
-    usage: /villager-debug <scan|info|discounts|recipes|config>
-    permission: wiic.debug.villager

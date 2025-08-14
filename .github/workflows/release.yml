@@ -1,4 +1,4 @@
-name: Build, ShadowJar, and Release
+name: Build and Release
 
 on:
   push:
@@ -6,15 +6,17 @@ on:
       - main
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
-
-    outputs:
-      VERSION: ${{ steps.get_version.outputs.VERSION }}
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
@@ -27,68 +29,66 @@ jobs:
         with:
           gradle-version: "8.8"
 
-      - name: Extract Gradle Version
-        id: get_version
+      - name: Extract version and build
+        id: build_info
         run: |
           VERSION=$(gradle properties -q | grep '^version:' | awk '{ print $2 }')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "::set-output name=VERSION::$VERSION"
-
-      - name: Build with Gradle
-        run: gradle shadowJar
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    permissions: write-all
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v2
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'temurin'
-          java-version: '21'
-
-      - name: Build with Gradle
-        run: gradle shadowJar
-
-      - name: Create Release
-        uses: marvinpinto/action-automatic-releases@latest
-        with:
-          repo_token: "${{ secrets.GITHUB_TOKEN }}"
-          automatic_release_tag: "v${{ needs.build.outputs.VERSION }}"
-          title: "Release ${{ needs.build.outputs.VERSION }}"
-          prerelease: true
-          files: |
-            # LICENSE.md
-            build/libs/*.jar
-
-      - name: Get project version
-        id: get_version
-        run: |
-          VERSION=$(grep "^version *= *['\"]" build.gradle | sed -E "s/version *= *['\"]([^'\"]+)['\"]/\1/")
-          echo "Version: $VERSION"
-          echo "version=$VERSION" >> $GITHUB_ENV
-          SOURCE_FILE="build/libs/WIIC-${VERSION}-all.jar"
-          TARGET_FILE="build/libs/WIIC.jar"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          gradle shadowJar
           
-          if ls "${SOURCE_FILE}" > /dev/null 2>&1; then
-            mv "${SOURCE_FILE}" "${TARGET_FILE}"
-            echo "Renamed file to ${TARGET_FILE}"
+          # Get commit info for release notes
+          COMMIT_COUNT=$(git rev-list --count HEAD)
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            COMMITS_SINCE_TAG=$(git log --oneline ${LAST_TAG}..HEAD --pretty=format:"- %s" | head -10)
           else
-            echo "Source file not found: ${SOURCE_FILE}"
-            exit 1
+            COMMITS_SINCE_TAG=$(git log --oneline --pretty=format:"- %s" | head -10)
           fi
+          
+          # Create release notes
+          cat > release_notes.md << EOF
+          # WIIC Release v$VERSION
+          
+          🎮 **Minecraft Paper Plugin** - Custom Economy System with Three-Tier Currency
+          
+          ## What's New in v$VERSION
+          
+          ### Recent Changes:
+          $COMMITS_SINCE_TAG
+          
+          ## Features
+          - 🪙 Three-tier currency system (Coppets → Licks → VerlDors)
+          - 🛒 Villager trading integration with automatic emerald→coin conversion
+          - 💰 Wallet management system with GUI
+          - 🏪 Shop functionality with item appraisal
+          - 📊 Daily selling limits and tracking
+          - 🔧 Configuration hot-reloading
+          
+          ## Installation
+          1. Download the JAR file from the assets below
+          2. Place it in your server's \`plugins/\` directory
+          3. Restart your server
+          4. Configure the plugin via \`config.yml\`
+          
+          ## Requirements
+          - Minecraft Paper 1.21.5+
+          - Java 21+
+          - Vault (optional)
+          
+          ---
+          Built from commit: \`$(git rev-parse --short HEAD)\` | Build #$COMMIT_COUNT
+          EOF
 
-      - name: Deploy to Pterodactyl
-        uses: rexlmanu/pterodactyl-upload-action@v2.4
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
         with:
-          panel-host: ${{ secrets.PTERODACTYL_URL }}
-          api-key: ${{ secrets.PTERODACTYL_API_KEY }}
-          server-id: ${{ secrets.SERVER_ID }}
-          source: "build/libs/WIIC.jar"
-          target: "plugins/WIIC.jar"
-          restart: false
+          tag_name: "v${{ steps.build_info.outputs.version }}"
+          name: "WIIC v${{ steps.build_info.outputs.version }}"
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          files: |
+            build/libs/*-all.jar
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

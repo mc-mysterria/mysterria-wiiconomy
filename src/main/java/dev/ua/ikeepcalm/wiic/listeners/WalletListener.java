@@ -1,15 +1,12 @@
 package dev.ua.ikeepcalm.wiic.listeners;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.economy.services.Appraiser;
-import dev.ua.ikeepcalm.wiic.economy.services.SoldItemsManager;
-import dev.ua.ikeepcalm.wiic.guis.currency.WalletGUI;
-import dev.ua.ikeepcalm.wiic.utils.item.LegacyItemUtil;
-import dev.ua.ikeepcalm.wiic.utils.item.ItemUtil;
-import dev.ua.ikeepcalm.wiic.currency.utils.WalletUtil;
 import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
+import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
+import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.gui.WalletGUI;
+import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Keyed;
 import org.bukkit.Material;
@@ -38,12 +35,12 @@ import java.util.UUID;
 
 public class WalletListener implements Listener {
 
-    private final Appraiser appraiser;
+    private final PriceAppraiser priceAppraiser;
     private final SoldItemsManager soldItemsManager;
     private final Map<Player, ItemStack> offhandItems = new HashMap<>();
 
     public WalletListener() {
-        this.appraiser = new Appraiser();
+        this.priceAppraiser = new PriceAppraiser();
         this.soldItemsManager = new SoldItemsManager(WIIC.INSTANCE);
     }
 
@@ -59,9 +56,7 @@ public class WalletListener implements Listener {
         if (event.getAction().equals(Action.LEFT_CLICK_AIR) || event.getAction().equals(Action.LEFT_CLICK_BLOCK))
             return;
         if (WalletUtil.isWallet(item)) {
-            if (WalletUtil.wasBound(item)) {
-                startOpeningVault(p);
-            }
+            startOpeningVault(p);
         }
     }
 
@@ -174,14 +169,14 @@ public class WalletListener implements Listener {
             WalletData data = new WalletData(balance.intValue());
             p.playSound(p.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1, 1);
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> new WalletGUI(
-                    appraiser,
+                    priceAppraiser,
                     soldItemsManager
             ).open(p, data, () -> {
                 returnOffhandItem(p);
                 WalletGUI.playersWithOpenWallets.remove(p);
             }));
         } else {
-            p.sendMessage(Component.text("Не ініціалізовано. Потримай гаманець у руках декілька секунд, і спробуй ще раз!").color(NamedTextColor.RED));
+            WIIC.INSTANCE.getMessageManager().sendMessage(p, "wiic.wallet.error.not_initialized");
             returnOffhandItem(p);
             WalletGUI.playersWithOpenWallets.remove(p);
         }
@@ -192,8 +187,15 @@ public class WalletListener implements Listener {
             if (player.getInventory().getItemInOffHand().getType().equals(Material.AIR)) {
                 player.getInventory().setItemInOffHand(offhandItems.remove(player));
             } else {
-                LegacyItemUtil.giveOrDrop(player, offhandItems.remove(player));
+                giveOrDrop(player, offhandItems.remove(player));
             }
+        }
+    }
+
+    private void giveOrDrop(Player player, ItemStack item) {
+        Map<Integer, ItemStack> notGiven = player.getInventory().addItem(item);
+        for (ItemStack itemToDrop : notGiven.values()) {
+            player.getWorld().dropItem(player.getLocation(), itemToDrop);
         }
     }
 

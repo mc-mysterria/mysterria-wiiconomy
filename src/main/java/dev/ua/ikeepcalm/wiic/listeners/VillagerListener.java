@@ -1,9 +1,8 @@
 package dev.ua.ikeepcalm.wiic.listeners;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.currency.models.CoinType;
-import dev.ua.ikeepcalm.wiic.currency.utils.CoinUtil;
-import dev.ua.ikeepcalm.wiic.utils.item.ItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.AbstractVillager;
@@ -65,7 +64,7 @@ public class VillagerListener implements Listener {
                 for (int i = 0; i < villager.getRecipeCount(); i++) {
                     MerchantRecipe recipe = villager.getRecipe(i);
                     List<ItemStack> ingredients = recipe.getIngredients();
-                    ingredients.removeIf(ingredient -> ingredient.getType() == Material.EMERALD || CoinUtil.getCoinType(ingredient) != CoinType.NONE);
+                    ingredients.removeIf(ingredient -> ingredient.getType() == Material.EMERALD || CoinUtil.isCoin(ingredient));
                     int emeralds = originalCosts[i];
                     if (emeralds == 0 && ingredients.size() == 1 && ingredients.getFirst().getType().equals(Material.BOOK) && ingredients.getFirst().getAmount() == 1) {
                         emeralds = 64;
@@ -78,7 +77,7 @@ public class VillagerListener implements Listener {
                         ingredients.add(new ItemStack(Material.EMERALD, emeralds));
                     }
                     ItemStack result = recipe.getResult();
-                    if ((result.getType() == Material.EMERALD || CoinUtil.getCoinType(result) != CoinType.NONE) && originalResults[i] > 0) {
+                    if ((result.getType() == Material.EMERALD || CoinUtil.isCoin(result)) && originalResults[i] > 0) {
                         result = new ItemStack(Material.EMERALD, originalResults[i]);
                     }
 

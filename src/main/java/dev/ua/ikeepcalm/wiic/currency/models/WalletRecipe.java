@@ -1,7 +1,7 @@
 package dev.ua.ikeepcalm.wiic.currency.models;
 
-import dev.ua.ikeepcalm.wiic.currency.utils.CoinUtil;
-import dev.ua.ikeepcalm.wiic.currency.utils.WalletUtil;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
