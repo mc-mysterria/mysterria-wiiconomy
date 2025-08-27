@@ -2,7 +2,7 @@ name: WIIC
 version: '${version}'
 main: dev.ua.ikeepcalm.wiic.WIIC
 api-version: '1.21'
-depend: [ LuckPerms, Vault ]
+depend: [ iConomyUnlocked, Vault ]
 commands:
   wallet:
     description: Check your wallet debug information

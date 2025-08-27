@@ -11,7 +11,7 @@ import org.bukkit.inventory.ItemStack;
 public class CoinUtil {
     public static ItemStack getVerlDor(int amount) {
         ItemStack verlDor = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItemTranslatable(verlDor, "goldcoin", "wiic.items.coin.verldor", NamedTextColor.YELLOW, "verlDor");
+        ItemUtil.modifyItemTranslatable(verlDor, "goldcoin", "item.wiic.goldcoin", NamedTextColor.YELLOW, "verlDor");
         return verlDor;
     }
 
@@ -19,7 +19,7 @@ public class CoinUtil {
 
     public static ItemStack getLick(int amount) {
         ItemStack lick = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItemTranslatable(lick, "silvercoin", "wiic.items.coin.lick", NamedTextColor.GRAY, "lick");
+        ItemUtil.modifyItemTranslatable(lick, "silvercoin", "item.wiic.silvercoin", NamedTextColor.GRAY, "lick");
         return lick;
     }
 
@@ -27,7 +27,7 @@ public class CoinUtil {
 
     public static ItemStack getCoppet(int amount) {
         ItemStack coppet = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItemTranslatable(coppet, "coppercoin", "wiic.items.coin.coppet", NamedTextColor.GOLD, "coppet");
+        ItemUtil.modifyItemTranslatable(coppet, "coppercoin", "item.wiic.coppercoin", NamedTextColor.GOLD, "coppet");
         return coppet;
     }
 
