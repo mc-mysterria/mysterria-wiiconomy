@@ -38,7 +38,7 @@ repositories {
 }
 
 shadowJar {
-    relocate 'com.github.stefvanschie.inventoryframework', 'dev.ua.ikeepcalm.wiic.inventoryframework'
+    // relocate 'com.github.stefvanschie.inventoryframework', 'dev.ua.ikeepcalm.wiic.inventoryframework'
 }
 
 dependencies {
