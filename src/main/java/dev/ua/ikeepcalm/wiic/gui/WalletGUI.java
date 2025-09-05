@@ -85,7 +85,7 @@ public class WalletGUI {
 
     private static String getDonateBalance(Player player) {
         // Placeholder for future currency implementation
-        return "0 UNI";
+        return "0M";
     }
 
     private static ItemStack getConverterItem(WalletData data) {
