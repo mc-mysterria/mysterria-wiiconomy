@@ -2,6 +2,7 @@ package dev.ua.ikeepcalm.wiic;
 
 import dev.ua.ikeepcalm.wiic.commands.ShatterCommand;
 import dev.ua.ikeepcalm.wiic.commands.WalletCommand;
+import dev.ua.ikeepcalm.wiic.commands.WiicCommand;
 import dev.ua.ikeepcalm.wiic.currency.models.WalletRecipe;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
@@ -48,6 +49,9 @@ public final class WIIC extends JavaPlugin {
         registerEvents(walletListener, new VillagerListener(this));
         Objects.requireNonNull(getCommand("wallet")).setExecutor(new WalletCommand());
         Objects.requireNonNull(getCommand("shatter")).setExecutor(new ShatterCommand());
+        WiicCommand wiicCommand = new WiicCommand(this);
+        Objects.requireNonNull(getCommand("wiic")).setExecutor(wiicCommand);
+        Objects.requireNonNull(getCommand("wiic")).setTabCompleter(wiicCommand);
 
         if (!setupEconomy()) {
             getLogger().severe(String.format("[%s] - Disabled due to no Vault dependency found!", getDescription().getName()));

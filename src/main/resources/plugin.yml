@@ -12,3 +12,7 @@ commands:
     description: Shatter currency to lesser
     usage: /shatter
     permission: wiic.shatter
+  wiic:
+    description: WIIC main command
+    usage: /wiic <reload|restore|debug|version>
+    permission: wiic.admin

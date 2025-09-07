@@ -18,6 +18,7 @@ import org.bukkit.persistence.PersistentDataType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.logging.Level;
 
 public class VillagerListener implements Listener {
     private final WIIC plugin;
@@ -34,6 +35,9 @@ public class VillagerListener implements Listener {
 
     @EventHandler
     public void onVillagerAcquireTrade(VillagerAcquireTradeEvent event) {
+        if (plugin.getConfig().getBoolean("debug.villagerListener", false)) {
+            plugin.getLogger().log(Level.INFO, "Villager acquiring trade: " + event.getRecipe().getResult().getType());
+        }
         saveOriginalCosts(event.getEntity(), event.getRecipe());
         event.setRecipe(convertRecipe(event.getRecipe()));
     }
@@ -43,6 +47,9 @@ public class VillagerListener implements Listener {
         if (event.getRightClicked() instanceof AbstractVillager villager) {
             int currentVersion = plugin.getConfig().getInt("villagers.version");
             PersistentDataContainer pdc = villager.getPersistentDataContainer();
+            if (plugin.getConfig().getBoolean("debug.villagerListener", false)) {
+                plugin.getLogger().log(Level.INFO, "Player interacting with villager. Current version: " + currentVersion + ", Villager version: " + pdc.get(villagerVersionKey, PersistentDataType.INTEGER));
+            }
             if (!Integer.valueOf(currentVersion).equals(
                 pdc.get(villagerVersionKey, PersistentDataType.INTEGER)
             )) {
@@ -137,7 +144,12 @@ public class VillagerListener implements Listener {
         ItemStack result = recipe.getResult();
         List<ItemStack> ingredients = recipe.getIngredients();
 
-        if (!plugin.getConfig().getBoolean("villagers.useCoinsOnlyForRareItems") || isRare(result.getType())) {
+        boolean useCoins = !plugin.getConfig().getBoolean("villagers.useCoinsOnlyForRareItems") || isRare(result.getType());
+        if (plugin.getConfig().getBoolean("debug.villagerListener", false)) {
+            plugin.getLogger().log(Level.INFO, "Converting recipe for " + result.getType() + ". Use coins: " + useCoins + " (isRare: " + isRare(result.getType()) + ")");
+        }
+
+        if (useCoins) {
             int emeralds = 0;
             for (ItemStack item : new ArrayList<>(ingredients)) {
                 if (item.getType() == Material.EMERALD) {
