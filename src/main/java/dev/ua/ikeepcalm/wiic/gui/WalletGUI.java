@@ -5,12 +5,13 @@ import com.github.stefvanschie.inventoryframework.gui.GuiItem;
 import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
 import com.github.stefvanschie.inventoryframework.pane.OutlinePane;
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
 import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
-import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -24,21 +25,133 @@ import java.util.List;
 import java.util.Set;
 
 public class WalletGUI {
-    ChestGui gui;
+
+    public final static Set<Player> playersWithOpenWallets = new HashSet<>();
     private final PriceAppraiser priceAppraiser;
     private final SoldItemsManager soldItemsManager;
+
     private boolean callOnClose = true;
-    public final static Set<Player> playersWithOpenWallets = new HashSet<>();
 
     public WalletGUI(PriceAppraiser priceAppraiser, SoldItemsManager soldItemsManager) {
         this.priceAppraiser = priceAppraiser;
         this.soldItemsManager = soldItemsManager;
     }
 
-    public void open(Player player, WalletData data, Runnable onClose) {
-        gui = new ChestGui(3, ComponentHolder.of(Component.text("\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3201\u3206").color(NamedTextColor.WHITE)));
+    private static ItemStack getSkull(Player player) {
+        ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta meta = (SkullMeta) skull.getItemMeta();
+        meta.setOwningPlayer(player);
 
-        final OutlinePane head = new OutlinePane(1, 1, 1,1);
+        meta.customName(Component.text(player.getName())
+                .color(TextColor.color(0xFFD700))
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true));
+
+        meta.lore(List.of(
+                Component.empty(),
+                Component.text("⚜ ").color(TextColor.color(0xFFD700))
+                        .append(Component.translatable("wiic.gui.wallet.profile_info")
+                                .color(NamedTextColor.GRAY))
+                        .append(Component.text(" ⚜").color(TextColor.color(0xFFD700)))
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+        ));
+
+        skull.setItemMeta(meta);
+        return skull;
+    }
+
+    private static ItemStack getDonateInfoItem(Player player) {
+        ItemStack item = new ItemStack(Material.DIAMOND);
+        ItemMeta meta = item.getItemMeta();
+
+        meta.itemName(Component.translatable("wiic.gui.wallet.donate_currency")
+                .color(TextColor.color(0x00BFFF))
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true));
+
+        String balance = getDonateBalance(player);
+        meta.lore(List.of(
+                Component.empty(),
+                Component.text("━━━━━━━━━━━━━━━━━━━━")
+                        .color(TextColor.color(0x4682B4))
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  ◆ ").color(TextColor.color(0x87CEEB))
+                        .append(Component.translatable("wiic.gui.wallet.current_balance", Component.text(balance)
+                                        .color(TextColor.color(0x00FF7F))
+                                        .decoration(TextDecoration.BOLD, true))
+                                .color(NamedTextColor.AQUA))
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  ℹ ").color(NamedTextColor.GRAY)
+                        .append(Component.translatable("wiic.gui.wallet.donate_description")
+                                .color(NamedTextColor.DARK_GRAY))
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("━━━━━━━━━━━━━━━━━━━━")
+                        .color(TextColor.color(0x4682B4))
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+        ));
+
+        meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, "donate"));
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private static String getDonateBalance(Player player) {
+        return "0M";
+    }
+
+    private static ItemStack getConverterItem(WalletData data) {
+        ItemStack item = new ItemStack(Material.GOLD_INGOT);
+        ItemMeta meta = item.getItemMeta();
+
+        meta.itemName(Component.translatable("wiic.gui.wallet.game_currency")
+                .color(TextColor.color(0xFFD700))
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true));
+
+        Component formattedBalance = CoinUtil.getFormattedPrice(data.getTotalCoppets());
+        meta.lore(List.of(
+                Component.empty(),
+                Component.text("━━━━━━━━━━━━━━━━━━━━")
+                        .color(TextColor.color(0xDAA520))
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  ◆ ").color(TextColor.color(0xFFD700))
+                        .append(Component.translatable("wiic.gui.wallet.current_balance").append(formattedBalance)
+                                .color(TextColor.color(0x00FF00))
+                                .decoration(TextDecoration.BOLD, true))
+                        .color(NamedTextColor.YELLOW)
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  ➤ ").color(NamedTextColor.GOLD)
+                        .append(Component.translatable("wiic.gui.wallet.click_to_convert")
+                                .color(NamedTextColor.GRAY))
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("  ℹ ").color(NamedTextColor.GRAY)
+                        .append(Component.translatable("wiic.gui.wallet.currency_info")
+                                .color(NamedTextColor.DARK_GRAY))
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty(),
+                Component.text("━━━━━━━━━━━━━━━━━━━━")
+                        .color(TextColor.color(0xDAA520))
+                        .decoration(TextDecoration.ITALIC, false),
+                Component.empty()
+        ));
+
+        meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, "game_money"));
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    public void open(Player player, WalletData data, Runnable onClose) {
+        ChestGui gui = new ChestGui(3, ComponentHolder.of(Component.text("㈁㈁㈁㈁㈁㈁㈁㈁㈁㈁㈁㈁㈆").color(NamedTextColor.WHITE)));
+
+        final OutlinePane head = new OutlinePane(1, 1, 1, 1);
         head.addItem(new GuiItem(getSkull(player), click -> click.setCancelled(true)));
         gui.addPane(head);
 
@@ -61,41 +174,5 @@ public class WalletGUI {
         gui.setOnGlobalClick(click -> click.setCancelled(true));
 
         gui.show(player);
-    }
-
-    private static ItemStack getSkull(Player player) {
-        ItemStack skull = new ItemStack(Material.PLAYER_HEAD);
-        SkullMeta meta = (SkullMeta) skull.getItemMeta();
-        meta.setOwningPlayer(player);
-        meta.customName(Component.text(player.getName()).decoration(TextDecoration.ITALIC, false));
-        skull.setItemMeta(meta);
-        return skull;
-    }
-
-    private static ItemStack getDonateInfoItem(Player player) {
-        ItemStack item = new ItemStack(Material.DIAMOND);
-        ItemMeta meta = item.getItemMeta();
-        meta.itemName(Component.translatable("wiic.gui.wallet.donate_currency").color(NamedTextColor.BLUE));
-        meta.lore(List.of(Component.translatable("wiic.gui.wallet.current_balance", Component.text(getDonateBalance(player)))
-                .color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)));
-        meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, "donate"));
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    private static String getDonateBalance(Player player) {
-        // Placeholder for future currency implementation
-        return "0M";
-    }
-
-    private static ItemStack getConverterItem(WalletData data) {
-        ItemStack item = new ItemStack(Material.GOLD_INGOT);
-        ItemMeta meta = item.getItemMeta();
-        meta.itemName(Component.translatable("wiic.gui.wallet.game_currency").color(NamedTextColor.GOLD));
-        meta.lore(List.of(Component.translatable("wiic.gui.wallet.current_balance", Component.text(CoinUtil.getFormattedPrice(data.getTotalCoppets())))
-                .color(NamedTextColor.GREEN).decoration(TextDecoration.ITALIC, false)));
-        meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, "game_money"));
-        item.setItemMeta(meta);
-        return item;
     }
 }

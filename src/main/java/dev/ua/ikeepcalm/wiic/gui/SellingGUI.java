@@ -5,9 +5,9 @@ import com.github.stefvanschie.inventoryframework.gui.GuiItem;
 import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
 import com.github.stefvanschie.inventoryframework.pane.OutlinePane;
 import com.github.stefvanschie.inventoryframework.pane.Pane;
-import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.locale.MessageManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextColor;
@@ -18,6 +18,7 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -32,13 +33,13 @@ public class SellingGUI {
     private final Runnable onClose;
 
     public SellingGUI(
-        Player player,
-        ItemStack item,
-        VaultGUI vaultGUI,
-        ConfirmationCallback callback,
-        PriceAppraiser priceAppraiser,
-        SoldItemsManager soldItemsManager,
-        Runnable onClose
+            Player player,
+            ItemStack item,
+            VaultGUI vaultGUI,
+            ConfirmationCallback callback,
+            PriceAppraiser priceAppraiser,
+            SoldItemsManager soldItemsManager,
+            Runnable onClose
     ) {
         this.pl = player;
         this.item = item;
@@ -52,60 +53,171 @@ public class SellingGUI {
     public void open() {
         int appraisal = priceAppraiser.appraise(item);
         int availableAmount = soldItemsManager.getAvailableSellingAmount(pl);
-        Component title = WIIC.INSTANCE.getMessageManager().getPlayerMessage(pl, "wiic.gui.selling.title");
+        Component title = MessageManager.getMessage("wiic.gui.selling.title");
         ChestGui gui = new ChestGui(3, ComponentHolder.of(title));
         gui.setOnGlobalClick(event -> event.setCancelled(true));
 
         if (appraisal > 0) {
             List<Component> details = priceAppraiser.getDetailedAppraisal(item, availableAmount);
+            boolean canSell = appraisal <= availableAmount;
 
-            ItemStack detailedItem = createItem(item.getType(), item.getType().name(), details, NamedTextColor.GREEN);
+            // Enhanced item display
+            ItemStack detailedItem = item.clone();
+            ItemMeta detailedMeta = detailedItem.getItemMeta();
+            if (detailedMeta != null) {
+                Component originalName = detailedMeta.hasDisplayName()
+                    ? detailedMeta.displayName()
+                    : Component.translatable(item.getType().translationKey());
+
+                if (originalName != null) {
+                    detailedMeta.displayName(originalName
+                            .color(canSell ? TextColor.color(0x00FF00) : TextColor.color(0xFF6B6B))
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true));
+                }
+
+                List<Component> enhancedLore = new ArrayList<>();
+                enhancedLore.add(Component.empty());
+                enhancedLore.add(Component.translatable("wiic.gui.selling.separator")
+                        .color(canSell ? TextColor.color(0x00AA00) : TextColor.color(0xAA0000))
+                        .decoration(TextDecoration.ITALIC, false));
+                enhancedLore.addAll(details);
+                enhancedLore.add(Component.empty());
+                if (canSell) {
+                    enhancedLore.add(Component.translatable("wiic.gui.selling.ready")
+                            .color(NamedTextColor.GREEN)
+                            .decoration(TextDecoration.ITALIC, false));
+                } else {
+                    enhancedLore.add(Component.translatable("wiic.gui.selling.limit_exceeded")
+                            .color(NamedTextColor.RED)
+                            .decoration(TextDecoration.ITALIC, false));
+                }
+                enhancedLore.add(Component.empty());
+
+                detailedMeta.lore(enhancedLore);
+                detailedItem.setItemMeta(detailedMeta);
+            }
             GuiItem centralItem = new GuiItem(detailedItem);
 
-            ItemStack confirmItem = createTranslatableItem(Material.GREEN_WOOL, "wiic.gui.action.confirm", Collections.emptyList(), NamedTextColor.GREEN);
+            // Enhanced buttons with better design
+            ItemStack confirmItem = createEnhancedButton(
+                    canSell ? Material.LIME_WOOL : Material.BARRIER,
+                    canSell ? "wiic.gui.action.confirm" : "wiic.gui.selling.limit_reached",
+                    canSell ? TextColor.color(0x00FF00) : TextColor.color(0xAA0000),
+                    canSell
+                        ? List.of(
+                            Component.empty(),
+                            Component.translatable("wiic.gui.selling.confirm_sell")
+                                    .color(NamedTextColor.GREEN)
+                                    .decoration(TextDecoration.ITALIC, false),
+                            Component.translatable("wiic.gui.selling.confirm_click")
+                                    .color(NamedTextColor.GRAY)
+                                    .decoration(TextDecoration.ITALIC, false),
+                            Component.empty()
+                        )
+                        : List.of(
+                            Component.empty(),
+                            Component.translatable("wiic.gui.selling.cannot_sell")
+                                    .color(NamedTextColor.RED)
+                                    .decoration(TextDecoration.ITALIC, false),
+                            Component.translatable("wiic.gui.selling.limit_reached_hint")
+                                    .color(NamedTextColor.GRAY)
+                                    .decoration(TextDecoration.ITALIC, false),
+                            Component.empty()
+                        )
+            );
+
             GuiItem confirmGuiItem = new GuiItem(confirmItem, event -> {
-                callback.onConfirm(item);
+                if (canSell) {
+                    callback.onConfirm(item);
+                }
             });
 
-            ItemStack cancelItem = createTranslatableItem(Material.RED_WOOL, "wiic.gui.action.cancel", Collections.emptyList(), NamedTextColor.RED);
+            ItemStack cancelItem = createEnhancedButton(
+                    Material.RED_WOOL,
+                    "wiic.gui.action.cancel",
+                    TextColor.color(0xFF0000),
+                    List.of(
+                            Component.empty(),
+                            Component.translatable("wiic.gui.selling.cancel_transaction")
+                                    .color(NamedTextColor.RED)
+                                    .decoration(TextDecoration.ITALIC, false),
+                            Component.translatable("wiic.gui.selling.cancel_click")
+                                    .color(NamedTextColor.GRAY)
+                                    .decoration(TextDecoration.ITALIC, false),
+                            Component.empty()
+                    )
+            );
             GuiItem cancelGuiItem = new GuiItem(cancelItem, event -> {
                 callback.onCancel();
             });
 
-            if (appraisal > availableAmount) {
-                confirmGuiItem = cancelGuiItem;
-            }
+            // Setup gradient background (green theme for selling)
+            setupSellingBackground(gui, canSell);
 
-            OutlinePane background = new OutlinePane(0, 0, 9, 3, Pane.Priority.LOWEST);
-            background.addItem(new GuiItem(new ItemStack(Material.BLACK_STAINED_GLASS_PANE)));
-            background.setRepeat(true);
-
-            gui.addPane(background);
-
-            OutlinePane navigationPane = new OutlinePane(3, 1, 3, 1);
+            OutlinePane navigationPane = new OutlinePane(2, 1, 5, 1, Pane.Priority.HIGH);
             navigationPane.addItem(confirmGuiItem);
+            navigationPane.addItem(new GuiItem(createGlassPane(Material.LIGHT_GRAY_STAINED_GLASS_PANE)));
             navigationPane.addItem(centralItem);
+            navigationPane.addItem(new GuiItem(createGlassPane(Material.LIGHT_GRAY_STAINED_GLASS_PANE)));
             navigationPane.addItem(cancelGuiItem);
             gui.addPane(navigationPane);
 
         } else {
             List<Component> details = priceAppraiser.getDetailedAppraisal(item, availableAmount);
 
-            ItemStack detailedItem = createItem(item.getType(), item.getType().name(), details, NamedTextColor.RED);
+            // Item cannot be sold
+            ItemStack detailedItem = item.clone();
+            ItemMeta detailedMeta = detailedItem.getItemMeta();
+            if (detailedMeta != null) {
+                Component originalName = detailedMeta.hasDisplayName()
+                    ? detailedMeta.displayName()
+                    : Component.translatable(item.getType().translationKey());
+
+                if (originalName != null) {
+                    detailedMeta.displayName(originalName
+                            .color(TextColor.color(0xFF0000))
+                            .decoration(TextDecoration.ITALIC, false)
+                            .decoration(TextDecoration.BOLD, true));
+                }
+
+                List<Component> enhancedLore = new ArrayList<>();
+                enhancedLore.add(Component.empty());
+                enhancedLore.add(Component.translatable("wiic.gui.selling.item_info_separator")
+                        .color(TextColor.color(0xAA0000))
+                        .decoration(TextDecoration.ITALIC, false));
+                enhancedLore.addAll(details);
+                enhancedLore.add(Component.empty());
+                enhancedLore.add(Component.translatable("wiic.gui.selling.unsellable")
+                        .color(NamedTextColor.RED)
+                        .decoration(TextDecoration.ITALIC, false));
+                enhancedLore.add(Component.empty());
+
+                detailedMeta.lore(enhancedLore);
+                detailedItem.setItemMeta(detailedMeta);
+            }
             GuiItem centralItem = new GuiItem(detailedItem);
 
-            ItemStack cancelItem = createTranslatableItem(Material.RED_WOOL, "wiic.gui.action.cancel", Collections.emptyList(), NamedTextColor.RED);
+            ItemStack cancelItem = createEnhancedButton(
+                    Material.RED_WOOL,
+                    "wiic.gui.action.cancel",
+                    TextColor.color(0xFF0000),
+                    List.of(
+                            Component.empty(),
+                            Component.translatable("wiic.gui.selling.go_back")
+                                    .color(NamedTextColor.RED)
+                                    .decoration(TextDecoration.ITALIC, false),
+                            Component.empty()
+                    )
+            );
             GuiItem cancelGuiItem = new GuiItem(cancelItem, event -> {
                 callback.onCancel();
             });
 
-            OutlinePane background = new OutlinePane(0, 0, 9, 3, Pane.Priority.LOWEST);
-            background.addItem(new GuiItem(new ItemStack(Material.BLACK_STAINED_GLASS_PANE)));
-            background.setRepeat(true);
+            // Red-themed background for unsellable items
+            setupSellingBackground(gui, false);
 
-            gui.addPane(background);
-
-            OutlinePane navigationPane = new OutlinePane(3, 1, 3, 1);
+            OutlinePane navigationPane = new OutlinePane(3, 1, 3, 1, Pane.Priority.HIGH);
             navigationPane.addItem(cancelGuiItem);
             navigationPane.addItem(centralItem);
             navigationPane.addItem(cancelGuiItem);
@@ -118,6 +230,59 @@ public class SellingGUI {
             }
         });
         gui.show(pl);
+    }
+
+    private void setupSellingBackground(ChestGui gui, boolean success) {
+        Material borderMaterial = success ? Material.LIME_STAINED_GLASS_PANE : Material.RED_STAINED_GLASS_PANE;
+        Material sideMaterial = success ? Material.GREEN_STAINED_GLASS_PANE : Material.ORANGE_STAINED_GLASS_PANE;
+
+        // Top and bottom borders
+        OutlinePane top = new OutlinePane(0, 0, 9, 1, Pane.Priority.LOWEST);
+        OutlinePane bottom = new OutlinePane(0, 2, 9, 1, Pane.Priority.LOWEST);
+        top.addItem(new GuiItem(createGlassPane(borderMaterial)));
+        bottom.addItem(new GuiItem(createGlassPane(borderMaterial)));
+        top.setRepeat(true);
+        bottom.setRepeat(true);
+
+        // Side borders
+        OutlinePane left = new OutlinePane(0, 1, 1, 1, Pane.Priority.LOWEST);
+        OutlinePane right = new OutlinePane(8, 1, 1, 1, Pane.Priority.LOWEST);
+        left.addItem(new GuiItem(createGlassPane(sideMaterial)));
+        right.addItem(new GuiItem(createGlassPane(sideMaterial)));
+
+        // Fill middle
+        OutlinePane middle = new OutlinePane(1, 1, 1, 1, Pane.Priority.LOWEST);
+        middle.addItem(new GuiItem(createGlassPane(Material.GRAY_STAINED_GLASS_PANE)));
+
+        OutlinePane middleRight = new OutlinePane(7, 1, 1, 1, Pane.Priority.LOWEST);
+        middleRight.addItem(new GuiItem(createGlassPane(Material.GRAY_STAINED_GLASS_PANE)));
+
+        gui.addPane(top);
+        gui.addPane(bottom);
+        gui.addPane(left);
+        gui.addPane(right);
+        gui.addPane(middle);
+        gui.addPane(middleRight);
+    }
+
+    private ItemStack createGlassPane(Material material) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(Component.empty());
+        item.setItemMeta(meta);
+        return item;
+    }
+
+    private ItemStack createEnhancedButton(Material material, String translationKey, TextColor color, List<Component> lore) {
+        ItemStack item = new ItemStack(material);
+        ItemMeta meta = item.getItemMeta();
+        meta.displayName(Component.translatable(translationKey)
+                .color(color)
+                .decoration(TextDecoration.ITALIC, false)
+                .decoration(TextDecoration.BOLD, true));
+        meta.lore(lore);
+        item.setItemMeta(meta);
+        return item;
     }
 
     private ItemStack createItem(Material material, String name, List<Component> lore, TextColor color) {

@@ -2,11 +2,12 @@ package dev.ua.ikeepcalm.wiic.listeners;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
-import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.gui.WalletGUI;
+import dev.ua.ikeepcalm.wiic.locale.MessageManager;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import org.bukkit.Bukkit;
 import org.bukkit.Keyed;
 import org.bukkit.Material;
@@ -163,22 +164,22 @@ public class WalletListener implements Listener {
     }
 
     // Function to open the vault inventory
-    private void openVaultInventory(Player p) {
-        if (WIIC.getEcon().hasAccount(p.getUniqueId())) {
-            BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", p.getUniqueId());
+    private void openVaultInventory(Player player) {
+        if (WIIC.getEcon().hasAccount(player.getUniqueId())) {
+            BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", player.getUniqueId());
             WalletData data = new WalletData(balance.intValue());
-            p.playSound(p.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1, 1);
+            player.playSound(player.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1, 1);
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> new WalletGUI(
                     priceAppraiser,
                     soldItemsManager
-            ).open(p, data, () -> {
-                returnOffhandItem(p);
-                WalletGUI.playersWithOpenWallets.remove(p);
+            ).open(player, data, () -> {
+                returnOffhandItem(player);
+                WalletGUI.playersWithOpenWallets.remove(player);
             }));
         } else {
-            WIIC.INSTANCE.getMessageManager().sendMessage(p, "wiic.wallet.error.not_initialized");
-            returnOffhandItem(p);
-            WalletGUI.playersWithOpenWallets.remove(p);
+            player.sendMessage(MessageManager.getMessage("wiic.wallet.error.not_initialized"));
+            returnOffhandItem(player);
+            WalletGUI.playersWithOpenWallets.remove(player);
         }
     }
 

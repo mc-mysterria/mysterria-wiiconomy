@@ -51,7 +51,7 @@ public class VillagerListener implements Listener {
                 plugin.getLogger().log(Level.INFO, "Player interacting with villager. Current version: " + currentVersion + ", Villager version: " + pdc.get(villagerVersionKey, PersistentDataType.INTEGER));
             }
             if (!Integer.valueOf(currentVersion).equals(
-                pdc.get(villagerVersionKey, PersistentDataType.INTEGER)
+                    pdc.get(villagerVersionKey, PersistentDataType.INTEGER)
             )) {
                 int[] originalCosts = pdc.get(originalCostsKey, PersistentDataType.INTEGER_ARRAY);
                 int[] originalResults = pdc.get(originalResultsKey, PersistentDataType.INTEGER_ARRAY);
@@ -89,15 +89,15 @@ public class VillagerListener implements Listener {
                     }
 
                     recipe = new MerchantRecipe(
-                        result,
-                        recipe.getUses(),
-                        recipe.getMaxUses(),
-                        recipe.hasExperienceReward(),
-                        recipe.getVillagerExperience(),
-                        recipe.getPriceMultiplier(),
-                        recipe.getDemand(),
-                        recipe.getSpecialPrice(),
-                        recipe.shouldIgnoreDiscounts()
+                            result,
+                            recipe.getUses(),
+                            recipe.getMaxUses(),
+                            recipe.hasExperienceReward(),
+                            recipe.getVillagerExperience(),
+                            recipe.getPriceMultiplier(),
+                            recipe.getDemand(),
+                            recipe.getSpecialPrice(),
+                            recipe.shouldIgnoreDiscounts()
                     );
                     recipe.setIngredients(ingredients);
 
@@ -196,15 +196,15 @@ public class VillagerListener implements Listener {
         }
 
         recipe = new MerchantRecipe(
-            result,
-            recipe.getUses(),
-            recipe.getMaxUses(),
-            recipe.hasExperienceReward(),
-            recipe.getVillagerExperience(),
-            recipe.getPriceMultiplier(),
-            recipe.getDemand(),
-            recipe.getSpecialPrice(),
-            recipe.shouldIgnoreDiscounts()
+                result,
+                recipe.getUses(),
+                recipe.getMaxUses(),
+                recipe.hasExperienceReward(),
+                recipe.getVillagerExperience(),
+                recipe.getPriceMultiplier(),
+                recipe.getDemand(),
+                recipe.getSpecialPrice(),
+                recipe.shouldIgnoreDiscounts()
         );
         recipe.setIngredients(ingredients);
 

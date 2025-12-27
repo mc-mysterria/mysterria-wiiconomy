@@ -1,6 +1,6 @@
 package dev.ua.ikeepcalm.wiic.commands;
 
-import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.locale.MessageManager;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import org.bukkit.Material;
@@ -19,7 +19,7 @@ public class ShatterCommand implements CommandExecutor {
             ItemStack item = player.getInventory().getItemInMainHand();
             if (CoinUtil.isCoin(item)) {
                 if (item.getAmount() > 1) {
-                    WIIC.INSTANCE.getMessageManager().sendMessage(player, "wiic.commands.shatter.error.take_one_item");
+                    player.sendMessage(MessageManager.getMessage("wiic.commands.shatter.error.take_one_item"));
                     return true;
                 }
                 final String type = ItemUtil.getType(item);
@@ -28,21 +28,21 @@ public class ShatterCommand implements CommandExecutor {
                         case "goldcoin" -> {
                             player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
                             player.getInventory().addItem(CoinUtil.getLick(64));
-                            WIIC.INSTANCE.getMessageManager().sendMessage(player, "wiic.commands.shatter.success");
+                            player.sendMessage(MessageManager.getMessage("wiic.commands.shatter.success"));
                         }
                         case "silvercoin" -> {
                             player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
                             player.getInventory().addItem(CoinUtil.getCoppet(64));
-                            WIIC.INSTANCE.getMessageManager().sendMessage(player, "wiic.commands.shatter.success");
+                            player.sendMessage(MessageManager.getMessage("wiic.commands.shatter.success"));
                         }
                         default -> {
-                            WIIC.INSTANCE.getMessageManager().sendMessage(player, "wiic.commands.shatter.error.cannot_shatter");
+                            player.sendMessage(MessageManager.getMessage("wiic.commands.shatter.error.cannot_shatter"));
                             return true;
                         }
                     }
                 }
             } else {
-                WIIC.INSTANCE.getMessageManager().sendMessage(player, "wiic.commands.shatter.error.cannot_shatter");
+                player.sendMessage(MessageManager.getMessage("wiic.commands.shatter.error.cannot_shatter"));
             }
         }
         return true;

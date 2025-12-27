@@ -6,7 +6,6 @@ import dev.ua.ikeepcalm.wiic.commands.WiicCommand;
 import dev.ua.ikeepcalm.wiic.currency.models.WalletRecipe;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
-import dev.ua.ikeepcalm.wiic.locale.MessageManager;
 import lombok.Getter;
 import lombok.Setter;
 import net.milkbowl.vault2.economy.Economy;
@@ -24,6 +23,7 @@ import java.util.Objects;
 public final class WIIC extends JavaPlugin {
 
     public static WIIC INSTANCE;
+
     private static String pluginNamespace;
 
     @Getter
@@ -32,8 +32,9 @@ public final class WIIC extends JavaPlugin {
     @Getter
     private WalletListener walletListener;
 
-    @Getter
-    private MessageManager messageManager;
+    public static String getNamespace() {
+        return pluginNamespace;
+    }
 
     @Override
     public void onEnable() {
@@ -56,10 +57,7 @@ public final class WIIC extends JavaPlugin {
         if (!setupEconomy()) {
             getLogger().severe(String.format("[%s] - Disabled due to no Vault dependency found!", getDescription().getName()));
             getServer().getPluginManager().disablePlugin(this);
-            return;
         }
-
-        messageManager = new MessageManager(this);
     }
 
     private boolean setupEconomy() {
@@ -84,10 +82,6 @@ public final class WIIC extends JavaPlugin {
         for (Listener listener : listeners) {
             pl.registerEvents(listener, this);
         }
-    }
-
-    public static String getNamespace() {
-        return pluginNamespace;
     }
 
 }

@@ -2,6 +2,9 @@ package dev.ua.ikeepcalm.wiic.commands;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -12,7 +15,6 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.AbstractVillager;
 import org.bukkit.entity.Entity;
-import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.MerchantRecipe;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -38,19 +40,22 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(CommandSender sender, Command command, String label, String[] args) {
         if (!sender.hasPermission("wiic.admin")) {
-            sender.sendMessage("§cВи не маєте дозволу на використання цієї команди!");
+            sender.sendMessage(Component.text("You don't have permission to use this command!")
+                    .color(NamedTextColor.RED));
             return true;
         }
 
         if (args.length == 0) {
-            sender.sendMessage("§eВикористання: /wiic <reload|restore|debug|version>");
+            sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version>")
+                    .color(NamedTextColor.YELLOW));
             return true;
         }
 
         switch (args[0].toLowerCase()) {
             case "reload":
                 plugin.reloadConfig();
-                sender.sendMessage("§aКонфігурацію перезавантажено!");
+                sender.sendMessage(Component.text("Configuration reloaded!")
+                        .color(NamedTextColor.GREEN));
                 plugin.getLogger().log(Level.INFO, "Configuration reloaded by " + sender.getName());
                 break;
 
@@ -62,7 +67,11 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
                 boolean currentState = plugin.getConfig().getBoolean("debug.villagerListener", false);
                 plugin.getConfig().set("debug.villagerListener", !currentState);
                 plugin.saveConfig();
-                sender.sendMessage("§eДебаг режим " + (!currentState ? "§aувімкнено" : "§cвимкнено") + "§e!");
+                sender.sendMessage(Component.text("Debug mode ")
+                        .color(NamedTextColor.YELLOW)
+                        .append(Component.text(!currentState ? "enabled" : "disabled")
+                                .color(!currentState ? NamedTextColor.GREEN : NamedTextColor.RED))
+                        .append(Component.text("!").color(NamedTextColor.YELLOW)));
                 plugin.getLogger().log(Level.INFO, "Debug mode " + (!currentState ? "enabled" : "disabled") + " by " + sender.getName());
                 break;
 
@@ -71,7 +80,8 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
                 break;
 
             default:
-                sender.sendMessage("§eВикористання: /wiic <reload|restore|debug|version>");
+                sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version>")
+                        .color(NamedTextColor.YELLOW));
                 break;
         }
 
@@ -93,7 +103,12 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
             }
         }
 
-        sender.sendMessage("§aВідновлено торгівлю для §e" + restoredCount + "§a з §e" + totalVillagers + "§a жителів!");
+        sender.sendMessage(Component.text("Restored trades for ")
+                .color(NamedTextColor.GREEN)
+                .append(Component.text(restoredCount).color(NamedTextColor.YELLOW))
+                .append(Component.text(" out of ").color(NamedTextColor.GREEN))
+                .append(Component.text(totalVillagers).color(NamedTextColor.YELLOW))
+                .append(Component.text(" villagers!").color(NamedTextColor.GREEN)));
         plugin.getLogger().log(Level.INFO, "Restored trades for " + restoredCount + " out of " + totalVillagers + " villagers by " + sender.getName());
     }
 
@@ -110,10 +125,10 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
         for (int i = 0; i < Math.min(villager.getRecipeCount(), originalCosts.length); i++) {
             MerchantRecipe recipe = villager.getRecipe(i);
             List<ItemStack> ingredients = recipe.getIngredients();
-            
+
             // Remove existing coins and emeralds
             ingredients.removeIf(ingredient -> ingredient.getType() == Material.EMERALD || CoinUtil.isCoin(ingredient));
-            
+
             // Add back original emerald costs
             int emeralds = originalCosts[i];
             if (emeralds > 64) {
@@ -123,7 +138,7 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
             if (emeralds > 0) {
                 ingredients.add(new ItemStack(Material.EMERALD, emeralds));
             }
-            
+
             // Restore original result if it was emeralds
             ItemStack result = recipe.getResult();
             if ((result.getType() == Material.EMERALD || CoinUtil.isCoin(result)) && originalResults[i] > 0) {
@@ -131,18 +146,18 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
             }
 
             MerchantRecipe newRecipe = new MerchantRecipe(
-                result,
-                recipe.getUses(),
-                recipe.getMaxUses(),
-                recipe.hasExperienceReward(),
-                recipe.getVillagerExperience(),
-                recipe.getPriceMultiplier(),
-                recipe.getDemand(),
-                recipe.getSpecialPrice(),
-                recipe.shouldIgnoreDiscounts()
+                    result,
+                    recipe.getUses(),
+                    recipe.getMaxUses(),
+                    recipe.hasExperienceReward(),
+                    recipe.getVillagerExperience(),
+                    recipe.getPriceMultiplier(),
+                    recipe.getDemand(),
+                    recipe.getSpecialPrice(),
+                    recipe.shouldIgnoreDiscounts()
             );
             newRecipe.setIngredients(ingredients);
-            
+
             villager.setRecipe(i, newRecipe);
             restored = true;
         }
@@ -162,9 +177,12 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
         int unknownVillagers = 0;
         int totalVillagers = 0;
 
-        sender.sendMessage("§e=== Звіт версій жителів ===");
-        sender.sendMessage("§eПоточна версія конфігурації: §a" + currentVersion);
-        sender.sendMessage("");
+        sender.sendMessage(Component.text("=== Villager Version Report ===")
+                .color(NamedTextColor.YELLOW));
+        sender.sendMessage(Component.text("Current configuration version: ")
+                .color(NamedTextColor.YELLOW)
+                .append(Component.text(currentVersion).color(NamedTextColor.GREEN)));
+        sender.sendMessage(Component.empty());
 
         for (World world : Bukkit.getWorlds()) {
             int worldVillagers = 0;
@@ -194,23 +212,35 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
             }
 
             if (worldVillagers > 0) {
-                sender.sendMessage("§6Світ " + world.getName() + "§e:");
-                sender.sendMessage("  §aАктуальні: " + worldMatching);
-                sender.sendMessage("  §cЗастарілі: " + worldOutdated);
-                sender.sendMessage("  §7Невідомі: " + worldUnknown);
-                sender.sendMessage("  §eВсього: " + worldVillagers);
-                sender.sendMessage("");
+                sender.sendMessage(Component.text("World ")
+                        .color(NamedTextColor.GOLD)
+                        .append(Component.text(world.getName()).color(NamedTextColor.GOLD))
+                        .append(Component.text(":").color(NamedTextColor.YELLOW)));
+                sender.sendMessage(Component.text("  Up-to-date: " + worldMatching)
+                        .color(NamedTextColor.GREEN));
+                sender.sendMessage(Component.text("  Outdated: " + worldOutdated)
+                        .color(NamedTextColor.RED));
+                sender.sendMessage(Component.text("  Unknown: " + worldUnknown)
+                        .color(NamedTextColor.GRAY));
+                sender.sendMessage(Component.text("  Total: " + worldVillagers)
+                        .color(NamedTextColor.YELLOW));
+                sender.sendMessage(Component.empty());
             }
         }
 
-        sender.sendMessage("§e=== Загальна статистика ===");
-        sender.sendMessage("§aАктуальні жителі: " + matchingVillagers + "/" + totalVillagers);
-        sender.sendMessage("§cЗастарілі жителі: " + outdatedVillagers + "/" + totalVillagers);
-        sender.sendMessage("§7Жителі без версії: " + unknownVillagers + "/" + totalVillagers);
-        
+        sender.sendMessage(Component.text("=== Overall Statistics ===")
+                .color(NamedTextColor.YELLOW));
+        sender.sendMessage(Component.text("Up-to-date villagers: " + matchingVillagers + "/" + totalVillagers)
+                .color(NamedTextColor.GREEN));
+        sender.sendMessage(Component.text("Outdated villagers: " + outdatedVillagers + "/" + totalVillagers)
+                .color(NamedTextColor.RED));
+        sender.sendMessage(Component.text("Villagers without version: " + unknownVillagers + "/" + totalVillagers)
+                .color(NamedTextColor.GRAY));
+
         if (outdatedVillagers > 0 || unknownVillagers > 0) {
-            sender.sendMessage("");
-            sender.sendMessage("§eТоргівля буде оновлена при наступній взаємодії з жителями.");
+            sender.sendMessage(Component.empty());
+            sender.sendMessage(Component.text("Trades will be updated on next villager interaction.")
+                    .color(NamedTextColor.YELLOW));
         }
 
         plugin.getLogger().log(Level.INFO, "Villager version check by " + sender.getName() + ": " + matchingVillagers + " current, " + outdatedVillagers + " outdated, " + unknownVillagers + " unknown");

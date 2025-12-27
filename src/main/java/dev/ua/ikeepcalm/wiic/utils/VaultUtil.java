@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
 
 public class VaultUtil {
 
-    private static Economy economy = WIIC.getEcon();
+    private static final Economy economy = WIIC.getEcon();
 
     public static void deposit(UUID player, double amount) {
         economy.deposit("iConomyUnlocked", player, BigDecimal.valueOf(amount));
