@@ -165,7 +165,7 @@ public class WalletListener implements Listener {
 
     // Function to open the vault inventory
     private void openVaultInventory(Player player) {
-        if (WIIC.getEcon().hasAccount(player.getUniqueId())) {
+        if (WIIC.getEcon() != null) {
             BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", player.getUniqueId());
             WalletData data = new WalletData(balance.intValue());
             player.playSound(player.getLocation(), Sound.ITEM_BOOK_PAGE_TURN, 1, 1);

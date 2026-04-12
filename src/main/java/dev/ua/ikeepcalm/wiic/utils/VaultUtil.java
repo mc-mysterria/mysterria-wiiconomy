@@ -12,19 +12,25 @@ import java.util.concurrent.CompletableFuture;
 
 public class VaultUtil {
 
-    private static final Economy economy = WIIC.getEcon();
-
     public static void deposit(UUID player, double amount) {
-        economy.deposit("iConomyUnlocked", player, BigDecimal.valueOf(amount));
+        if (WIIC.getEcon() != null) {
+            WIIC.getEcon().deposit("iConomyUnlocked", player, BigDecimal.valueOf(amount));
+        }
     }
 
     public static void withdraw(UUID player, double amount) {
-        economy.withdraw("iConomyUnlocked", player, BigDecimal.valueOf(amount));
+        if (WIIC.getEcon() != null) {
+            WIIC.getEcon().withdraw("iConomyUnlocked", player, BigDecimal.valueOf(amount));
+        }
     }
 
     public static CompletableFuture<Double> getBalance(UUID player) {
         final CompletableFuture<Double> result = new CompletableFuture<>();
-        Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> result.complete(economy.balance("iConomyUnlocked", player).doubleValue()));
+        if (WIIC.getEcon() != null) {
+            Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> result.complete(WIIC.getEcon().balance("iConomyUnlocked", player).doubleValue()));
+        } else {
+            result.complete(0.0);
+        }
         return result;
     }
 

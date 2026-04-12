@@ -5,6 +5,7 @@ import com.github.stefvanschie.inventoryframework.gui.GuiItem;
 import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
 import com.github.stefvanschie.inventoryframework.pane.OutlinePane;
 import com.github.stefvanschie.inventoryframework.pane.Pane;
+import com.github.stefvanschie.inventoryframework.pane.util.Slot;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
 import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
@@ -52,8 +53,8 @@ public class VaultGUI {
         gui = new ChestGui(6, ComponentHolder.of(title));
         setupBackground();
         setupSectionHeaders(data);
-        walletInventory = new OutlinePane(1, 1, 7, 1, Pane.Priority.HIGH);
-        playerInventory = new OutlinePane(1, 4, 7, 1, Pane.Priority.HIGH);
+        walletInventory = new OutlinePane(7, 1, Pane.Priority.HIGH);
+        playerInventory = new OutlinePane(7, 1, Pane.Priority.HIGH);
 
         while (data.getLicks() >= 64) {
             data.setLicks(data.getLicks() - 64);
@@ -199,8 +200,8 @@ public class VaultGUI {
             inventoryItemsAdded++;
         }
 
-        gui.addPane(walletInventory);
-        gui.addPane(playerInventory);
+        gui.addPane(Slot.fromXY(1, 1), walletInventory);
+        gui.addPane(Slot.fromXY(1, 4), playerInventory);
 
         gui.setOnGlobalClick(event -> event.setCancelled(true));
 
@@ -239,37 +240,37 @@ public class VaultGUI {
 
     private void setupBackground() {
         // Top border (gold themed)
-        OutlinePane top = new OutlinePane(0, 0, 9, 1, Pane.Priority.LOWEST);
+        OutlinePane top = new OutlinePane(9, 1, Pane.Priority.LOWEST);
         top.addItem(new GuiItem(createGlassPane(Material.YELLOW_STAINED_GLASS_PANE)));
         top.setRepeat(true);
 
         // Wallet section separator (row 3)
-        OutlinePane walletSeparator = new OutlinePane(0, 3, 9, 1, Pane.Priority.LOWEST);
+        OutlinePane walletSeparator = new OutlinePane(9, 1, Pane.Priority.LOWEST);
         walletSeparator.addItem(new GuiItem(createGlassPane(Material.ORANGE_STAINED_GLASS_PANE)));
         walletSeparator.setRepeat(true);
 
         // Bottom border
-        OutlinePane bottom = new OutlinePane(0, 5, 9, 1, Pane.Priority.LOWEST);
+        OutlinePane bottom = new OutlinePane(9, 1, Pane.Priority.LOWEST);
         bottom.addItem(new GuiItem(createGlassPane(Material.YELLOW_STAINED_GLASS_PANE)));
         bottom.setRepeat(true);
 
         // Side borders (gray)
-        OutlinePane left = new OutlinePane(0, 1, 1, 4, Pane.Priority.LOWEST);
-        OutlinePane right = new OutlinePane(8, 1, 1, 4, Pane.Priority.LOWEST);
+        OutlinePane left = new OutlinePane(1, 4, Pane.Priority.LOWEST);
+        OutlinePane right = new OutlinePane(1, 4, Pane.Priority.LOWEST);
         left.addItem(new GuiItem(createGlassPane(Material.GRAY_STAINED_GLASS_PANE)));
         right.addItem(new GuiItem(createGlassPane(Material.GRAY_STAINED_GLASS_PANE)));
         left.setRepeat(true);
         right.setRepeat(true);
 
-        gui.addPane(top);
-        gui.addPane(walletSeparator);
-        gui.addPane(bottom);
-        gui.addPane(left);
-        gui.addPane(right);
+        gui.addPane(Slot.fromXY(0, 0), top);
+        gui.addPane(Slot.fromXY(0, 3), walletSeparator);
+        gui.addPane(Slot.fromXY(0, 5), bottom);
+        gui.addPane(Slot.fromXY(0, 1), left);
+        gui.addPane(Slot.fromXY(8, 1), right);
     }
 
     private void setupSectionHeaders(WalletData data) {
-        OutlinePane walletHeader = new OutlinePane(4, 0, 1, 1, Pane.Priority.HIGH);
+        OutlinePane walletHeader = new OutlinePane(1, 1, Pane.Priority.HIGH);
         walletHeader.addItem(new GuiItem(createHeaderItem(
                 Material.GOLD_INGOT,
                 Component.translatable("wiic.gui.vault.wallet_section")
@@ -292,7 +293,7 @@ public class VaultGUI {
         )));
 
         // Inventory section header (centered at middle separator)
-        OutlinePane inventoryHeader = new OutlinePane(4, 3, 1, 1, Pane.Priority.HIGH);
+        OutlinePane inventoryHeader = new OutlinePane(1, 1, Pane.Priority.HIGH);
         inventoryHeader.addItem(new GuiItem(createHeaderItem(
                 Material.CHEST,
                 Component.translatable("wiic.gui.vault.inventory_section")
@@ -309,8 +310,8 @@ public class VaultGUI {
                 )
         )));
 
-        gui.addPane(walletHeader);
-        gui.addPane(inventoryHeader);
+        gui.addPane(Slot.fromXY(4, 0), walletHeader);
+        gui.addPane(Slot.fromXY(4, 3), inventoryHeader);
     }
 
     private ItemStack createGlassPane(Material material) {

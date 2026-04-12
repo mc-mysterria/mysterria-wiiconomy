@@ -5,6 +5,7 @@ import com.github.stefvanschie.inventoryframework.gui.GuiItem;
 import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
 import com.github.stefvanschie.inventoryframework.pane.OutlinePane;
 import com.github.stefvanschie.inventoryframework.pane.Pane;
+import com.github.stefvanschie.inventoryframework.pane.util.Slot;
 import dev.ua.ikeepcalm.wiic.locale.MessageManager;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -109,13 +110,13 @@ public class ActionGUI {
         // Gradient background
         setupGradientBackground(gui);
 
-        OutlinePane navigationPane = new OutlinePane(2, 1, 5, 1, Pane.Priority.HIGH);
+        OutlinePane navigationPane = new OutlinePane(5, 1, Pane.Priority.HIGH);
         navigationPane.addItem(confirmGuiItem);
         navigationPane.addItem(new GuiItem(createGlassPane(Material.LIGHT_GRAY_STAINED_GLASS_PANE)));
         navigationPane.addItem(centralItem);
         navigationPane.addItem(new GuiItem(createGlassPane(Material.LIGHT_GRAY_STAINED_GLASS_PANE)));
         navigationPane.addItem(cancelGuiItem);
-        gui.addPane(navigationPane);
+        gui.addPane(Slot.fromXY(2, 1), navigationPane);
 
         gui.setOnClose(event -> {
             if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW && event.getReason() != InventoryCloseEvent.Reason.PLUGIN) {
@@ -129,32 +130,32 @@ public class ActionGUI {
 
     private void setupGradientBackground(ChestGui gui) {
         // Top and bottom borders
-        OutlinePane top = new OutlinePane(0, 0, 9, 1, Pane.Priority.LOWEST);
-        OutlinePane bottom = new OutlinePane(0, 2, 9, 1, Pane.Priority.LOWEST);
+        OutlinePane top = new OutlinePane(9, 1, Pane.Priority.LOWEST);
+        OutlinePane bottom = new OutlinePane(9, 1, Pane.Priority.LOWEST);
         top.addItem(new GuiItem(createGlassPane(Material.CYAN_STAINED_GLASS_PANE)));
         bottom.addItem(new GuiItem(createGlassPane(Material.CYAN_STAINED_GLASS_PANE)));
         top.setRepeat(true);
         bottom.setRepeat(true);
 
         // Side borders
-        OutlinePane left = new OutlinePane(0, 1, 1, 1, Pane.Priority.LOWEST);
-        OutlinePane right = new OutlinePane(8, 1, 1, 1, Pane.Priority.LOWEST);
+        OutlinePane left = new OutlinePane(1, 1, Pane.Priority.LOWEST);
+        OutlinePane right = new OutlinePane(1, 1, Pane.Priority.LOWEST);
         left.addItem(new GuiItem(createGlassPane(Material.LIGHT_BLUE_STAINED_GLASS_PANE)));
         right.addItem(new GuiItem(createGlassPane(Material.LIGHT_BLUE_STAINED_GLASS_PANE)));
 
         // Fill middle
-        OutlinePane middle = new OutlinePane(1, 1, 1, 1, Pane.Priority.LOWEST);
+        OutlinePane middle = new OutlinePane(1, 1, Pane.Priority.LOWEST);
         middle.addItem(new GuiItem(createGlassPane(Material.GRAY_STAINED_GLASS_PANE)));
 
-        OutlinePane middleRight = new OutlinePane(7, 1, 1, 1, Pane.Priority.LOWEST);
+        OutlinePane middleRight = new OutlinePane(1, 1, Pane.Priority.LOWEST);
         middleRight.addItem(new GuiItem(createGlassPane(Material.GRAY_STAINED_GLASS_PANE)));
 
-        gui.addPane(top);
-        gui.addPane(bottom);
-        gui.addPane(left);
-        gui.addPane(right);
-        gui.addPane(middle);
-        gui.addPane(middleRight);
+        gui.addPane(Slot.fromXY(0, 0), top);
+        gui.addPane(Slot.fromXY(0, 2), bottom);
+        gui.addPane(Slot.fromXY(0, 1), left);
+        gui.addPane(Slot.fromXY(8, 1), right);
+        gui.addPane(Slot.fromXY(1, 1), middle);
+        gui.addPane(Slot.fromXY(7, 1), middleRight);
     }
 
     private ItemStack createGlassPane(Material material) {

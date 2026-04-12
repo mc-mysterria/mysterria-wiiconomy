@@ -64,7 +64,7 @@ public final class WIIC extends JavaPlugin {
         if (getServer().getPluginManager().getPlugin("Vault") == null) {
             return false;
         }
-        RegisteredServiceProvider<Economy> rsp = getServer().getServicesManager().getRegistration(Economy.class);
+        RegisteredServiceProvider<net.milkbowl.vault2.economy.Economy> rsp = getServer().getServicesManager().getRegistration(net.milkbowl.vault2.economy.Economy.class);
         if (rsp == null) {
             return false;
         }

@@ -4,6 +4,67 @@
 # Made by ikeepcalm
 # -----------------------------
 
+# Wallet GUI Configuration
+wallet-gui:
+  title: "ꐕ"
+  items:
+    player-info:
+      slot: [1, 1]
+      material: PLAYER_HEAD
+      name: "<white>%prefix% %player%"
+    balance:
+      slot: [4, 1]
+      material: DIAMOND
+      name: "<#FFAA00>ʙᴀʟᴀɴᴄᴇ"
+      lore:
+        - "<gray>ʏᴏᴜ ᴄᴜʀʀᴇɴᴛʟʏ"
+        - "<gray>ʜᴀᴠᴇ <#FFAA00>%balance%$"
+      custom-model-data: 2
+      # item-model: "wiic:balance_icon" # Example of NamespacedKey support
+    rank:
+      slot: [5, 1]
+      material: DIAMOND
+      name: "<#FF5555>ʀᴀɴᴋ"
+      lore:
+        - "<gray>ʏᴏᴜ ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ"
+        - "<white>%vault_prefix%" # Example of PAPI placeholder
+      custom-model-data: 5
+    documentation:
+      slot: [6, 1]
+      material: DIAMOND
+      name: "<white>ᴅᴏᴄᴜᴍᴇɴᴛᴀᴛɪᴏɴ"
+      lore:
+        - "<gray>ʏᴏᴜʀ ɴᴀᴍᴇ ɪs <white>%player%"
+        - "<gray>ʏᴏᴜʀ ꜰɪʀsᴛ ɪɴᴄᴏᴍᴇ"
+        - "<gray>ᴡᴀs <white>%first-join%"
+      custom-model-data: 4
+    store:
+      slot: [4, 2]
+      material: DIAMOND
+      name: "<#FFAA00>sᴇʀᴠᴇʀ sᴛᴏʀᴇ"
+      lore:
+        - "<gray>ʏᴏᴜʀ sᴛᴏʀᴇ sᴇʀᴠᴇʀ"
+        - "<#FFAA00>ʜᴇʀᴇ"
+      custom-model-data: 7
+    discord:
+      slot: [5, 2]
+      material: DIAMOND
+      name: "<#5555FF>ᴅɪsᴄᴏʀᴅ sᴇʀᴠᴇʀ"
+      lore:
+        - "<gray>ʏᴏᴜʀ ᴅɪsᴄᴏʀᴅ sᴇʀᴠᴇʀ"
+        - "<#5555FF>ʜᴇʀᴇ"
+      custom-model-data: 3
+    server-stats:
+      slot: [6, 2]
+      material: DIAMOND
+      name: "<white>sᴇʀᴠᴇʀ sᴛᴀᴛs"
+      lore:
+        - "<gray>ᴛᴘs: <white>%tps%"
+        - "<gray>ᴍs: <white>%ping%"
+        - "<gray>ʀᴀᴍ: <white>%ram-used%/%ram-max%"
+        - "<gray>ᴏɴʟɪɴᴇ: <white>%online%/%max-players%"
+      custom-model-data: 6
+
 # Multipliers for each rarity
 rarities:
   COMMON: 1.0
