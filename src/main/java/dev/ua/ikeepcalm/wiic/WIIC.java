@@ -4,6 +4,7 @@ import dev.ua.ikeepcalm.wiic.commands.ShatterCommand;
 import dev.ua.ikeepcalm.wiic.commands.WalletCommand;
 import dev.ua.ikeepcalm.wiic.commands.WiicCommand;
 import dev.ua.ikeepcalm.wiic.currency.models.WalletRecipe;
+import dev.ua.ikeepcalm.wiic.currency.services.PreferencesManager;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
 import lombok.Getter;
@@ -45,6 +46,7 @@ public final class WIIC extends JavaPlugin {
         if (!new File(getDataFolder() + File.separator + "config.yml").exists()) {
             saveDefaultConfig();
         }
+        PreferencesManager.init();
         new WalletRecipe(this);
         walletListener = new WalletListener();
         registerEvents(walletListener, new VillagerListener(this));

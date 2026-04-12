@@ -6,7 +6,8 @@
 
 # Wallet GUI Configuration
 wallet-gui:
-  title: "ꐕ"
+  title: "<shift:-48><glyph:bronze_wallet>"
+  background: AIR
   items:
     player-info:
       slot: [1, 1]
@@ -19,8 +20,7 @@ wallet-gui:
       lore:
         - "<gray>ʏᴏᴜ ᴄᴜʀʀᴇɴᴛʟʏ"
         - "<gray>ʜᴀᴠᴇ <#FFAA00>%balance%$"
-      custom-model-data: 2
-      # item-model: "wiic:balance_icon" # Example of NamespacedKey support
+      item-model: "wallet:balance"
     rank:
       slot: [5, 1]
       material: DIAMOND
@@ -28,7 +28,7 @@ wallet-gui:
       lore:
         - "<gray>ʏᴏᴜ ᴀʀᴇ ᴄᴜʀʀᴇɴᴛʟʏ"
         - "<white>%vault_prefix%" # Example of PAPI placeholder
-      custom-model-data: 5
+      item-model: "wallet:rank"
     documentation:
       slot: [6, 1]
       material: DIAMOND
@@ -37,7 +37,14 @@ wallet-gui:
         - "<gray>ʏᴏᴜʀ ɴᴀᴍᴇ ɪs <white>%player%"
         - "<gray>ʏᴏᴜʀ ꜰɪʀsᴛ ɪɴᴄᴏᴍᴇ"
         - "<gray>ᴡᴀs <white>%first-join%"
-      custom-model-data: 4
+      item-model: "wallet:documents"
+    settings:
+      slot: [6, 2]
+      material: DIAMOND
+      name: "<white>sᴇᴛᴛɪɴɢs"
+      lore:
+        - "<gray>ᴄʜᴀɴɢᴇ ɢᴜɪ ᴛʜᴇᴍᴇ"
+      item-model: "wallet:settings"
     store:
       slot: [4, 2]
       material: DIAMOND
@@ -45,7 +52,7 @@ wallet-gui:
       lore:
         - "<gray>ʏᴏᴜʀ sᴛᴏʀᴇ sᴇʀᴠᴇʀ"
         - "<#FFAA00>ʜᴇʀᴇ"
-      custom-model-data: 7
+      item-model: "wallet:website"
     discord:
       slot: [5, 2]
       material: DIAMOND
@@ -53,17 +60,139 @@ wallet-gui:
       lore:
         - "<gray>ʏᴏᴜʀ ᴅɪsᴄᴏʀᴅ sᴇʀᴠᴇʀ"
         - "<#5555FF>ʜᴇʀᴇ"
-      custom-model-data: 3
-    server-stats:
-      slot: [6, 2]
-      material: DIAMOND
-      name: "<white>sᴇʀᴠᴇʀ sᴛᴀᴛs"
+      item-model: "wallet:discord"
+
+# Vault GUI — balance overview and coin/item interactions
+# Slots use [col, row] notation (0-based). The GUI is 3 rows × 9 cols.
+#   wallet-coins-start:    start slot for wallet coins (VerlDor → Lick → Coppet), fills right
+#   inventory-items-start: start slot for actionable player inventory items, fills right
+vault-gui:
+  title: ""
+  background: NONE
+  wallet-coins-start: [2, 0]
+  inventory-items-start: [1, 1]
+  items:
+    balance:
+      slot: [1, 0]
+      material: GOLD_INGOT
+      name: "<#FFD700>ʙᴀʟᴀɴᴄᴇ"
       lore:
-        - "<gray>ᴛᴘs: <white>%tps%"
-        - "<gray>ᴍs: <white>%ping%"
-        - "<gray>ʀᴀᴍ: <white>%ram-used%/%ram-max%"
-        - "<gray>ᴏɴʟɪɴᴇ: <white>%online%/%max-players%"
-      custom-model-data: 6
+        - "<gray>sᴛᴏʀᴇᴅ: <#FFD700>%balance%"
+        - ""
+        - "<dark_gray>ᴄʟɪᴄᴋ ᴀ ᴄᴏɪɴ ᴛᴏ ᴡɪᴛʜᴅʀᴀᴡ"
+        - "<dark_gray>ᴄʟɪᴄᴋ ᴀ ʙᴀɢ ɪᴛᴇᴍ ᴛᴏ sᴇʟʟ"
+      item-model: "wallet:balance"
+
+# Action GUI — deposit / withdrawal confirmation
+# preview-slot: [col, row] for the coin preview item
+action-gui:
+  title: ""
+  background: GRAY_STAINED_GLASS_PANE
+  preview-slot: [4, 1]
+  items:
+    confirm:
+      slot: [2, 1]
+      material: LIME_WOOL
+      name: "<green>ᴄᴏɴꜰɪʀᴍ"
+      lore:
+        - ""
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ᴄᴏɴꜰɪʀᴍ ᴛʜɪs ᴀᴄᴛɪᴏɴ"
+        - ""
+    cancel:
+      slot: [6, 1]
+      material: RED_WOOL
+      name: "<red>ᴄᴀɴᴄᴇʟ"
+      lore:
+        - ""
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"
+        - ""
+
+# Selling GUI — sell confirmation
+# confirm-available:   shown when the daily limit allows the sale; supports %price%
+# confirm-unavailable: shown when the item cannot be sold (bad type or daily limit hit)
+selling-gui:
+  title: ""
+  background: GRAY_STAINED_GLASS_PANE
+  preview-slot: [4, 1]
+  items:
+    confirm-available:
+      slot: [2, 1]
+      material: LIME_WOOL
+      name: "<green>sᴇʟʟ"
+      lore:
+        - ""
+        - "<gray>ᴘʀɪᴄᴇ: <#FFD700>%price%"
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ᴄᴏɴꜰɪʀᴍ"
+        - ""
+    confirm-unavailable:
+      slot: [2, 1]
+      material: BARRIER
+      name: "<red>ᴄᴀɴɴᴏᴛ sᴇʟʟ"
+      lore:
+        - ""
+        - "<gray>ɪᴛᴇᴍ ɴᴏᴛ sᴇʟʟᴀʙʟᴇ ᴏʀ"
+        - "<gray>ᴅᴀɪʟʏ ʟɪᴍɪᴛ ʀᴇᴀᴄʜᴇᴅ"
+        - ""
+    cancel:
+      slot: [6, 1]
+      material: RED_WOOL
+      name: "<red>ᴄᴀɴᴄᴇʟ"
+      lore:
+        - ""
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ɢᴏ ʙᴀᴄᴋ"
+        - ""
+  # Dynamic lore appended to the item preview — supports MiniMessage formatting
+  lore:
+    separator-available: "<dark_green>──────────────"
+    separator-unavailable: "<dark_red>──────────────"
+    not-sellable: "<red>ɴᴏᴛ sᴇʟʟᴀʙʟᴇ"
+    daily-limit: "<gold>ᴅᴀɪʟʏ ʟɪᴍɪᴛ ʀᴇᴀᴄʜᴇᴅ"
+
+# Settings GUI — theme picker shown when a player clicks the settings item in WalletGUI
+# Each entry under "themes" is a standard item config section plus a "wallet-title" key.
+# "wallet-title" is the MiniMessage string (typically a texture-glyph char) used as the
+# WalletGUI window title when the player has this theme selected.
+# Use %selected% in name/lore to show "✔ " prefix for the currently active theme.
+settings-gui:
+  title: ""
+  background: GRAY_STAINED_GLASS_PANE
+  themes:
+    theme-1:
+      slot: [3, 1]
+      material: BROWN_DYE
+      name: "%selected%<white>ᴛʜᴇᴍᴇ 1"
+      lore:
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ sᴇʟᴇᴄᴛ"
+      wallet-title: "<shift:-48><glyph:bronze_wallet>"
+      vault-title: "<shift:-48><glyph:bronze_vault>"
+      background: AIR
+    theme-2:
+      slot: [4, 1]
+      material: BLACK_DYE
+      name: "%selected%<aqua>ᴛʜᴇᴍᴇ 2"
+      lore:
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ sᴇʟᴇᴄᴛ"
+      wallet-title: "<shift:-48><glyph:black_wallet>"
+      vault-title: "<shift:-48><glyph:black_vault>"
+      background: AIR
+    theme-3:
+      slot: [5, 1]
+      material: ORANGE_DYE
+      name: "%selected%<light_purple>ᴛʜᴇᴍᴇ 3"
+      lore:
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ sᴇʟᴇᴄᴛ"
+      wallet-title: "<shift:-48><glyph:golden_wallet>"
+      vault-title: "<shift:-48><glyph:golden_vault>"
+      background: AIR
+  items:
+    back:
+      slot: [8, 2]
+      material: RED_WOOL
+      name: "<red>ʙᴀᴄᴋ"
+      lore:
+        - ""
+        - "<gray>ʀᴇᴛᴜʀɴ ᴛᴏ ᴡᴀʟʟᴇᴛ"
+        - ""
 
 # Multipliers for each rarity
 rarities:
@@ -88,6 +217,33 @@ ores:
 
 minimum-value: 0
 daily-limit: 128
+
+# Coin display names and formatted-price strings.
+# All support MiniMessage formatting. %value% is replaced with the count.
+# "name"   — displayed on the physical item and in GUI previews (non-italic, no translatable)
+# "format" — used in balance / price strings, e.g. "<yellow>3 ᴠᴇʀʟ ᴅᴏʀs"
+coins:
+  verldor:
+    name:   "<yellow>ᴠᴇʀʟ ᴅᴏʀ"
+    format: "<yellow>%value% ᴠᴇʀʟ ᴅᴏʀs"
+  lick:
+    name:   "<gray>ʟɪᴄᴋ"
+    format: "<gray>%value% ʟɪᴄᴋs"
+  coppet:
+    name:   "<gold>ᴄᴏᴘᴘᴇᴛ"
+    format: "<gold>%value% ᴄᴏᴘᴘᴇᴛs"
+  zero:     "<gray>0 ᴄᴏᴘᴘᴇᴛs"
+
+# Appraisal detail lines shown in the SellingGUI item preview lore.
+# All values support MiniMessage formatting. Use %value% for the numeric placeholder.
+appraiser:
+  cannot-appraise: "<red>ᴄᴀɴɴᴏᴛ ᴀᴘᴘʀᴀɪsᴇ"
+  base-price:      "<dark_gray>ʙᴀsᴇ ᴘʀɪᴄᴇ: <gray>%value%"
+  uniqueness:      "<dark_gray>ᴜɴɪQᴜᴇɴᴇss: <gray>%value%"
+  quantity:        "<dark_gray>Qᴜᴀɴᴛɪᴛʏ: <gray>%value%"
+  final-appraisal: "<#FFD700>ꜰɪɴᴀʟ: <white>%value%"
+  cannot-sell:     "<red>ᴄᴀɴɴᴏᴛ sᴇʟʟ"
+  daily-limit:     "<red>ᴅᴀɪʟʏ ʟɪᴍɪᴛ: <gray>%value%"
 
 villagers:
   version: 2

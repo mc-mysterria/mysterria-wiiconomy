@@ -1,204 +1,125 @@
 package dev.ua.ikeepcalm.wiic.gui;
 
-import com.github.stefvanschie.inventoryframework.adventuresupport.ComponentHolder;
-import com.github.stefvanschie.inventoryframework.gui.GuiItem;
-import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
-import com.github.stefvanschie.inventoryframework.pane.OutlinePane;
-import com.github.stefvanschie.inventoryframework.pane.Pane;
-import com.github.stefvanschie.inventoryframework.pane.util.Slot;
-import dev.ua.ikeepcalm.wiic.locale.MessageManager;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextColor;
-import net.kyori.adventure.text.format.TextDecoration;
+import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.currency.services.PreferencesManager;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
-import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
+import xyz.xenondevs.invui.gui.Gui;
+import xyz.xenondevs.invui.item.Item;
+import xyz.xenondevs.invui.window.Window;
 
-import java.util.Collections;
-import java.util.List;
+import java.util.Map;
 
+/**
+ * Confirmation dialog for coin deposit and withdrawal actions.
+ *
+ * <p>Configured via {@code action-gui} in {@code config.yml}:
+ * <ul>
+ *   <li>{@code title}        — MiniMessage title string</li>
+ *   <li>{@code background}   — backdrop pane material</li>
+ *   <li>{@code preview-slot} — {@code [x, y]} slot for the item being confirmed</li>
+ *   <li>{@code items.confirm} — confirm button (standard item config)</li>
+ *   <li>{@code items.cancel}  — cancel button (standard item config)</li>
+ * </ul>
+ *
+ * <p>Default layout (3 rows, 9 wide):
+ * <pre>
+ *   Row 0:  # # # # # # # # #
+ *   Row 1:  # # [confirm] # [preview] # [cancel] # #
+ *   Row 2:  # # # # # # # # #
+ * </pre>
+ */
 public class ActionGUI {
 
-    private final Player pl;
+    private static final MiniMessage MM = MiniMessage.miniMessage();
+
+    private final Player player;
     private final ItemStack item;
-    private final VaultGUI vaultGUI;
     private final ConfirmationCallback callback;
     private final Runnable onClose;
 
-    public ActionGUI(Player player, ItemStack item, VaultGUI vaultGUI, ConfirmationCallback callback, Runnable onClose) {
-        this.pl = player;
-        this.item = item;
-        this.vaultGUI = vaultGUI;
+    public ActionGUI(Player player, ItemStack item, ConfirmationCallback callback, Runnable onClose) {
+        this.player = player;
+        this.item   = item;
         this.callback = callback;
-        this.onClose = onClose;
+        this.onClose  = onClose;
     }
 
     public void open() {
-        Component title = MessageManager.getMessage("wiic.gui.action.title");
-        ChestGui gui = new ChestGui(3, ComponentHolder.of(title));
-        gui.setOnGlobalClick(event -> event.setCancelled(true));
+        ConfigurationSection config = WIIC.INSTANCE.getConfig().getConfigurationSection("action-gui");
 
-        // Enhanced central item with quantity and type info
-        ItemStack detailedItem = item.clone();
-        ItemMeta detailedMeta = detailedItem.getItemMeta();
-        if (detailedMeta != null) {
-            Component originalName = detailedMeta.hasDisplayName()
-                ? detailedMeta.displayName()
-                : Component.translatable(item.getType().translationKey());
+        Material bg = PreferencesManager.getThemeBackground(player.getUniqueId(), GuiUtil.backgroundMaterial(config));
+        Gui gui = Gui.builder()
+                .setStructure(
+                        "# # # # # # # # #",
+                        "# # # # # # # # #",
+                        "# # # # # # # # #")
+                .addIngredient('#', GuiUtil.emptyPane(bg))
+                .build();
 
-            if (originalName != null) {
-                detailedMeta.displayName(originalName
-                        .color(TextColor.color(0xFFD700))
-                        .decoration(TextDecoration.ITALIC, false)
-                        .decoration(TextDecoration.BOLD, true));
+        // Guard against processing a click while async work is already in flight
+        boolean[] acted = {false};
+
+        // Preview — show the actual item as-is (its own name/lore describe it)
+        int previewSlot = config != null ? GuiUtil.slotIndex(config, "preview-slot") : 13;
+        if (previewSlot < 0) previewSlot = 13;
+        gui.setItem(previewSlot, Item.builder().setItemProvider(item.clone()).build());
+
+        // Confirm button
+        if (config != null) {
+            ConfigurationSection confirmSection = config.getConfigurationSection("items.confirm");
+            if (confirmSection != null) {
+                int slot = GuiUtil.itemSlot(confirmSection);
+                if (slot < 0) slot = 11;
+                ItemStack btn = GuiUtil.createConfigItem(confirmSection, player);
+                gui.setItem(slot, Item.builder()
+                        .setItemProvider(btn)
+                        .addClickHandler(_ -> {
+                            if (acted[0]) return;
+                            acted[0] = true;
+                            callback.onConfirm(item);
+                        })
+                        .build());
             }
 
-            detailedMeta.lore(List.of(
-                    Component.empty(),
-                    Component.translatable("wiic.gui.action.separator")
-                            .color(TextColor.color(0xDAA520))
-                            .decoration(TextDecoration.ITALIC, false),
-                    Component.translatable("wiic.gui.action.amount", Component.text(item.getAmount()))
-                            .color(NamedTextColor.YELLOW)
-                            .decoration(TextDecoration.ITALIC, false),
-                    Component.empty(),
-                    Component.translatable("wiic.gui.action.hint")
-                            .color(NamedTextColor.GRAY)
-                            .decoration(TextDecoration.ITALIC, false)
-            ));
-            detailedItem.setItemMeta(detailedMeta);
+            // Cancel button
+            ConfigurationSection cancelSection = config.getConfigurationSection("items.cancel");
+            if (cancelSection != null) {
+                int slot = GuiUtil.itemSlot(cancelSection);
+                if (slot < 0) slot = 15;
+                ItemStack btn = GuiUtil.createConfigItem(cancelSection, player);
+                gui.setItem(slot, Item.builder()
+                        .setItemProvider(btn)
+                        .addClickHandler(_ -> {
+                            if (acted[0]) return;
+                            acted[0] = true;
+                            callback.onCancel();
+                        })
+                        .build());
+            }
         }
-        GuiItem centralItem = new GuiItem(detailedItem);
 
-        // Enhanced confirm button
-        ItemStack confirmItem = createEnhancedButton(
-                Material.LIME_WOOL,
-                "wiic.gui.action.confirm",
-                TextColor.color(0x00FF00),
-                List.of(
-                        Component.empty(),
-                        Component.translatable("wiic.gui.action.confirm_hint")
-                                .color(NamedTextColor.GREEN)
-                                .decoration(TextDecoration.ITALIC, false),
-                        Component.empty()
-                )
-        );
-        GuiItem confirmGuiItem = new GuiItem(confirmItem, event -> {
-            callback.onConfirm(item);
-        });
+        String titleStr = config != null ? config.getString("title", "") : "";
+        var title = MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of()));
 
-        // Enhanced cancel button
-        ItemStack cancelItem = createEnhancedButton(
-                Material.RED_WOOL,
-                "wiic.gui.action.cancel",
-                TextColor.color(0xFF0000),
-                List.of(
-                        Component.empty(),
-                        Component.translatable("wiic.gui.action.cancel_hint")
-                                .color(NamedTextColor.RED)
-                                .decoration(TextDecoration.ITALIC, false),
-                        Component.empty()
-                )
-        );
-        GuiItem cancelGuiItem = new GuiItem(cancelItem, event -> {
-            callback.onCancel();
-        });
-
-        // Gradient background
-        setupGradientBackground(gui);
-
-        OutlinePane navigationPane = new OutlinePane(5, 1, Pane.Priority.HIGH);
-        navigationPane.addItem(confirmGuiItem);
-        navigationPane.addItem(new GuiItem(createGlassPane(Material.LIGHT_GRAY_STAINED_GLASS_PANE)));
-        navigationPane.addItem(centralItem);
-        navigationPane.addItem(new GuiItem(createGlassPane(Material.LIGHT_GRAY_STAINED_GLASS_PANE)));
-        navigationPane.addItem(cancelGuiItem);
-        gui.addPane(Slot.fromXY(2, 1), navigationPane);
-
-        gui.setOnClose(event -> {
-            if (event.getReason() != InventoryCloseEvent.Reason.OPEN_NEW && event.getReason() != InventoryCloseEvent.Reason.PLUGIN) {
-                vaultGUI.removeUUIDTags(pl.getInventory());
-                onClose.run();
-            }
-        });
-
-        gui.show(pl);
-    }
-
-    private void setupGradientBackground(ChestGui gui) {
-        // Top and bottom borders
-        OutlinePane top = new OutlinePane(9, 1, Pane.Priority.LOWEST);
-        OutlinePane bottom = new OutlinePane(9, 1, Pane.Priority.LOWEST);
-        top.addItem(new GuiItem(createGlassPane(Material.CYAN_STAINED_GLASS_PANE)));
-        bottom.addItem(new GuiItem(createGlassPane(Material.CYAN_STAINED_GLASS_PANE)));
-        top.setRepeat(true);
-        bottom.setRepeat(true);
-
-        // Side borders
-        OutlinePane left = new OutlinePane(1, 1, Pane.Priority.LOWEST);
-        OutlinePane right = new OutlinePane(1, 1, Pane.Priority.LOWEST);
-        left.addItem(new GuiItem(createGlassPane(Material.LIGHT_BLUE_STAINED_GLASS_PANE)));
-        right.addItem(new GuiItem(createGlassPane(Material.LIGHT_BLUE_STAINED_GLASS_PANE)));
-
-        // Fill middle
-        OutlinePane middle = new OutlinePane(1, 1, Pane.Priority.LOWEST);
-        middle.addItem(new GuiItem(createGlassPane(Material.GRAY_STAINED_GLASS_PANE)));
-
-        OutlinePane middleRight = new OutlinePane(1, 1, Pane.Priority.LOWEST);
-        middleRight.addItem(new GuiItem(createGlassPane(Material.GRAY_STAINED_GLASS_PANE)));
-
-        gui.addPane(Slot.fromXY(0, 0), top);
-        gui.addPane(Slot.fromXY(0, 2), bottom);
-        gui.addPane(Slot.fromXY(0, 1), left);
-        gui.addPane(Slot.fromXY(8, 1), right);
-        gui.addPane(Slot.fromXY(1, 1), middle);
-        gui.addPane(Slot.fromXY(7, 1), middleRight);
-    }
-
-    private ItemStack createGlassPane(Material material) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.empty());
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    private ItemStack createEnhancedButton(Material material, String translationKey, TextColor color, List<Component> lore) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.translatable(translationKey)
-                .color(color)
-                .decoration(TextDecoration.ITALIC, false)
-                .decoration(TextDecoration.BOLD, true));
-        meta.lore(lore);
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    private ItemStack createItem(Material material, String name, List<Component> lore, TextColor color) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.text(name).color(color).decoration(TextDecoration.ITALIC, false));
-        meta.lore(lore);
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    private ItemStack createTranslatableItem(Material material, String translationKey, List<Component> lore, TextColor color) {
-        ItemStack item = new ItemStack(material);
-        ItemMeta meta = item.getItemMeta();
-        meta.displayName(Component.translatable(translationKey).color(color).decoration(TextDecoration.ITALIC, false));
-        meta.lore(lore);
-        item.setItemMeta(meta);
-        return item;
+        Window.builder()
+                .setViewer(player)
+                .setUpperGui(gui)
+                .setTitle(title)
+                .addCloseHandler(_ -> {
+                    // Player pressed ESC without clicking confirm/cancel
+                    if (!acted[0]) onClose.run();
+                    acted[0] = false;
+                })
+                .build()
+                .open();
     }
 
     public interface ConfirmationCallback {
         void onConfirm(ItemStack item);
-
         void onCancel();
     }
 }

@@ -1,16 +1,26 @@
 package dev.ua.ikeepcalm.wiic.utils;
 
-import dev.ua.ikeepcalm.wiic.locale.MessageManager;
+import dev.ua.ikeepcalm.wiic.WIIC;
 import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.inventory.ItemStack;
 
 public class CoinUtil {
+
+    private static final MiniMessage MM = MiniMessage.miniMessage();
+
+    // -------------------------------------------------------------------------
+    // Coin item constructors
+    // -------------------------------------------------------------------------
+
     public static ItemStack getVerlDor(int amount) {
-        ItemStack verlDor = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItemTranslatable(verlDor, "goldcoin", "item.wiic.goldcoin", NamedTextColor.YELLOW, "verlDor");
-        return verlDor;
+        ItemStack item = new ItemStack(Material.GOLD_INGOT, amount);
+        String name = WIIC.INSTANCE.getConfig().getString("coins.verldor.name", "<yellow>ᴠᴇʀʟ ᴅᴏʀ");
+        applyCoinMeta(item, "goldcoin", name, "verlDor");
+        return item;
     }
 
     public static ItemStack getVerlDor() {
@@ -18,9 +28,10 @@ public class CoinUtil {
     }
 
     public static ItemStack getLick(int amount) {
-        ItemStack lick = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItemTranslatable(lick, "silvercoin", "item.wiic.silvercoin", NamedTextColor.GRAY, "lick");
-        return lick;
+        ItemStack item = new ItemStack(Material.GOLD_INGOT, amount);
+        String name = WIIC.INSTANCE.getConfig().getString("coins.lick.name", "<gray>ʟɪᴄᴋ");
+        applyCoinMeta(item, "silvercoin", name, "lick");
+        return item;
     }
 
     public static ItemStack getLick() {
@@ -28,20 +39,23 @@ public class CoinUtil {
     }
 
     public static ItemStack getCoppet(int amount) {
-        ItemStack coppet = new ItemStack(Material.GOLD_INGOT, amount);
-        ItemUtil.modifyItemTranslatable(coppet, "coppercoin", "item.wiic.coppercoin", NamedTextColor.GOLD, "coppet");
-        return coppet;
+        ItemStack item = new ItemStack(Material.GOLD_INGOT, amount);
+        String name = WIIC.INSTANCE.getConfig().getString("coins.coppet.name", "<gold>ᴄᴏᴘᴘᴇᴛ");
+        applyCoinMeta(item, "coppercoin", name, "coppet");
+        return item;
     }
 
     public static ItemStack getCoppet() {
         return getCoppet(1);
     }
 
+    // -------------------------------------------------------------------------
+    // Coin detection
+    // -------------------------------------------------------------------------
+
     public static boolean isCoin(ItemStack item) {
-        if (item == null || item.getType() != Material.GOLD_INGOT || !item.hasItemMeta()) {
-            return false;
-        }
-        final String type = ItemUtil.getType(item);
+        if (item == null || item.getType() != Material.GOLD_INGOT || !item.hasItemMeta()) return false;
+        String type = ItemUtil.getType(item);
         if (type == null) return false;
         return switch (type) {
             case "coppercoin", "silvercoin", "goldcoin" -> true;
@@ -49,33 +63,55 @@ public class CoinUtil {
         };
     }
 
+    // -------------------------------------------------------------------------
+    // Formatted price
+    // -------------------------------------------------------------------------
+
+    /**
+     * Returns a MiniMessage-parsed {@link Component} representing {@code cost} coppets
+     * broken down into VerlDors, Licks, and Coppets.
+     * Format strings are read from {@code coins.*.format} in {@code config.yml}.
+     */
     public static Component getFormattedPrice(int cost) {
         int verlDors = cost / (64 * 64);
         cost %= 64 * 64;
         int licks = cost / 64;
         cost %= 64;
 
-        if (cost == 0 && licks == 0 && verlDors == 0) {
-            return MessageManager.getMessage("wiic.currency.zero_coppets");
-
+        if (verlDors == 0 && licks == 0 && cost == 0) {
+            String zero = WIIC.INSTANCE.getConfig().getString("coins.zero", "<gray>0 ᴄᴏᴘᴘᴇᴛs");
+            return MM.deserialize(zero);
         }
 
-        Component finalResult = Component.text("");
-
+        Component result = Component.empty();
         if (cost > 0) {
-            finalResult = finalResult.append(Component.text(" ").append(MessageManager.getMessage("wiic.items.coin.coppets", String.valueOf(cost))));
+            String fmt = WIIC.INSTANCE.getConfig().getString("coins.coppet.format", "<gold>%value% ᴄᴏᴘᴘᴇᴛs");
+            result = result.append(Component.space()).append(MM.deserialize(fmt.replace("%value%", String.valueOf(cost))));
         }
-
         if (licks > 0) {
-            Component lickText = MessageManager.getMessage("wiic.items.coin.licks", String.valueOf(licks));
-            finalResult = finalResult.append(Component.text(" ").append(lickText));
+            String fmt = WIIC.INSTANCE.getConfig().getString("coins.lick.format", "<gray>%value% ʟɪᴄᴋs");
+            result = result.append(Component.space()).append(MM.deserialize(fmt.replace("%value%", String.valueOf(licks))));
         }
-
         if (verlDors > 0) {
-            Component verlDorText = MessageManager.getMessage("wiic.items.coin.verldors", String.valueOf(verlDors));
-            finalResult = finalResult.append(Component.text(" ").append(verlDorText));
+            String fmt = WIIC.INSTANCE.getConfig().getString("coins.verldor.format", "<yellow>%value% ᴠᴇʀʟ ᴅᴏʀs");
+            result = result.append(Component.space()).append(MM.deserialize(fmt.replace("%value%", String.valueOf(verlDors))));
         }
+        return result;
+    }
 
-        return finalResult;
+    // -------------------------------------------------------------------------
+    // Internal helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Sets the PDC type tag, MiniMessage display name (non-italic), and item model
+     * on the given coin item.
+     */
+    private static void applyCoinMeta(ItemStack item, String type, String nameStr, String model) {
+        ItemUtil.setType(item, type);
+        item.editMeta(meta -> {
+            meta.displayName(MM.deserialize(nameStr).decoration(TextDecoration.ITALIC, false));
+            meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, model));
+        });
     }
 }

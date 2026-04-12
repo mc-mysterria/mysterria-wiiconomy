@@ -1,195 +1,162 @@
 package dev.ua.ikeepcalm.wiic.gui;
 
-import com.github.stefvanschie.inventoryframework.adventuresupport.ComponentHolder;
-import com.github.stefvanschie.inventoryframework.gui.GuiItem;
-import com.github.stefvanschie.inventoryframework.gui.type.ChestGui;
-import com.github.stefvanschie.inventoryframework.pane.StaticPane;
-import com.github.stefvanschie.inventoryframework.pane.util.Slot;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
+import dev.ua.ikeepcalm.wiic.currency.services.PreferencesManager;
 import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
-import me.clip.placeholderapi.PlaceholderAPI;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.inventory.meta.ItemMeta;
-import org.bukkit.inventory.meta.SkullMeta;
+import xyz.xenondevs.invui.gui.Gui;
+import xyz.xenondevs.invui.item.Item;
+import xyz.xenondevs.invui.window.Window;
 
-import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.math.BigDecimal;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
- * Represents the main Wallet GUI where players can see their balance, stats, and navigate to other menus.
- * This class is designed to be highly configurable via config.yml.
+ * Main Wallet GUI — the player's hub for balance, stats, and navigation.
+ *
+ * <p>Fully config-driven via {@code wallet-gui} in {@code config.yml}:
+ * <ul>
+ *   <li>{@code title}      — MiniMessage string used as the default wallet title
+ *       (overridden by the player's chosen theme from {@code settings-gui.themes})</li>
+ *   <li>{@code background} — Material name for the glass-pane backdrop</li>
+ *   <li>{@code items.*}    — Each item: {@code slot [x,y]}, {@code material},
+ *       {@code name}, {@code lore}, {@code item-model}, {@code custom-model-data}</li>
+ * </ul>
+ *
+ * <p>Special item keys:
+ * <ul>
+ *   <li>{@code balance}  — opens {@link VaultGUI} on click</li>
+ *   <li>{@code settings} — opens {@link SettingsGUI} on click</li>
+ * </ul>
  */
 public class WalletGUI {
 
-    public final static Set<Player> playersWithOpenWallets = new HashSet<>();
+    public static final Set<Player> playersWithOpenWallets = new HashSet<>();
+
+    private static final MiniMessage MM = MiniMessage.miniMessage();
+
     private final PriceAppraiser priceAppraiser;
     private final SoldItemsManager soldItemsManager;
-    private final ConfigurationSection config;
-    private final MiniMessage miniMessage = MiniMessage.miniMessage();
-    private boolean callOnClose = true;
 
     public WalletGUI(PriceAppraiser priceAppraiser, SoldItemsManager soldItemsManager) {
         this.priceAppraiser = priceAppraiser;
         this.soldItemsManager = soldItemsManager;
-        this.config = WIIC.INSTANCE.getConfig().getConfigurationSection("wallet-gui");
     }
 
-    /**
-     * Opens the Wallet GUI for a player.
-     *
-     * @param player  The player to open the GUI for.
-     * @param data    The wallet data (e.g. balance).
-     * @param onClose Action to perform when the GUI is closed.
-     */
     public void open(Player player, WalletData data, Runnable onClose) {
+        ConfigurationSection config = WIIC.INSTANCE.getConfig().getConfigurationSection("wallet-gui");
         if (config == null) {
-            player.sendMessage(Component.text("Wallet GUI configuration is missing!").color(net.kyori.adventure.text.format.NamedTextColor.RED));
+            player.sendMessage(Component.text("wallet-gui section missing in config.yml")
+                    .color(NamedTextColor.RED));
             return;
         }
 
-        String titleStr = config.getString("title", "Wallet");
-        ChestGui gui = new ChestGui(3, ComponentHolder.of(miniMessage.deserialize(parsePlaceholders(player, titleStr))));
-        StaticPane pane = new StaticPane(9, 3);
+        // Navigating to VaultGUI / SettingsGUI must not fire onClose
+        boolean[] callOnClose = {true};
 
-        // Add items from configuration
-        addConfigItem(pane, "player-info", player, null);
-        addConfigItem(pane, "balance", player, click -> {
-            callOnClose = false;
-            player.closeInventory();
-            new VaultGUI(priceAppraiser, soldItemsManager).openVault(player, onClose);
+        Material bg = GuiUtil.backgroundMaterial(config);
+        Gui gui = Gui.builder()
+                .setStructure(
+                        "# # # # # # # # #",
+                        "# # # # # # # # #",
+                        "# # # # # # # # #")
+                .addIngredient('#', GuiUtil.emptyPane(bg))
+                .build();
+
+        ConfigurationSection items = config.getConfigurationSection("items");
+        if (items != null) {
+            for (String key : items.getKeys(false)) {
+                ConfigurationSection section = items.getConfigurationSection(key);
+                if (section == null) continue;
+
+                int slot = GuiUtil.itemSlot(section);
+                if (slot < 0) continue;
+
+                ItemStack item = GuiUtil.createConfigItem(section, player);
+
+                switch (key) {
+                    case "balance" ->
+                        gui.setItem(slot, Item.builder()
+                                .setItemProvider(item)
+                                .addClickHandler(_ -> {
+                                    callOnClose[0] = false;
+                                    new VaultGUI(priceAppraiser, soldItemsManager).openVault(player, onClose);
+                                })
+                                .build());
+
+                    case "settings" ->
+                        gui.setItem(slot, Item.builder()
+                                .setItemProvider(item)
+                                .addClickHandler(_ -> {
+                                    callOnClose[0] = false;
+                                    new SettingsGUI(player, () -> reopen(player, onClose)).open();
+                                })
+                                .build());
+
+                    default ->
+                        gui.setItem(slot, Item.builder().setItemProvider(item).build());
+                }
+            }
+        }
+
+        // Resolve title: prefer the player's saved theme; fall back to wallet-gui.title
+        String titleStr = resolveTitle(player, config);
+        Component title = MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of()));
+
+        Window.builder()
+                .setViewer(player)
+                .setUpperGui(gui)
+                .setTitle(title)
+                .addCloseHandler(_ -> {
+                    if (callOnClose[0]) onClose.run();
+                })
+                .build()
+                .open();
+    }
+
+    /**
+     * Re-fetches the player's balance asynchronously and reopens the wallet GUI.
+     * Used by SettingsGUI to navigate back after a theme change.
+     */
+    public void reopen(Player player, Runnable onClose) {
+        Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
+            if (WIIC.getEcon() == null) return;
+            BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", player.getUniqueId());
+            WalletData data = new WalletData(balance.intValue());
+            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> open(player, data, onClose));
         });
-        addConfigItem(pane, "rank", player, null);
-        addConfigItem(pane, "documentation", player, null);
-        addConfigItem(pane, "store", player, null);
-        addConfigItem(pane, "discord", player, null);
-        addConfigItem(pane, "server-stats", player, null);
-
-        gui.addPane(Slot.fromXY(0, 0), pane);
-
-        gui.setOnClose(event -> {
-            if (callOnClose) {
-                onClose.run();
-            }
-        });
-
-        gui.setOnGlobalClick(click -> click.setCancelled(true));
-        gui.show(player);
     }
 
-    /**
-     * Adds an item to the pane based on config.yml settings.
-     */
-    private void addConfigItem(StaticPane pane, String key, Player player, java.util.function.Consumer<org.bukkit.event.inventory.InventoryClickEvent> action) {
-        ConfigurationSection itemSection = config.getConfigurationSection("items." + key);
-        if (itemSection == null) return;
-
-        List<Integer> slot = itemSection.getIntegerList("slot");
-        if (slot.size() < 2) return;
-
-        ItemStack item = createConfigItem(itemSection, player);
-        pane.addItem(new GuiItem(item, click -> {
-            click.setCancelled(true);
-            if (action != null) {
-                action.accept(click);
-            }
-        }), slot.get(0), slot.get(1));
-    }
+    // -------------------------------------------------------------------------
+    // Helpers
+    // -------------------------------------------------------------------------
 
     /**
-     * Creates an ItemStack based on a configuration section.
+     * Returns the MiniMessage title string for the given player.
+     * Looks up the player's saved theme in {@code settings-gui.themes.<themeId>.wallet-title};
+     * falls back to {@code wallet-gui.title} if no theme is saved or the theme entry is missing.
      */
-    private ItemStack createConfigItem(ConfigurationSection section, Player player) {
-        String materialName = section.getString("material", "DIAMOND");
-        Material material = Material.matchMaterial(materialName);
-        ItemStack item = new ItemStack(material != null ? material : Material.DIAMOND);
-        ItemMeta meta = item.getItemMeta();
-
-        if (meta == null) return item;
-
-        String name = section.getString("name");
-        if (name != null) {
-            meta.displayName(miniMessage.deserialize(parsePlaceholders(player, name))
-                    .decoration(TextDecoration.ITALIC, false));
-        }
-
-        List<String> lore = section.getStringList("lore");
-        if (!lore.isEmpty()) {
-            meta.lore(lore.stream()
-                    .map(line -> miniMessage.deserialize(parsePlaceholders(player, line))
-                            .decoration(TextDecoration.ITALIC, false))
-                    .collect(Collectors.toList()));
-        }
-
-        // Support for setItemModel (NamespacedKey)
-        String itemModel = section.getString("item-model");
-        if (itemModel != null && !itemModel.isEmpty()) {
-            if (itemModel.contains(":")) {
-                meta.setItemModel(NamespacedKey.fromString(itemModel));
-            } else {
-                meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, itemModel));
+    private static String resolveTitle(Player player, ConfigurationSection walletConfig) {
+        String themeId = PreferencesManager.getTheme(player.getUniqueId());
+        if (!themeId.isEmpty()) {
+            ConfigurationSection themeSection = WIIC.INSTANCE.getConfig()
+                    .getConfigurationSection("settings-gui.themes." + themeId);
+            if (themeSection != null) {
+                String themed = themeSection.getString("wallet-title");
+                if (themed != null && !themed.isEmpty()) return themed;
             }
         }
-
-        // Support for CustomModelData
-        int cmd = section.getInt("custom-model-data", -1);
-        if (cmd != -1) {
-            meta.setCustomModelData(cmd);
-        }
-
-        if (meta instanceof SkullMeta skullMeta) {
-            skullMeta.setOwningPlayer(player);
-        }
-
-        item.setItemMeta(meta);
-        return item;
-    }
-
-    /**
-     * Parses placeholders using PlaceholderAPI if available, and our internal placeholders.
-     */
-    private String parsePlaceholders(Player player, String text) {
-        if (text == null) return "";
-
-        // Internal Placeholders
-        text = text.replace("%player%", player.getName());
-
-        double balance = 0;
-        if (WIIC.getEcon() != null) {
-            balance = WIIC.getEcon().balance("iConomyUnlocked", player.getUniqueId()).doubleValue();
-        }
-        text = text.replace("%balance%", String.format("%,.2f", balance));
-
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
-        text = text.replace("%first-join%", sdf.format(new Date(player.getFirstPlayed())));
-
-        double tps = Bukkit.getTPS()[0];
-        text = text.replace("%tps%", String.format("%.1f", tps));
-        text = text.replace("%ping%", String.valueOf(player.getPing()));
-
-        long ramUsed = (Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024 / 1024;
-        long ramMax = Runtime.getRuntime().maxMemory() / 1024 / 1024;
-        text = text.replace("%ram-used%", String.valueOf(ramUsed));
-        text = text.replace("%ram-max%", String.valueOf(ramMax));
-
-        text = text.replace("%online%", String.valueOf(Bukkit.getOnlinePlayers().size()));
-        text = text.replace("%max-players%", String.valueOf(Bukkit.getMaxPlayers()));
-
-        // PlaceholderAPI Support
-        if (Bukkit.getPluginManager().isPluginEnabled("PlaceholderAPI")) {
-            text = PlaceholderAPI.setPlaceholders(player, text);
-        }
-
-        return text;
+        return walletConfig.getString("title", "Wallet");
     }
 }
