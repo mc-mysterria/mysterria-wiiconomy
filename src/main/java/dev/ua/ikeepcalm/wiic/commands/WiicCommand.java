@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.logging.Level;
 
 public class WiicCommand implements CommandExecutor, TabCompleter {
+
     private final WIIC plugin;
     private final NamespacedKey originalCostsKey;
     private final NamespacedKey originalResultsKey;
@@ -64,8 +65,8 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
                 break;
 
             case "debug":
-                boolean currentState = plugin.getConfig().getBoolean("debug.villagerListener", false);
-                plugin.getConfig().set("debug.villagerListener", !currentState);
+                boolean currentState = plugin.getConfig().getBoolean("debug.villager-listener", false);
+                plugin.getConfig().set("debug.villager-listener", !currentState);
                 plugin.saveConfig();
                 sender.sendMessage(Component.text("Debug mode ")
                         .color(NamedTextColor.YELLOW)

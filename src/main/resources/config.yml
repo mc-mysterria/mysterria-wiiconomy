@@ -86,14 +86,14 @@ ores:
   ANCIENT_DEBRIS: 5.0
   OTHER: 0.0
 
-minimumValue: 0
-dailyLimit: 128
+minimum-value: 0
+daily-limit: 128
 
 villagers:
   version: 2
-  emeraldsToCoppetsMultiplier: 1.0
-  convertTradeResults: true
-  useCoinsOnlyForRareItems: true
+  emeralds-to-coppets-multiplier: 1.0
+  convert-trade-results: true
+  use-coins-only-for-rare-items: true
 
 debug:
-  villagerListener: false
+  villager-listener: false

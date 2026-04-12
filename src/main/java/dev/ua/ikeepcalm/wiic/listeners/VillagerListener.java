@@ -35,7 +35,7 @@ public class VillagerListener implements Listener {
 
     @EventHandler
     public void onVillagerAcquireTrade(VillagerAcquireTradeEvent event) {
-        if (plugin.getConfig().getBoolean("debug.villagerListener", false)) {
+        if (plugin.getConfig().getBoolean("debug.villager-listener", false)) {
             plugin.getLogger().log(Level.INFO, "Villager acquiring trade: " + event.getRecipe().getResult().getType());
         }
         saveOriginalCosts(event.getEntity(), event.getRecipe());
@@ -47,7 +47,7 @@ public class VillagerListener implements Listener {
         if (event.getRightClicked() instanceof AbstractVillager villager) {
             int currentVersion = plugin.getConfig().getInt("villagers.version");
             PersistentDataContainer pdc = villager.getPersistentDataContainer();
-            if (plugin.getConfig().getBoolean("debug.villagerListener", false)) {
+            if (plugin.getConfig().getBoolean("debug.villager-listener", false)) {
                 plugin.getLogger().log(Level.INFO, "Player interacting with villager. Current version: " + currentVersion + ", Villager version: " + pdc.get(villagerVersionKey, PersistentDataType.INTEGER));
             }
             if (!Integer.valueOf(currentVersion).equals(
@@ -144,8 +144,8 @@ public class VillagerListener implements Listener {
         ItemStack result = recipe.getResult();
         List<ItemStack> ingredients = recipe.getIngredients();
 
-        boolean useCoins = !plugin.getConfig().getBoolean("villagers.useCoinsOnlyForRareItems") || isRare(result.getType());
-        if (plugin.getConfig().getBoolean("debug.villagerListener", false)) {
+        boolean useCoins = !plugin.getConfig().getBoolean("villagers.use-coins-only-for-rare-items") || isRare(result.getType());
+        if (plugin.getConfig().getBoolean("debug.villager-listener", false)) {
             plugin.getLogger().log(Level.INFO, "Converting recipe for " + result.getType() + ". Use coins: " + useCoins + " (isRare: " + isRare(result.getType()) + ")");
         }
 
@@ -186,7 +186,7 @@ public class VillagerListener implements Listener {
             }
         }
 
-        if (plugin.getConfig().getBoolean("villagers.convertTradeResults") && result.getType() == Material.EMERALD) {
+        if (plugin.getConfig().getBoolean("villagers.convert-trade-results") && result.getType() == Material.EMERALD) {
             int coppets = emeraldsToCoppets(result.getAmount());
             if (coppets >= 64) {
                 result = CoinUtil.getLick((int) Math.round(coppets / 64.0));
@@ -215,7 +215,7 @@ public class VillagerListener implements Listener {
         if (emeralds == 0) {
             return 0;
         }
-        int coppets = (int) Math.round(emeralds * plugin.getConfig().getDouble("villagers.emeraldsToCoppetsMultiplier"));
+        int coppets = (int) Math.round(emeralds * plugin.getConfig().getDouble("villagers.emeralds-to-coppets-multiplier"));
         if (coppets == 0) {
             return 1;
         }
@@ -228,10 +228,10 @@ public class VillagerListener implements Listener {
         }
         final String coinType = ItemUtil.getType(item);
         if ("coppet".equals(coinType) || "coppercoin".equals(coinType)) {
-            return (int) Math.round(item.getAmount() / plugin.getConfig().getDouble("villagers.emeraldsToCoppetsMultiplier"));
+            return (int) Math.round(item.getAmount() / plugin.getConfig().getDouble("villagers.emeralds-to-coppets-multiplier"));
         }
         if ("lick".equals(coinType) || "silvercoin".equals(coinType)) {
-            return (int) Math.round(item.getAmount() * 64 / plugin.getConfig().getDouble("villagers.emeraldsToCoppetsMultiplier"));
+            return (int) Math.round(item.getAmount() * 64 / plugin.getConfig().getDouble("villagers.emeralds-to-coppets-multiplier"));
         }
         return 0;
     }

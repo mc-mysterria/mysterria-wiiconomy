@@ -41,8 +41,8 @@ public class PriceAppraiser {
 
         double value = basePrice * materialCoefficient * itemStack.getAmount();
 
-        if (config.contains("minimumValue")) {
-            value = Math.max(value, config.getDouble("minimumValue"));
+        if (config.contains("minimum-value")) {
+            value = Math.max(value, config.getDouble("minimum-value"));
         }
 
         return (int) value;
@@ -115,6 +115,6 @@ public class PriceAppraiser {
             return config.getDouble("ores.NETHER_QUARTZ_ORE");
         }
 
-        return config.getDouble("categories.OTHER");
+        return config.getDouble("ores.OTHER");
     }
 }

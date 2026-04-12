@@ -46,7 +46,7 @@ public class SoldItemsManager {
     }
 
     public int getAvailableSellingAmount(Player player) {
-        return plugin.getConfig().getInt("dailyLimit", 0) - getSoldValue(player);
+        return plugin.getConfig().getInt("daily-limit", 0) - getSoldValue(player);
     }
 
     private void saveSoldItems() {
