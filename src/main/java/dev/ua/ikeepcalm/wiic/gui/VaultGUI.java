@@ -5,17 +5,16 @@ import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
 import dev.ua.ikeepcalm.wiic.currency.services.PreferencesManager;
 import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
-import dev.ua.ikeepcalm.wiic.locale.MessageManager;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
-import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.inventory.ItemStack;
 import xyz.xenondevs.invui.gui.Gui;
 import xyz.xenondevs.invui.item.Item;
@@ -64,8 +63,7 @@ public class VaultGUI {
     private void openVaultSync(Player player, Runnable onClose) {
         ConfigurationSection config = WIIC.INSTANCE.getConfig().getConfigurationSection("vault-gui");
         if (config == null) {
-            player.sendMessage(MessageManager.getMessage("wiic.wallet.error.config_missing")
-                    .color(NamedTextColor.RED));
+            player.sendMessage(MM.deserialize("<red>Configuration for 'vault-gui' is missing in config.yml!"));
             return;
         }
 
@@ -135,10 +133,12 @@ public class VaultGUI {
             if (slotIdx >= 27) break;
             gui.setItem(slotIdx, Item.builder()
                     .setItemProvider(coin)
-                    .addClickHandler(_ -> {
+                    .addClickHandler(click -> {
+                        ClickType clickType = click.clickType();
+                        if (!clickType.isLeftClick() && !clickType.isRightClick()) return;
                         if (actionClose[0]) return;
                         if (player.getInventory().firstEmpty() == -1) {
-                            player.sendMessage(MessageManager.getMessage("wiic.wallet.error.inventory_full"));
+                            player.sendMessage(MM.deserialize("<red>Your inventory is full!"));
                             return;
                         }
                         actionClose[0] = true;
@@ -179,7 +179,12 @@ public class VaultGUI {
                             new ActionGUI(player, invItem, new ActionGUI.ConfirmationCallback() {
                                 @Override
                                 public void onConfirm(ItemStack confirmed) {
-                                    player.getInventory().removeItem(confirmed);
+                                    Map<Integer, ItemStack> notRemoved = player.getInventory().removeItem(confirmed);
+                                    if (!notRemoved.isEmpty()) {
+                                        // Item was dropped before confirming — abort to prevent free deposit
+                                        openVault(player, onClose);
+                                        return;
+                                    }
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
                                         deposit(player, confirmed);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
@@ -193,14 +198,19 @@ public class VaultGUI {
                             }, onClose).open();
                         } else {
                             if (player.getInventory().getItemInOffHand().getType() != Material.AIR) {
-                                player.sendMessage(MessageManager.getMessage("wiic.wallet.error.empty_hand_required"));
+                                player.sendMessage(MM.deserialize("<red>You must have an empty off-hand to perform this action!"));
                                 actionClose[0] = false;
                                 return;
                             }
                             new SellingGUI(player, invItem, new SellingGUI.ConfirmationCallback() {
                                 @Override
                                 public void onConfirm(ItemStack confirmed) {
-                                    player.getInventory().removeItem(confirmed);
+                                    Map<Integer, ItemStack> notRemoved = player.getInventory().removeItem(confirmed);
+                                    if (!notRemoved.isEmpty()) {
+                                        // Item was dropped before confirming — abort to prevent free sell
+                                        openVault(player, onClose);
+                                        return;
+                                    }
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
                                         sell(player, confirmed);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));

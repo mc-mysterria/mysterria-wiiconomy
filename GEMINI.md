@@ -43,13 +43,9 @@ The project uses Gradle for dependency management and building.
 
 ## Development Conventions
 - **Language Level:** Uses Java 25. Utilize modern features where appropriate.
-- **Message System:** All messages should use `Kyori Adventure` components. Use `MessageManager` for translations.
+- **Message System:** All messages should use `Kyori Adventure` components.
 - **GUIs:** Do not use raw Bukkit inventories. Use `InventoryFramework` implementations.
 - **Item Meta:** Use `ItemUtil` for modifying item NBT and display properties to ensure consistency.
-- **Localization:**
-  - Properties files in `src/main/resources/lang/` for plugin messages.
-  - JSON files in `src/main/resources/resourcepack/` for resource pack integration.
-
 ---
 
 ## Core Systems
@@ -73,4 +69,3 @@ The project uses Gradle for dependency management and building.
 ## Configuration
 - `config.yml`: Main plugin settings.
 - `sold-items.yml`: Persistence for the dynamic price/appraisal system.
-- `lang/`: Locale files.

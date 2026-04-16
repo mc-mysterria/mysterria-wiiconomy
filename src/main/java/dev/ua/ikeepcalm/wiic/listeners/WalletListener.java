@@ -5,7 +5,6 @@ import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
 import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.gui.WalletGUI;
-import dev.ua.ikeepcalm.wiic.locale.MessageManager;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import org.bukkit.Bukkit;
@@ -177,7 +176,7 @@ public class WalletListener implements Listener {
                 WalletGUI.playersWithOpenWallets.remove(player);
             }));
         } else {
-            player.sendMessage(MessageManager.getMessage("wiic.wallet.error.not_initialized"));
+            player.sendMessage("Not initialized!");
             returnOffhandItem(player);
             WalletGUI.playersWithOpenWallets.remove(player);
         }
