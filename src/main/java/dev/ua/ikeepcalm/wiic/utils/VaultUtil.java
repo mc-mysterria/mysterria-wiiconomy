@@ -3,6 +3,7 @@ package dev.ua.ikeepcalm.wiic.utils;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
 import net.milkbowl.vault2.economy.Economy;
+import net.milkbowl.vault2.economy.EconomyResponse;
 import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;
 
@@ -12,16 +13,16 @@ import java.util.concurrent.CompletableFuture;
 
 public class VaultUtil {
 
-    public static void deposit(UUID player, double amount) {
-        if (WIIC.getEcon() != null) {
-            WIIC.getEcon().deposit("iConomyUnlocked", player, BigDecimal.valueOf(amount));
-        }
+    public static boolean deposit(UUID player, double amount) {
+        if (WIIC.getEcon() == null) return false;
+        EconomyResponse response = WIIC.getEcon().deposit("iConomyUnlocked", player, BigDecimal.valueOf(amount));
+        return response != null && response.transactionSuccess();
     }
 
-    public static void withdraw(UUID player, double amount) {
-        if (WIIC.getEcon() != null) {
-            WIIC.getEcon().withdraw("iConomyUnlocked", player, BigDecimal.valueOf(amount));
-        }
+    public static boolean withdraw(UUID player, double amount) {
+        if (WIIC.getEcon() == null) return false;
+        EconomyResponse response = WIIC.getEcon().withdraw("iConomyUnlocked", player, BigDecimal.valueOf(amount));
+        return response != null && response.transactionSuccess();
     }
 
     public static CompletableFuture<Double> getBalance(UUID player) {

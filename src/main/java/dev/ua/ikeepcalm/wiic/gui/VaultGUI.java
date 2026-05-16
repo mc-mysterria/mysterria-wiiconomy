@@ -262,16 +262,32 @@ public class VaultGUI {
     private void withdraw(Player player, ItemStack item) {
         String type = ItemUtil.getType(item);
         if (type == null) return;
-        switch (type) {
-            case "goldcoin" -> VaultUtil.withdraw(player.getUniqueId(), (long) item.getAmount() * 64 * 64);
-            case "silvercoin" -> VaultUtil.withdraw(player.getUniqueId(), (long) item.getAmount() * 64);
-            case "coppercoin" -> VaultUtil.withdraw(player.getUniqueId(), item.getAmount());
+        long amount = switch (type) {
+            case "goldcoin" -> (long) item.getAmount() * 64 * 64;
+            case "silvercoin" -> (long) item.getAmount() * 64;
+            case "coppercoin" -> item.getAmount();
+            default -> 0L;
+        };
+        if (amount == 0) return;
+        boolean success = VaultUtil.withdraw(player.getUniqueId(), amount);
+        if (!success) {
+            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () ->
+                    player.sendMessage(MM.deserialize("<red>Withdrawal failed — please contact an administrator.")));
+            WIIC.INSTANCE.getLogger().warning("Withdraw of " + amount + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
         }
     }
 
     private void sell(Player player, ItemStack item) {
         int value = priceAppraiser.appraise(item);
-        VaultUtil.deposit(player.getUniqueId(), value);
+        boolean success = VaultUtil.deposit(player.getUniqueId(), value);
+        if (!success) {
+            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
+                player.getInventory().addItem(item);
+                player.sendMessage(MM.deserialize("<red>Transaction failed — your items have been returned."));
+            });
+            WIIC.INSTANCE.getLogger().warning("Deposit of " + value + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
+            return;
+        }
         soldItemsManager.setSoldValue(player, soldItemsManager.getSoldValue(player) + value);
     }
 }
