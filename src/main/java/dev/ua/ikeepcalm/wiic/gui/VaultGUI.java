@@ -205,6 +205,8 @@ public class VaultGUI {
                             new SellingGUI(player, invItem, new SellingGUI.ConfirmationCallback() {
                                 @Override
                                 public void onConfirm(ItemStack confirmed) {
+                                    // Clone before removeItem, which may modify the input stack's amount to 0
+                                    ItemStack snapshot = confirmed.clone();
                                     Map<Integer, ItemStack> notRemoved = player.getInventory().removeItem(confirmed);
                                     if (!notRemoved.isEmpty()) {
                                         // Item was dropped before confirming — abort to prevent free sell
@@ -212,7 +214,7 @@ public class VaultGUI {
                                         return;
                                     }
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                        sell(player, confirmed);
+                                        sell(player, snapshot);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
                                     });
                                 }
