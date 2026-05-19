@@ -145,9 +145,15 @@ public class VaultGUI {
                         new ActionGUI(player, coin, new ActionGUI.ConfirmationCallback() {
                             @Override
                             public void onConfirm(ItemStack confirmed) {
-                                player.getInventory().addItem(confirmed);
+                                // Clone before addItem, which mutates the input stack's amount to the leftover
+                                ItemStack snapshot = confirmed.clone();
+                                Map<Integer, ItemStack> notAdded = player.getInventory().addItem(confirmed);
+                                // Drop any leftover at the player's feet so the withdrawn amount and given amount stay in sync
+                                for (ItemStack leftover : notAdded.values()) {
+                                    player.getWorld().dropItem(player.getLocation(), leftover);
+                                }
                                 Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                    withdraw(player, confirmed);
+                                    withdraw(player, snapshot);
                                     Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
                                 });
                             }
@@ -179,6 +185,8 @@ public class VaultGUI {
                             new ActionGUI(player, invItem, new ActionGUI.ConfirmationCallback() {
                                 @Override
                                 public void onConfirm(ItemStack confirmed) {
+                                    // Clone before removeItem, which mutates the input stack's amount to the leftover
+                                    ItemStack snapshot = confirmed.clone();
                                     Map<Integer, ItemStack> notRemoved = player.getInventory().removeItem(confirmed);
                                     if (!notRemoved.isEmpty()) {
                                         // Item was dropped before confirming — abort to prevent free deposit
@@ -186,7 +194,7 @@ public class VaultGUI {
                                         return;
                                     }
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                        deposit(player, confirmed);
+                                        deposit(player, snapshot);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
                                     });
                                 }
