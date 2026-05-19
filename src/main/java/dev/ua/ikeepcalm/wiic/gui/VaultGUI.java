@@ -7,6 +7,7 @@ import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
@@ -20,6 +21,7 @@ import xyz.xenondevs.invui.gui.Gui;
 import xyz.xenondevs.invui.item.Item;
 import xyz.xenondevs.invui.window.Window;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -262,10 +264,24 @@ public class VaultGUI {
     private void deposit(Player player, ItemStack item) {
         String type = ItemUtil.getType(item);
         if (type == null) return;
-        switch (type) {
-            case "goldcoin" -> VaultUtil.deposit(player.getUniqueId(), (long) item.getAmount() * 64 * 64);
-            case "silvercoin" -> VaultUtil.deposit(player.getUniqueId(), (long) item.getAmount() * 64);
-            case "coppercoin" -> VaultUtil.deposit(player.getUniqueId(), item.getAmount());
+        long amount = switch (type) {
+            case "goldcoin" -> (long) item.getAmount() * 64 * 64;
+            case "silvercoin" -> (long) item.getAmount() * 64;
+            case "coppercoin" -> item.getAmount();
+            default -> 0L;
+        };
+        if (amount == 0) return;
+        BigDecimal before = currentBalance(player);
+        TransactionLogger.logBalance(player, before, "before deposit");
+        boolean success = VaultUtil.deposit(player.getUniqueId(), amount);
+        TransactionLogger.logDeposit(player, item, amount, success);
+        TransactionLogger.logBalance(player, currentBalance(player), "after deposit");
+        if (!success) {
+            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
+                player.getInventory().addItem(item);
+                player.sendMessage(MM.deserialize("<red>Deposit failed — your coins have been returned."));
+            });
+            WIIC.INSTANCE.getLogger().warning("Deposit of " + amount + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
         }
     }
 
@@ -279,7 +295,11 @@ public class VaultGUI {
             default -> 0L;
         };
         if (amount == 0) return;
+        BigDecimal before = currentBalance(player);
+        TransactionLogger.logBalance(player, before, "before withdraw");
         boolean success = VaultUtil.withdraw(player.getUniqueId(), amount);
+        TransactionLogger.logWithdraw(player, item, amount, success);
+        TransactionLogger.logBalance(player, currentBalance(player), "after withdraw");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () ->
                     player.sendMessage(MM.deserialize("<red>Withdrawal failed — please contact an administrator.")));
@@ -289,7 +309,11 @@ public class VaultGUI {
 
     private void sell(Player player, ItemStack item) {
         int value = priceAppraiser.appraise(item);
+        BigDecimal before = currentBalance(player);
+        TransactionLogger.logBalance(player, before, "before sell");
         boolean success = VaultUtil.deposit(player.getUniqueId(), value);
+        TransactionLogger.logSell(player, item, value, success);
+        TransactionLogger.logBalance(player, currentBalance(player), "after sell");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
                 player.getInventory().addItem(item);
@@ -299,5 +323,11 @@ public class VaultGUI {
             return;
         }
         soldItemsManager.setSoldValue(player, soldItemsManager.getSoldValue(player) + value);
+    }
+
+    private static BigDecimal currentBalance(Player player) {
+        if (WIIC.getEcon() == null) return BigDecimal.ZERO;
+        BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", player.getUniqueId());
+        return balance != null ? balance : BigDecimal.ZERO;
     }
 }
