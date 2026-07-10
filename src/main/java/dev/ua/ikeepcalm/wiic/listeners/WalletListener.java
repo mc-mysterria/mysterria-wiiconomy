@@ -23,8 +23,10 @@ import org.bukkit.event.inventory.*;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.Recipe;
+import xyz.xenondevs.invui.window.WindowManager;
 
 import java.math.BigDecimal;
 import java.util.Arrays;
@@ -77,12 +79,51 @@ public class WalletListener implements Listener {
         }
     }
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST)
     public void onInventoryClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
+
+        // While any WIIC InvUI window is open, the player must not be able to
+        // manipulate their own inventory. Every WIIC GUI is a split window whose
+        // bottom half is the player's real inventory; the vault deposit/withdraw/
+        // sell flow snapshots inventory contents when the GUI is built and only
+        // reconciles them on confirm. Splitting a coin stack onto the cursor,
+        // hotbar-swapping, or pushing coins into a bundle in the meantime would
+        // desync that snapshot and let money be voided or duplicated.
+        //
+        // All interactive GUI slots live in the top inventory and are handled by
+        // InvUI directly (Item slots never fire Bukkit click events), so every
+        // click event that reaches us here is a player-inventory interaction with
+        // no legitimate purpose. InvUI honours the cancellation and aborts the
+        // underlying item move — including bundle inserts.
+        if (WindowManager.getInstance().getOpenWindow(player) != null) {
+            Inventory clicked = event.getClickedInventory();
+            boolean ownInventory = clicked != null && clicked.equals(player.getInventory());
+            boolean crossInventory = switch (event.getAction()) {
+                case MOVE_TO_OTHER_INVENTORY, COLLECT_TO_CURSOR, HOTBAR_SWAP -> true;
+                default -> false;
+            };
+            if (ownInventory || crossInventory) {
+                event.setCancelled(true);
+                return;
+            }
+        }
+
         if (!WalletGUI.playersWithOpenWallets.contains(player)) return;
-        // cancel putting item in offhand
+        // Belt-and-suspenders: block offhand swaps while the wallet session is
+        // active but the player is looking at their own crafting view (no chest GUI).
         if (event.getInventory().getType() == InventoryType.CRAFTING && (event.getSlot() == 40 || event.getAction() == InventoryAction.HOTBAR_SWAP)) {
+            event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onInventoryDrag(InventoryDragEvent event) {
+        if (!(event.getWhoClicked() instanceof Player player)) return;
+        // No WIIC GUI uses drag interactions, so any drag while a window is open
+        // can only scatter items across the player's own inventory. Block it to
+        // keep the vault snapshot in sync with reality.
+        if (WindowManager.getInstance().getOpenWindow(player) != null) {
             event.setCancelled(true);
         }
     }
