@@ -1,8 +1,8 @@
-package dev.ua.ikeepcalm.wiic.currency.services;
+package dev.ua.ikeepcalm.wiic.domain.wallet.services;
 
 import com.google.gson.Gson;
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
+import dev.ua.ikeepcalm.wiic.domain.wallet.models.WalletData;
 
 import java.io.File;
 import java.io.FileReader;

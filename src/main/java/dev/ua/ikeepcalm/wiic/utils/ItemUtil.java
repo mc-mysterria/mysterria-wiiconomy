@@ -5,10 +5,13 @@ import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.NamespacedKey;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.Map;
 
 public class ItemUtil {
     private static NamespacedKey getTypeKey() {
@@ -44,6 +47,17 @@ public class ItemUtil {
             meta.displayName(Component.translatable(translationKey).color(color).decoration(TextDecoration.ITALIC, false));
             meta.setItemModel(new NamespacedKey(WIIC.INSTANCE, model));
             item.setItemMeta(meta);
+        }
+    }
+
+    /**
+     * Adds each item to the player's inventory, dropping anything that doesn't fit
+     * at their feet so the given amount and the received-or-dropped amount always match.
+     */
+    public static void giveOrDrop(Player player, ItemStack... items) {
+        Map<Integer, ItemStack> notGiven = player.getInventory().addItem(items);
+        for (ItemStack leftover : notGiven.values()) {
+            player.getWorld().dropItem(player.getLocation(), leftover);
         }
     }
 

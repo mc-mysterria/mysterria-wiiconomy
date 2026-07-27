@@ -26,12 +26,12 @@ public class ShatterCommand implements CommandExecutor {
                     switch (type) {
                         case "goldcoin" -> {
                             player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
-                            player.getInventory().addItem(CoinUtil.getLick(64));
+                            ItemUtil.giveOrDrop(player, CoinUtil.getLick(64));
                             player.sendMessage("Shattered!");
                         }
                         case "silvercoin" -> {
                             player.getInventory().setItemInMainHand(new ItemStack(Material.AIR));
-                            player.getInventory().addItem(CoinUtil.getCoppet(64));
+                            ItemUtil.giveOrDrop(player, CoinUtil.getCoppet(64));
                             player.sendMessage("Shattered!");
                         }
                         default -> {

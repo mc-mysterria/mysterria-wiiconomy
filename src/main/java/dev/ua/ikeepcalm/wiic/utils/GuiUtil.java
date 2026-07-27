@@ -1,4 +1,4 @@
-package dev.ua.ikeepcalm.wiic.gui;
+package dev.ua.ikeepcalm.wiic.utils;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
 import me.clip.placeholderapi.PlaceholderAPI;
@@ -180,5 +180,21 @@ public final class GuiUtil {
      */
     public static int itemSlot(ConfigurationSection itemSection) {
         return slotIndex(itemSection, "slot");
+    }
+
+    // -------------------------------------------------------------------------
+    // Text helpers
+    // -------------------------------------------------------------------------
+
+    /** Turns an {@code UPPER_SNAKE_CASE} or {@code lower_snake_case} token into "Title Case Words". */
+    public static String prettify(String token) {
+        String[] parts = token.toLowerCase(java.util.Locale.ROOT).split("_");
+        StringBuilder sb = new StringBuilder();
+        for (String part : parts) {
+            if (part.isEmpty()) continue;
+            if (!sb.isEmpty()) sb.append(' ');
+            sb.append(Character.toUpperCase(part.charAt(0))).append(part.substring(1));
+        }
+        return sb.toString();
     }
 }

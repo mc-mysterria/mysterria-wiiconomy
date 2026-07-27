@@ -1,10 +1,11 @@
 package dev.ua.ikeepcalm.wiic.gui;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.currency.services.PreferencesManager;
-import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
-import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.config.WalletConfig;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
+import dev.ua.ikeepcalm.wiic.utils.GuiUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -75,7 +76,7 @@ public class SellingGUI {
         List<Component> appraisalDetails = priceAppraiser.getDetailedAppraisal(item, available);
         boolean canSell = appraisal > 0 && appraisal <= available;
 
-        Material bg = PreferencesManager.getThemeBackground(player.getUniqueId(), GuiUtil.backgroundMaterial(config));
+        Material bg = WalletConfig.getThemeBackground(player.getUniqueId(), GuiUtil.backgroundMaterial(config));
         Gui gui = Gui.builder()
                 .setStructure(
                         "# # # # # # # # #",

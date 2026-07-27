@@ -1,4 +1,4 @@
-package dev.ua.ikeepcalm.wiic.currency.models;
+package dev.ua.ikeepcalm.wiic.domain.wallet.models;
 
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;

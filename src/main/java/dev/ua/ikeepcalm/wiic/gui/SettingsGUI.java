@@ -1,7 +1,8 @@
 package dev.ua.ikeepcalm.wiic.gui;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.currency.services.PreferencesManager;
+import dev.ua.ikeepcalm.wiic.config.WalletConfig;
+import dev.ua.ikeepcalm.wiic.utils.GuiUtil;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
@@ -61,7 +62,7 @@ public class SettingsGUI {
                     int slot = GuiUtil.itemSlot(theme);
                     if (slot < 0 || slot >= 27) continue;
 
-                    String currentTheme = PreferencesManager.getTheme(player.getUniqueId());
+                    String currentTheme = WalletConfig.getTheme(player.getUniqueId());
                     Map<String, String> extras = Map.of("%selected%", themeId.equals(currentTheme) ? "✔ " : "");
                     ItemStack btn = GuiUtil.createConfigItem(theme, player, extras);
 
@@ -71,7 +72,7 @@ public class SettingsGUI {
                             .addClickHandler(_ -> {
                                 if (acted[0]) return;
                                 acted[0] = true;
-                                PreferencesManager.setTheme(player.getUniqueId(), capturedId);
+                                WalletConfig.setTheme(player.getUniqueId(), capturedId);
                                 onBack.run();
                             })
                             .build());

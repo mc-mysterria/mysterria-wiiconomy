@@ -1,7 +1,8 @@
 package dev.ua.ikeepcalm.wiic.gui;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.currency.services.PreferencesManager;
+import dev.ua.ikeepcalm.wiic.config.WalletConfig;
+import dev.ua.ikeepcalm.wiic.utils.GuiUtil;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
@@ -51,7 +52,7 @@ public class ActionGUI {
     public void open() {
         ConfigurationSection config = WIIC.INSTANCE.getConfig().getConfigurationSection("action-gui");
 
-        Material bg = PreferencesManager.getThemeBackground(player.getUniqueId(), GuiUtil.backgroundMaterial(config));
+        Material bg = WalletConfig.getThemeBackground(player.getUniqueId(), GuiUtil.backgroundMaterial(config));
         Gui gui = Gui.builder()
                 .setStructure(
                         "# # # # # # # # #",

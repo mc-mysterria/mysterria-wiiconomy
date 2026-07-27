@@ -1,6 +1,7 @@
 package dev.ua.ikeepcalm.wiic.utils;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
+import org.bukkit.Material;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
@@ -47,6 +48,13 @@ public final class TransactionLogger {
         write(player, String.format(
                 "SELL     %-18s x%-3d -> %d coppets   %s",
                 item.getType().name().toLowerCase(), item.getAmount(), coppets, success ? "OK" : "FAILED"));
+    }
+
+    /** Logs a {@code /shop} purchase — the coppets spent here are destroyed, not deposited anywhere. */
+    public static void logPurchase(Player player, Material material, int amount, long coppets, double marketIndex, boolean success) {
+        write(player, String.format(
+                "PURCHASE %-18s x%-5d <- %d coppets   index=%.3f   %s",
+                material.name().toLowerCase(), amount, coppets, marketIndex, success ? "OK" : "FAILED"));
     }
 
     public static void logBalance(Player player, BigDecimal balance, String note) {

@@ -1,8 +1,7 @@
 package dev.ua.ikeepcalm.wiic.utils;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
-import net.milkbowl.vault2.economy.Economy;
+import dev.ua.ikeepcalm.wiic.domain.wallet.models.WalletData;
 import net.milkbowl.vault2.economy.EconomyResponse;
 import org.bukkit.Bukkit;
 import org.jetbrains.annotations.NotNull;

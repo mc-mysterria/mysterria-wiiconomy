@@ -1,4 +1,4 @@
-package dev.ua.ikeepcalm.wiic.currency.services;
+package dev.ua.ikeepcalm.wiic.domain.wallet.services;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
 import net.kyori.adventure.text.Component;

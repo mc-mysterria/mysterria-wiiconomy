@@ -1,10 +1,11 @@
 package dev.ua.ikeepcalm.wiic.gui;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
-import dev.ua.ikeepcalm.wiic.currency.services.PreferencesManager;
-import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
-import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.domain.wallet.models.WalletData;
+import dev.ua.ikeepcalm.wiic.config.WalletConfig;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.utils.GuiUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -148,7 +149,7 @@ public class WalletGUI {
      * falls back to {@code wallet-gui.title} if no theme is saved or the theme entry is missing.
      */
     private static String resolveTitle(Player player, ConfigurationSection walletConfig) {
-        String themeId = PreferencesManager.getTheme(player.getUniqueId());
+        String themeId = WalletConfig.getTheme(player.getUniqueId());
         if (!themeId.isEmpty()) {
             ConfigurationSection themeSection = WIIC.INSTANCE.getConfig()
                     .getConfigurationSection("settings-gui.themes." + themeId);

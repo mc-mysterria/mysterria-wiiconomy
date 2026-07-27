@@ -1,9 +1,9 @@
 package dev.ua.ikeepcalm.wiic.listeners;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
-import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
-import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.domain.wallet.models.WalletData;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.gui.WalletGUI;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
@@ -228,18 +228,10 @@ public class WalletListener implements Listener {
             if (player.getInventory().getItemInOffHand().getType().equals(Material.AIR)) {
                 player.getInventory().setItemInOffHand(offhandItems.remove(player));
             } else {
-                giveOrDrop(player, offhandItems.remove(player));
+                ItemUtil.giveOrDrop(player, offhandItems.remove(player));
             }
         }
     }
-
-    private void giveOrDrop(Player player, ItemStack item) {
-        Map<Integer, ItemStack> notGiven = player.getInventory().addItem(item);
-        for (ItemStack itemToDrop : notGiven.values()) {
-            player.getWorld().dropItem(player.getLocation(), itemToDrop);
-        }
-    }
-
 
 }
 

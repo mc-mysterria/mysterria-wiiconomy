@@ -1,0 +1,307 @@
+# -----------------------------
+#      W I I C   S H O P
+# -----------------------------
+# Auto-catalogued building-block market (/shop).
+# The item list is generated automatically from the Bukkit Material registry —
+# you do not maintain an item list here. Use the lists below only to fine-tune
+# what the automatic catalogue picked up, and run `/wiic shop-audit` after any
+# change to inspect the generated result (written to plugins/WIIC/shop-audit.txt).
+# All prices are in coppets (the base currency; 64 coppets = 1 lick, 64 licks = 1 verldor).
+
+catalog:
+  # Exact material names to force-exclude, on top of the built-in ore/valuable/
+  # functional-block filter. Use this for anything the automatic filter missed.
+  deny: []
+
+  # Exact material names to force-include even if the built-in filter, a
+  # regex below, or the deny list above would otherwise exclude them.
+  allow: []
+
+  # Extra regex patterns (matched against the material name) to exclude.
+  exclude-name-patterns:
+    - "^INFESTED_.*"
+
+pricing:
+  # Base unit price (in coppets) for any material that doesn't match a
+  # category price or an explicit override below.
+  default-price: 4
+
+  # Base unit price per catalogue category. See category-gui.categories
+  # below for the full category list.
+  category-prices:
+    WOOD: 3
+    STONE: 2
+    COLOR: 5
+    NATURE: 2
+    NETHER_END: 6
+    DECORATION: 8
+    MISC: 4
+
+  # Exact per-material overrides. Takes priority over everything below, including
+  # shape-multipliers — an override is the final, absolute unit price.
+  # overrides:
+  #   OAK_PLANKS: 2
+  overrides: { }
+
+  # Multiplies category-prices/default-price by the material's "shape", so a raw
+  # block that crafts into several processed units isn't priced the same as one of
+  # those units — otherwise there's no reason to ever buy the processed form instead
+  # of the raw one (e.g. a log costs the same as a plank today, but 1 log = 4 planks).
+  # Matched by material-name suffix, longest match wins; anything unmatched is 1.0
+  # (the base/processed tier — planks, the plain stone block, etc.).
+  # Ratios below are exact vanilla crafting yields: 1 log -> 4 planks, 1 block -> 2
+  # slabs, 6 material -> 4 stairs.
+  shape-multipliers:
+    _LOG: 4.0
+    _WOOD: 4.0
+    _STEM: 4.0
+    _HYPHAE: 4.0
+    _SLAB: 0.5
+    _STAIRS: 1.5
+
+market:
+  # How often (in minutes) the server-wide money supply is rescanned, fully async.
+  scan-interval-minutes: 10
+  # vault-scan: sum every known account's balance via Vault2's getUUIDNameMap().
+  # online-sample: sum only currently-online players' balances (cheaper, less accurate).
+  supply-source: vault-scan
+  # Reference money supply the index is measured against. 0 = auto-capture from
+  # the first successful scan after install, then persisted to market-state.yml.
+  baseline: 0
+  # How strongly the index reacts to supply moving away from the baseline.
+  # index = (supply / baseline) ^ elasticity, before smoothing and clamping.
+  elasticity: 0.75
+  # Exponential-moving-average weight given to each new scan (0-1). Lower = smoother.
+  smoothing-alpha: 0.25
+  min-multiplier: 0.5
+  max-multiplier: 4.0
+
+limits:
+  # Hard cap on how many blocks can be bought in a single purchase (54 stacks).
+  max-per-purchase: 3456
+  # Minimum time between two purchases by the same player, in milliseconds.
+  cooldown-ms: 500
+  # The final confirm button in PurchaseConfirmGUI ignores clicks until this many
+  # milliseconds have passed since the screen opened, so a click carried over
+  # from the previous screen can't land on it.
+  confirm-arm-ms: 400
+
+# -------------------------------------------------------------------------
+# GUI screens — standard item config keys apply: slot [col,row], material,
+# name, lore, item-model, custom-model-data. All text is MiniMessage.
+# -------------------------------------------------------------------------
+
+shop-gui:
+  title: "<gold>ʙᴜɪʟᴅᴇʀs' ᴍᴀʀᴋᴇᴛ"
+  background: GRAY_STAINED_GLASS_PANE
+  items:
+    balance:
+      slot: [4, 0]
+      material: GOLD_INGOT
+      name: "<#FFD700>ʙᴀʟᴀɴᴄᴇ"
+      lore:
+        - "<gray>%balance%"
+    market-index:
+      slot: [4, 5]
+      material: PAPER
+      name: "<aqua>ᴍᴀʀᴋᴇᴛ ɪɴᴅᴇx"
+      lore:
+        - "<gray>ᴄᴜʀʀᴇɴᴛ: <white>%market-index%"
+        - "<dark_gray>ᴘʀɪᴄᴇs ꜰʟᴜᴄᴛᴜᴀᴛᴇ ᴡɪᴛʜ"
+        - "<dark_gray>ᴛʜᴇ sᴇʀᴠᴇʀ'ѕ ᴛᴏᴛᴀʟ ᴡᴇᴀʟᴛʜ"
+    search:
+      slot: [8, 0]
+      material: COMPASS
+      name: "<white>sᴇᴀʀᴄʜ"
+      lore:
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ sᴇᴀʀᴄʜ ʙʏ ɴᴀᴍᴇ"
+  categories:
+    wood:
+      slot: [1, 2]
+      material: OAK_LOG
+      name: "<#B57A42>ᴡᴏᴏᴅ"
+      lore:
+        - "<gray>ᴘʟᴀɴᴋs, ʟᴏɢs,"
+        - "<gray>ᴅᴏᴏʀs & ᴍᴏʀᴇ"
+    stone:
+      slot: [2, 2]
+      material: STONE
+      name: "<gray>sᴛᴏɴᴇ"
+      lore:
+        - "<gray>ʙʀɪᴄᴋs, ᴡᴀʟʟs,"
+        - "<gray>sᴛᴀɪʀs & ᴍᴏʀᴇ"
+    color:
+      slot: [3, 2]
+      material: WHITE_CONCRETE
+      name: "<white>ᴄᴏʟᴏʀ"
+      lore:
+        - "<gray>ᴡᴏᴏʟ, ᴄᴏɴᴄʀᴇᴛᴇ,"
+        - "<gray>sᴛᴀɪɴᴇᴅ ɢʟᴀss & ᴍᴏʀᴇ"
+    nature:
+      slot: [4, 2]
+      material: GRASS_BLOCK
+      name: "<green>ɴᴀᴛᴜʀᴇ"
+      lore:
+        - "<gray>ᴅɪʀᴛ, sᴀɴᴅ,"
+        - "<gray>ʟᴇᴀᴠᴇs & ᴍᴏʀᴇ"
+    nether_end:
+      slot: [5, 2]
+      material: NETHERRACK
+      name: "<red>ɴᴇᴛʜᴇʀ & ᴇɴᴅ"
+      lore:
+        - "<gray>ɴᴇᴛʜᴇʀʀᴀᴄᴋ, ʙᴀsᴀʟᴛ,"
+        - "<gray>ᴇɴᴅ sᴛᴏɴᴇ & ᴍᴏʀᴇ"
+    decoration:
+      slot: [6, 2]
+      material: LANTERN
+      name: "<yellow>ᴅᴇᴄᴏʀᴀᴛɪᴏɴ"
+      lore:
+        - "<gray>ʟᴀɴᴛᴇʀɴs, ɢʟᴀss,"
+        - "<gray>ᴄʜᴀɪɴs & ᴍᴏʀᴇ"
+    misc:
+      slot: [7, 2]
+      material: BOOKSHELF
+      name: "<white>ᴍɪsᴄ"
+      lore:
+        - "<gray>ᴇᴠᴇʀʏᴛʜɪɴɢ ᴇʟsᴇ"
+
+family-gui:
+  title: "<gold>ᴍᴀʀᴋᴇᴛ <dark_gray>» <white>%category%"
+  background: GRAY_STAINED_GLASS_PANE
+  items:
+    back:
+      slot: [0, 0]
+      material: RED_WOOL
+      name: "<red>ʙᴀᴄᴋ"
+      lore:
+        - "<gray>ʀᴇᴛᴜʀɴ ᴛᴏ ᴄᴀᴛᴇɢᴏʀɪᴇs"
+
+items-gui:
+  title: "<gold>ᴍᴀʀᴋᴇᴛ <dark_gray>» <white>%family%"
+  background: GRAY_STAINED_GLASS_PANE
+  items:
+    back:
+      material: RED_WOOL
+      name: "<red>ʙᴀᴄᴋ"
+      lore:
+        - "<gray>ʀᴇᴛᴜʀɴ ᴛᴏ ꜰᴀᴍɪʟɪᴇs"
+    previous-page:
+      material: ARROW
+      name: "<yellow>« ᴘʀᴇᴠɪᴏᴜs ᴘᴀɢᴇ"
+    next-page:
+      material: ARROW
+      name: "<yellow>ɴᴇxᴛ ᴘᴀɢᴇ »"
+    page-indicator:
+      material: PAPER
+      name: "<white>ᴘᴀɢᴇ %page% / %pages%"
+    item-price:
+      # Appended below each catalogue item's own lore.
+      lore:
+        - ""
+        - "<dark_gray>──────────────"
+        - "<gray>ᴘʀɪᴄᴇ ᴇᴀᴄʜ: <#FFD700>%unit-price%"
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ʙᴜʏ"
+
+quantity-gui:
+  title: "<gold>ǫᴜᴀɴᴛɪᴛʏ <dark_gray>» <white>%item%"
+  background: GRAY_STAINED_GLASS_PANE
+  items:
+    preview:
+      slot: [4, 1]
+    decrease-1:
+      slot: [2, 2]
+      material: RED_STAINED_GLASS_PANE
+      name: "<red>-1"
+    decrease-8:
+      slot: [1, 2]
+      material: RED_STAINED_GLASS_PANE
+      name: "<red>-8"
+    decrease-64:
+      slot: [0, 2]
+      material: RED_STAINED_GLASS_PANE
+      name: "<red>-64"
+    increase-1:
+      slot: [6, 2]
+      material: LIME_STAINED_GLASS_PANE
+      name: "<green>+1"
+    increase-8:
+      slot: [7, 2]
+      material: LIME_STAINED_GLASS_PANE
+      name: "<green>+8"
+    increase-64:
+      slot: [8, 2]
+      material: LIME_STAINED_GLASS_PANE
+      name: "<green>+64"
+    preset-1:
+      slot: [1, 3]
+      material: PAPER
+      name: "<white>1"
+    preset-16:
+      slot: [2, 3]
+      material: PAPER
+      name: "<white>16"
+    preset-64:
+      slot: [3, 3]
+      material: PAPER
+      name: "<white>64 <dark_gray>(1 sᴛᴀᴄᴋ)"
+    preset-320:
+      slot: [4, 3]
+      material: PAPER
+      name: "<white>320 <dark_gray>(5 sᴛᴀᴄᴋs)"
+    preset-640:
+      slot: [5, 3]
+      material: PAPER
+      name: "<white>640 <dark_gray>(10 sᴛᴀᴄᴋs)"
+    type-amount:
+      slot: [7, 3]
+      material: WRITABLE_BOOK
+      name: "<yellow>ᴛʏᴘᴇ ᴀᴍᴏᴜɴᴛ"
+      lore:
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ᴇɴᴛᴇʀ"
+        - "<gray>ᴀɴ ᴇxᴀᴄᴛ ᴀᴍᴏᴜɴᴛ"
+    confirm:
+      slot: [4, 5]
+      material: LIME_WOOL
+      name: "<green>ᴄᴏɴᴛɪɴᴜᴇ"
+      lore:
+        - "<gray>ᴀᴍᴏᴜɴᴛ: <white>%amount%"
+        - "<gray>ᴛᴏᴛᴀʟ: <#FFD700>%total%"
+    cancel:
+      slot: [0, 5]
+      material: RED_WOOL
+      name: "<red>ᴄᴀɴᴄᴇʟ"
+
+confirm-gui:
+  title: "<gold>ᴄᴏɴꜰɪʀᴍ ᴘᴜʀᴄʜᴀsᴇ"
+  background: GRAY_STAINED_GLASS_PANE
+  items:
+    preview:
+      slot: [4, 1]
+    confirm:
+      slot: [2, 3]
+      material: LIME_WOOL
+      name: "<green>ᴄᴏɴꜰɪʀᴍ ᴘᴜʀᴄʜᴀsᴇ"
+      lore:
+        - "<gray>%amount%x %item%"
+        - "<gray>ᴛᴏᴛᴀʟ: <#FFD700>%total%"
+        - ""
+        - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ᴄᴏɴꜰɪʀᴍ"
+    cancel:
+      slot: [6, 3]
+      material: RED_WOOL
+      name: "<red>ᴄᴀɴᴄᴇʟ"
+
+search-gui:
+  title: "<white>sᴇᴀʀᴄʜ ᴍᴀʀᴋᴇᴛ"
+
+messages:
+  inventory-full-drop: "<yellow>Your inventory couldn't hold everything — the rest was dropped at your feet."
+  insufficient-funds: "<red>You don't have enough money for this purchase."
+  price-changed: "<red>The price changed while you were confirming — please try again."
+  purchase-failed: "<red>Purchase failed — please contact an administrator."
+  purchase-success: "<green>Bought %amount%x %item% for %total%."
+  purchase-refunded: "<red>Something went wrong delivering your purchase — you've been refunded."
+  cooldown: "<red>Please wait a moment before purchasing again."
+  invalid-amount: "<red>Enter a whole number between 1 and %max%."
+  in-progress: "<red>Please finish or cancel your current purchase first."
+  no-results: "<red>No matching blocks found."

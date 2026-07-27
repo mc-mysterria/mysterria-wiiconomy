@@ -1,10 +1,13 @@
 package dev.ua.ikeepcalm.wiic.commands;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
+import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopCatalog;
+import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopEntry;
+import dev.ua.ikeepcalm.wiic.domain.shop.service.ShopServices;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
-import net.kyori.adventure.text.format.TextColor;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -20,6 +23,10 @@ import org.bukkit.inventory.MerchantRecipe;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.Arrays;
 import java.util.List;
 import java.util.logging.Level;
@@ -47,7 +54,7 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 0) {
-            sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version>")
+            sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit>")
                     .color(NamedTextColor.YELLOW));
             return true;
         }
@@ -55,6 +62,11 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
         switch (args[0].toLowerCase()) {
             case "reload":
                 plugin.reloadConfig();
+                PriceAppraiser.loadConfig();
+                if (plugin.getShopServices() != null) {
+                    plugin.getShopServices().config().reload();
+                    plugin.getShopServices().catalog().rebuild();
+                }
                 sender.sendMessage(Component.text("Configuration reloaded!")
                         .color(NamedTextColor.GREEN));
                 plugin.getLogger().log(Level.INFO, "Configuration reloaded by " + sender.getName());
@@ -80,13 +92,58 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
                 checkVillagerVersions(sender);
                 break;
 
+            case "shop-audit":
+                dumpShopAudit(sender);
+                break;
+
             default:
-                sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version>")
+                sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit>")
                         .color(NamedTextColor.YELLOW));
                 break;
         }
 
         return true;
+    }
+
+    /**
+     * Dumps the full generated {@code /shop} catalogue — every purchasable material with
+     * its category, family, and current unit price — to {@code plugins/WIIC/shop-audit.txt}
+     * so an admin can review what the automatic classifier picked up after tuning
+     * {@code shop.yml}'s allow/deny lists or exclusion rules.
+     */
+    private void dumpShopAudit(CommandSender sender) {
+        ShopServices services = plugin.getShopServices();
+        if (services == null) {
+            sender.sendMessage(Component.text("Shop is not initialized yet!").color(NamedTextColor.RED));
+            return;
+        }
+
+        ShopCatalog catalog = services.catalog();
+        StringBuilder sb = new StringBuilder();
+        sb.append("WIIC shop catalogue audit — ").append(catalog.all().size()).append(" materials\n");
+        sb.append(String.format("%-32s %-12s %-16s %10s%n", "MATERIAL", "CATEGORY", "FAMILY", "UNIT PRICE"));
+
+        List<ShopEntry> entries = new java.util.ArrayList<>(catalog.all());
+        entries.sort(java.util.Comparator
+                .comparing((ShopEntry e) -> e.category().name())
+                .thenComparing(ShopEntry::family)
+                .thenComparing(e -> e.material().name()));
+
+        for (ShopEntry entry : entries) {
+            long unitPrice = services.pricing().unitPrice(entry.material());
+            sb.append(String.format("%-32s %-12s %-16s %10d%n",
+                    entry.material().name(), entry.category().name(), entry.family(), unitPrice));
+        }
+
+        File file = new File(plugin.getDataFolder(), "shop-audit.txt");
+        try {
+            Files.writeString(file.toPath(), sb.toString(), StandardCharsets.UTF_8);
+            sender.sendMessage(Component.text("Wrote " + entries.size() + " catalogue entries to plugins/WIIC/shop-audit.txt")
+                    .color(NamedTextColor.GREEN));
+        } catch (IOException e) {
+            sender.sendMessage(Component.text("Failed to write shop-audit.txt: " + e.getMessage()).color(NamedTextColor.RED));
+            plugin.getLogger().warning("Failed to write shop-audit.txt: " + e.getMessage());
+        }
     }
 
     private void restoreVillagerTrades(CommandSender sender) {
@@ -250,7 +307,7 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("reload", "restore", "debug", "version");
+            return Arrays.asList("reload", "restore", "debug", "version", "shop-audit");
         }
         return null;
     }

@@ -21,7 +21,9 @@ import java.util.List;
 import java.util.logging.Level;
 
 public class VillagerListener implements Listener {
+
     private final WIIC plugin;
+
     private final NamespacedKey originalCostsKey;
     private final NamespacedKey originalResultsKey;
     private final NamespacedKey villagerVersionKey;
@@ -72,7 +74,11 @@ public class VillagerListener implements Listener {
                     MerchantRecipe recipe = villager.getRecipe(i);
                     List<ItemStack> ingredients = recipe.getIngredients();
                     ingredients.removeIf(ingredient -> ingredient.getType() == Material.EMERALD || CoinUtil.isCoin(ingredient));
-                    int emeralds = originalCosts[i];
+                    int emeralds = 0;
+
+                    if (originalCosts != null) {
+                        emeralds = originalCosts[i];
+                    }
                     if (emeralds == 0 && ingredients.size() == 1 && ingredients.getFirst().getType().equals(Material.BOOK) && ingredients.getFirst().getAmount() == 1) {
                         emeralds = 64;
                     }
@@ -84,7 +90,7 @@ public class VillagerListener implements Listener {
                         ingredients.add(new ItemStack(Material.EMERALD, emeralds));
                     }
                     ItemStack result = recipe.getResult();
-                    if ((result.getType() == Material.EMERALD || CoinUtil.isCoin(result)) && originalResults[i] > 0) {
+                    if (originalResults != null && (result.getType() == Material.EMERALD || CoinUtil.isCoin(result)) && originalResults[i] > 0) {
                         result = new ItemStack(Material.EMERALD, originalResults[i]);
                     }
 

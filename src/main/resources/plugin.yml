@@ -12,7 +12,11 @@ commands:
     description: Shatter currency to lesser
     usage: /shatter
     permission: wiic.shatter
+  shop:
+    description: Open the building-block market
+    usage: /shop
+    permission: wiic.shop
   wiic:
     description: WIIC main command
-    usage: /wiic <reload|restore|debug|version>
+    usage: /wiic <reload|restore|debug|version|shop-audit>
     permission: wiic.admin

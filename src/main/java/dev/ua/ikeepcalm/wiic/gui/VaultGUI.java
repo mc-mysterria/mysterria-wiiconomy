@@ -1,14 +1,11 @@
 package dev.ua.ikeepcalm.wiic.gui;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.currency.models.WalletData;
-import dev.ua.ikeepcalm.wiic.currency.services.PreferencesManager;
-import dev.ua.ikeepcalm.wiic.currency.services.PriceAppraiser;
-import dev.ua.ikeepcalm.wiic.currency.services.SoldItemsManager;
-import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
-import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
-import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
-import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
+import dev.ua.ikeepcalm.wiic.domain.wallet.models.WalletData;
+import dev.ua.ikeepcalm.wiic.config.WalletConfig;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.SoldItemsManager;
+import dev.ua.ikeepcalm.wiic.utils.*;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
@@ -102,7 +99,7 @@ public class VaultGUI {
         boolean[] actionClose = {false};
 
         // Build 3-row GUI — all slots start as the configured background pane
-        Material bg = PreferencesManager.getThemeBackground(player.getUniqueId(), GuiUtil.backgroundMaterial(config));
+        Material bg = WalletConfig.getThemeBackground(player.getUniqueId(), GuiUtil.backgroundMaterial(config));
         Gui gui = Gui.builder()
                 .setStructure(
                         "# # # # # # # # #",
@@ -239,7 +236,7 @@ public class VaultGUI {
                     .build());
         }
 
-        String titleStr = PreferencesManager.getThemeString(
+        String titleStr = WalletConfig.getThemeString(
                 player.getUniqueId(), "vault-title", config.getString("title", ""));
 
         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () ->
@@ -278,7 +275,7 @@ public class VaultGUI {
         TransactionLogger.logBalance(player, currentBalance(player), "after deposit");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
-                player.getInventory().addItem(item);
+                ItemUtil.giveOrDrop(player, item);
                 player.sendMessage(MM.deserialize("<red>Deposit failed — your coins have been returned."));
             });
             WIIC.INSTANCE.getLogger().warning("Deposit of " + amount + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
@@ -316,7 +313,7 @@ public class VaultGUI {
         TransactionLogger.logBalance(player, currentBalance(player), "after sell");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
-                player.getInventory().addItem(item);
+                ItemUtil.giveOrDrop(player, item);
                 player.sendMessage(MM.deserialize("<red>Transaction failed — your items have been returned."));
             });
             WIIC.INSTANCE.getLogger().warning("Deposit of " + value + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");

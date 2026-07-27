@@ -1,4 +1,4 @@
-package dev.ua.ikeepcalm.wiic.currency.services;
+package dev.ua.ikeepcalm.wiic.config;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
 import org.bukkit.Material;
@@ -13,12 +13,12 @@ import java.util.UUID;
  * Persists per-player GUI theme preferences to {@code preferences.yml}
  * in the plugin data folder. Call {@link #init()} once during plugin enable.
  */
-public final class PreferencesManager {
+public final class WalletConfig {
 
     private static File file;
     private static YamlConfiguration config;
 
-    private PreferencesManager() {}
+    private WalletConfig() {}
 
     public static void init() {
         file = new File(WIIC.INSTANCE.getDataFolder(), "preferences.yml");
