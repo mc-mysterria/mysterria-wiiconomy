@@ -15,6 +15,7 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.block.*;
 import org.bukkit.event.entity.*;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
+import org.bukkit.event.hanging.HangingBreakEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
 import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
@@ -120,11 +121,47 @@ public class MarketProtectionListener implements Listener {
         event.setCancelled(true);
     }
 
+    /**
+     * No hostile mob gets to exist here, however it was summoned. Natural spawns are the
+     * obvious case, but a spawn egg is a plain item use that no build check covers, so the
+     * reasons a <i>player</i> can trigger are refused too. CUSTOM is deliberately left
+     * alone — that is how Citizens puts the market's own NPCs on the ground.
+     */
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onSpawn(CreatureSpawnEvent event) {
         if (!config.isMarketWorld(event.getLocation().getWorld())) return;
-        if (event.getSpawnReason() != CreatureSpawnEvent.SpawnReason.NATURAL) return;
-        if (event.getEntity() instanceof Monster) event.setCancelled(true);
+        if (!(event.getEntity() instanceof Monster)) return;
+        switch (event.getSpawnReason()) {
+            case NATURAL, SPAWNER, SPAWNER_EGG, DISPENSE_EGG, EGG, BUILD_WITHER, TRIAL_SPAWNER,
+                 RAID, PATROL, VILLAGE_INVASION, REINFORCEMENTS, LIGHTNING -> event.setCancelled(true);
+            default -> {
+            }
+        }
+    }
+
+    /**
+     * Stepping on things counts as building: pressure plates, tripwire and farmland trample
+     * all reach the world through a PHYSICAL interaction that no click handler sees.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPhysical(PlayerInteractEvent event) {
+        if (event.getAction() != org.bukkit.event.block.Action.PHYSICAL) return;
+        Block block = event.getClickedBlock();
+        if (block == null || !config.isMarketWorld(block.getWorld())) return;
+        if (!canBuild(event.getPlayer(), block.getLocation())) event.setCancelled(true);
+    }
+
+    /**
+     * A stall's floor is not a free-for-all: goods dropped inside a plot belong to whoever
+     * may build there, so a bystander cannot stand at the boundary and hoover them up.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onPickup(EntityPickupItemEvent event) {
+        if (!(event.getEntity() instanceof Player player)) return;
+        Location where = event.getItem().getLocation();
+        if (!config.isMarketWorld(where.getWorld())) return;
+        if (plots.regionAt(where) == null) return; // open floor: finders keepers
+        if (!canBuild(player, where)) event.setCancelled(true);
     }
 
     /**
@@ -135,6 +172,18 @@ public class MarketProtectionListener implements Listener {
     public void onHangingBreak(HangingBreakByEntityEvent event) {
         if (!config.isMarketWorld(event.getEntity().getWorld())) return;
         if (event.getRemover() instanceof Player player && canBuild(player, event.getEntity().getLocation())) return;
+        event.setCancelled(true);
+    }
+
+    /**
+     * The same frame can also pop off because its support vanished or an explosion reached
+     * it — {@code HangingBreakByEntityEvent} never fires for those, and the item inside
+     * would drop to the floor for anyone to take.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
+    public void onHangingBreakPhysics(HangingBreakEvent event) {
+        if (event instanceof HangingBreakByEntityEvent) return; // handled above, with its build check
+        if (!config.isMarketWorld(event.getEntity().getWorld())) return;
         event.setCancelled(true);
     }
 

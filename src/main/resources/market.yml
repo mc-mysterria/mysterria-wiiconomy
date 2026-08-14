@@ -132,7 +132,12 @@ notifications:
 entrance:
   craftable: true
   door-material: CRIMSON_DOOR
-  allow-break: true
+  # Whether a player may mine a registered entrance door. The hub entrance is on no
+  # claim, so with this on anyone can destroy the server's public way in.
+  allow-break: false
+  # Re-check land trust each time someone uses a door, not just when placing it.
+  # Off by default: owners walk guests in through their own entrance.
+  require-trust-to-enter: false
   validation-interval-minutes: 30
   # The staged descent: how long between stepping through a door and landing on
   # the other side, and how long the dark lingers after arrival. Set both to 0

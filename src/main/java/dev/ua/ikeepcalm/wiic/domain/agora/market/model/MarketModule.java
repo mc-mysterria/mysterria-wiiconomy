@@ -123,7 +123,9 @@ public class MarketModule {
             this.npcService = new MarketNpcService(config);
         } else {
             this.npcService = null;
-            plugin.getLogger().warning("Citizens not found — market NPCs are disabled (GUIs reachable via /wiicmarket open)");
+            plugin.getLogger().warning("Citizens not found — market NPCs are disabled. /wiicmarket open is"
+                    + " admin-only, so ORDINARY PLAYERS HAVE NO WAY TO REACH ANY MARKET GUI until Citizens"
+                    + " is installed and the NPCs are placed. The entrances will still let them in.");
         }
 
         PlotService plots = new PlotService(plugin, config, db, inspector, npcService);
@@ -201,6 +203,16 @@ public class MarketModule {
         services.containment().shutdown();
         services.entrances().shutdown();
         services.db().shutdown();
+        // The single-flight guards are static, so they outlive the module across a plugin
+        // reload. A continuation dropped during shutdown never gets to release its entry,
+        // and the player it belonged to would come back unable to buy, list or claim
+        // anything until the whole server restarted.
+        MarketPurchaseService.releaseAll();
+        ListingService.releaseAll();
+        StashService.releaseAll();
+        LedgerService.releaseAll();
+        PlotService.releaseAll();
+        PlotShopService.releaseAll();
     }
 
     /** GUI dispatch for market NPCs and {@code /wiicmarket open}. */

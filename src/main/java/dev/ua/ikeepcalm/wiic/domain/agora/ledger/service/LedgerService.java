@@ -109,7 +109,20 @@ public class LedgerService {
                 try {
                     journal.append(MarketJournal.Type.CLAIM_DEPOSITED, batchId, uuid, sum, null);
                 } catch (IllegalStateException e) {
+                    // The money is already in their hands and we cannot prove it. Recovery
+                    // treats an unproven CLAIM as "never paid" and hands the rows back as
+                    // UNCLAIMED, which would pay this batch out a second time — and the two
+                    // failures that lead here are correlated (a full disk fails the marker
+                    // write and the commit below alike). Dropping the intent entry instead
+                    // leaves recovery with nothing to act on: the rows stay CLAIMING, which
+                    // is wrong-but-harmless, rather than reverting into a double payout.
                     plugin.getLogger().severe("Market journal marker write failed after ledger deposit: " + e.getMessage());
+                    if (!journal.remove(batchId)) {
+                        plugin.getLogger().severe("CRITICAL: ledger claim of " + sum + " coppets for " + uuid
+                                + " was deposited but is neither proven nor retractable in the journal."
+                                + " Delete the CLAIM entry for batch " + batchId + " from market-journal.dat"
+                                + " before restarting, or the claim will be paid out twice.");
+                    }
                 }
                 db.transactionThenMain(conn -> {
                     LedgerDao.finishClaim(conn, uuid, System.currentTimeMillis());
@@ -144,4 +157,11 @@ public class LedgerService {
             then.run();
         });
     }
+
+    /** Drops every single-flight guard. Called on module shutdown — these sets are
+     *  static and would otherwise carry a stale lock across a plugin reload. */
+    public static void releaseAll() {
+        IN_FLIGHT.clear();
+    }
+
 }

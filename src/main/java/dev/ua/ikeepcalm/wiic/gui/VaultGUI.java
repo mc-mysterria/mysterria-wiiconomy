@@ -144,16 +144,17 @@ public class VaultGUI {
                         new ActionGUI(player, coin, new ActionGUI.ConfirmationCallback() {
                             @Override
                             public void onConfirm(ItemStack confirmed) {
-                                // Clone before addItem, which mutates the input stack's amount to the leftover
+                                // Debit first, hand over second. The balance is the real money and
+                                // the coin is only a token for it, so the coin must never exist
+                                // before the coppets behind it are gone — a failed withdraw after
+                                // an unconditional addItem would mint currency out of nothing.
                                 ItemStack snapshot = confirmed.clone();
-                                Map<Integer, ItemStack> notAdded = player.getInventory().addItem(confirmed);
-                                // Drop any leftover at the player's feet so the withdrawn amount and given amount stay in sync
-                                for (ItemStack leftover : notAdded.values()) {
-                                    player.getWorld().dropItem(player.getLocation(), leftover);
-                                }
                                 Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                    withdraw(player, snapshot);
-                                    Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
+                                    boolean debited = withdraw(player, snapshot);
+                                    Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
+                                        if (debited) ItemUtil.giveOrDrop(player, snapshot);
+                                        openVault(player, onClose);
+                                    });
                                 });
                             }
 
@@ -275,23 +276,31 @@ public class VaultGUI {
         TransactionLogger.logBalance(player, currentBalance(player), "after deposit");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
-                ItemUtil.giveOrDrop(player, item);
-                player.sendMessage(MM.deserialize("<red>Deposit failed — your coins have been returned."));
+                if (ItemUtil.giveOrDrop(player, item)) {
+                    player.sendMessage(MM.deserialize("<red>Deposit failed — your coins have been returned."));
+                } else {
+                    // They left while the deposit was in flight: the coins are out of an
+                    // inventory that will never be saved again, and the balance was never
+                    // credited. Say exactly what is owed so it can be restored by hand.
+                    WIIC.INSTANCE.getLogger().severe("OWED: " + amount + " coppets to " + player.getName()
+                            + " (" + player.getUniqueId() + ") — deposit failed and they had already left");
+                }
             });
             WIIC.INSTANCE.getLogger().warning("Deposit of " + amount + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
         }
     }
 
-    private void withdraw(Player player, ItemStack item) {
+    /** @return true if the coppets were actually taken — only then may the coin be handed over. */
+    private boolean withdraw(Player player, ItemStack item) {
         String type = ItemUtil.getType(item);
-        if (type == null) return;
+        if (type == null) return false;
         long amount = switch (type) {
             case "goldcoin" -> (long) item.getAmount() * 64 * 64;
             case "silvercoin" -> (long) item.getAmount() * 64;
             case "coppercoin" -> item.getAmount();
             default -> 0L;
         };
-        if (amount == 0) return;
+        if (amount == 0) return false;
         BigDecimal before = currentBalance(player);
         TransactionLogger.logBalance(player, before, "before withdraw");
         boolean success = VaultUtil.withdraw(player.getUniqueId(), amount);
@@ -302,6 +311,7 @@ public class VaultGUI {
                     player.sendMessage(MM.deserialize("<red>Withdrawal failed — please contact an administrator.")));
             WIIC.INSTANCE.getLogger().warning("Withdraw of " + amount + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
         }
+        return success;
     }
 
     private void sell(Player player, ItemStack item) {
@@ -313,13 +323,18 @@ public class VaultGUI {
         TransactionLogger.logBalance(player, currentBalance(player), "after sell");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
-                ItemUtil.giveOrDrop(player, item);
-                player.sendMessage(MM.deserialize("<red>Transaction failed — your items have been returned."));
+                if (ItemUtil.giveOrDrop(player, item)) {
+                    player.sendMessage(MM.deserialize("<red>Transaction failed — your items have been returned."));
+                } else {
+                    WIIC.INSTANCE.getLogger().severe("OWED: " + item.getType() + " x" + item.getAmount()
+                            + " to " + player.getName() + " (" + player.getUniqueId()
+                            + ") — sale failed and they had already left");
+                }
             });
             WIIC.INSTANCE.getLogger().warning("Deposit of " + value + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
             return;
         }
-        soldItemsManager.setSoldValue(player, soldItemsManager.getSoldValue(player) + value);
+        soldItemsManager.addSoldValue(player, value);
     }
 
     private static BigDecimal currentBalance(Player player) {

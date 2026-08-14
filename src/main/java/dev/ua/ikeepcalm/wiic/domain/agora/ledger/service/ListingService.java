@@ -30,12 +30,15 @@ import java.util.function.Consumer;
  * per-player single-flight lock, main-thread validation, async money leg, DB
  * transaction, refund toward the player on failure.
  *
- * <p>Listing-creation ordering: the fee is withdrawn <b>first</b> (money is
- * authoritative), then the item — already removed from the player's inventory into
- * the GUI's virtual inventory — is journaled and committed as an ACTIVE listing.
- * A DB failure refunds the fee and hands the item back to the GUI. A crash between
- * journal append and DB commit is repaired at startup by {@link JournalRecovery}
- * (item lands in the seller's stash, never lost, never duplicated).
+ * <p>Listing-creation ordering: the item comes <b>first</b>. By the time this class is
+ * called the goods are already out of the seller's inventory and exist only as a local
+ * variable, so they are journaled before anything else — before the limit check, before
+ * the fee, before the insert. Only then is the fee withdrawn and the listing committed.
+ * A crash anywhere after the journal write is repaired at startup by
+ * {@link JournalRecovery}: the item lands in the seller's stash, never lost, never
+ * duplicated. A failure hands the item back through the GUI instead, unless the journal
+ * could not be pruned — see {@link Outcome#itemRetained()}, which is what keeps "given
+ * back" and "recovered into the stash" from both happening to the same item.
  */
 public class ListingService {
 
@@ -44,9 +47,19 @@ public class ListingService {
         DAILY_LIMIT, MAX_ACTIVE, INSUFFICIENT_FEE, ERROR
     }
 
-    public record Outcome(Result result, String denyMessageKey, long fee) {
+    /**
+     * @param itemRetained set when the listing failed but the journal still holds the item.
+     *                     The caller must <b>not</b> hand it back — startup recovery will
+     *                     deliver it to the seller's stash, and doing both would duplicate it.
+     */
+    public record Outcome(Result result, String denyMessageKey, long fee, boolean itemRetained) {
         public static Outcome of(Result result) {
-            return new Outcome(result, null, 0);
+            return new Outcome(result, null, 0, false);
+        }
+
+        /** A failure whose disposition of the item depends on whether the journal let go of it. */
+        static Outcome failed(Result result, long fee, boolean journalPruned) {
+            return new Outcome(result, null, fee, !journalPruned);
         }
     }
 
@@ -84,7 +97,7 @@ public class ListingService {
 
         String denied = inspector.checkDenied(item);
         if (denied != null) {
-            finish(uuid, callback, new Outcome(Result.ITEM_DENIED, denied, 0));
+            finish(uuid, callback, new Outcome(Result.ITEM_DENIED, denied, 0, false));
             return;
         }
         if (price < config.minPrice() || price > config.maxPrice()) {
@@ -103,20 +116,44 @@ public class ListingService {
                 price, ListingState.ACTIVE, null, plotId, now, now + config.listingDurationMs(),
                 snapshot.valueKey());
 
-        // Money leg first: fee is a sink (never deposited anywhere), see market.yml.
+        // The item is already out of the seller's inventory by the time we are called, so it
+        // exists nowhere but this method's local variable until the journal has it. Write
+        // that first — before the fee, before the insert — so no crash can strand it.
+        try {
+            journal.append(MarketJournal.Type.LIST, listingId.toString(), uuid, price, bytes);
+        } catch (IllegalStateException e) {
+            plugin.getLogger().severe("Market journal unavailable, aborting listing: " + e.getMessage());
+            finish(uuid, callback, Outcome.of(Result.ERROR));
+            return;
+        }
+
+        // Limits are re-checked authoritatively inside the insert transaction; this earlier
+        // read only spares a seller who is over their limit the charge-then-refund dance.
+        db.submitThenMain(conn -> {
+            if (DailyCounterDao.listingsCreatedToday(conn, uuid) >= config.dailyListingLimit()) return Result.DAILY_LIMIT;
+            if (ListingDao.countActiveBySeller(conn, uuid) >= config.maxActivePerPlayer()) return Result.MAX_ACTIVE;
+            return null;
+        }, preflight -> {
+            if (preflight != null) {
+                finish(uuid, callback, Outcome.failed(preflight, 0, journal.remove(listingId.toString())));
+                return;
+            }
+            chargeAndInsert(seller, uuid, listing, listingId, snapshot, price, fee, callback);
+        }, error -> {
+            plugin.getLogger().severe("Market listing preflight failed for " + seller.getName() + ": " + error);
+            finish(uuid, callback, Outcome.failed(Result.ERROR, 0, journal.remove(listingId.toString())));
+        });
+    }
+
+    private void chargeAndInsert(Player seller, UUID uuid, Listing listing, UUID listingId,
+                                 ItemSnapshot snapshot, long price, long fee, Consumer<Outcome> callback) {
+        // Fee is a sink (never deposited anywhere), see market.yml.
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             if (fee > 0 && !VaultUtil.withdraw(uuid, fee)) {
                 TransactionLogger.logNote(seller, "MARKET LIST fee withdraw of " + fee + " coppets failed");
-                Bukkit.getScheduler().runTask(plugin, () -> finish(uuid, callback, new Outcome(Result.INSUFFICIENT_FEE, null, fee)));
-                return;
-            }
-
-            try {
-                journal.append(MarketJournal.Type.LIST, listingId.toString(), uuid, price, bytes);
-            } catch (IllegalStateException e) {
-                plugin.getLogger().severe("Market journal unavailable, aborting listing: " + e.getMessage());
-                refundFee(seller, uuid, fee, "journal append failed");
-                Bukkit.getScheduler().runTask(plugin, () -> finish(uuid, callback, Outcome.of(Result.ERROR)));
+                boolean pruned = journal.remove(listingId.toString());
+                Bukkit.getScheduler().runTask(plugin, () ->
+                        finish(uuid, callback, Outcome.failed(Result.INSUFFICIENT_FEE, fee, pruned)));
                 return;
             }
 
@@ -135,15 +172,15 @@ public class ListingService {
                 journal.remove(listingId.toString());
                 TransactionLogger.logNote(seller, "MARKET LIST " + snapshot.material().name() + " x" + snapshot.amount()
                         + " for " + price + " coppets (fee " + fee + ") id=" + listingId);
-                finish(uuid, callback, new Outcome(Result.SUCCESS, null, fee));
+                finish(uuid, callback, new Outcome(Result.SUCCESS, null, fee, false));
             }, error -> {
-                journal.remove(listingId.toString());
+                boolean pruned = journal.remove(listingId.toString());
                 refundFee(seller, uuid, fee, "listing insert failed");
                 Result result = error instanceof ListingLimitException limit ? limit.result : Result.ERROR;
                 if (result == Result.ERROR) {
                     plugin.getLogger().severe("Market listing insert failed for " + seller.getName() + ": " + error);
                 }
-                finish(uuid, callback, Outcome.of(result));
+                finish(uuid, callback, Outcome.failed(result, fee, pruned));
             });
         });
     }
@@ -199,4 +236,11 @@ public class ListingService {
             this.result = result;
         }
     }
+
+    /** Drops every single-flight guard. Called on module shutdown — these sets are
+     *  static and would otherwise carry a stale lock across a plugin reload. */
+    public static void releaseAll() {
+        IN_FLIGHT.clear();
+    }
+
 }

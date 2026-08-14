@@ -32,7 +32,6 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -124,7 +123,7 @@ public class PlotShopService {
 
     public void load() {
         try {
-            List<PlotShop> all = db.submit(PlotShopDao::all).get(10, TimeUnit.SECONDS);
+            List<PlotShop> all = db.awaitLoad("plot shop", PlotShopDao::all);
             for (PlotShop shop : all) bySign.put(shop.signKey(), shop);
             plugin.getLogger().info("Loaded " + all.size() + " market stall counters");
         } catch (Exception e) {
@@ -303,6 +302,12 @@ public class PlotShopService {
      * Changes the asking price without touching the goods.
      */
     public void reprice(PlotShop shop, long price, Consumer<Boolean> callback) {
+        // Same bounds create() enforces. This has no caller yet; wiring one up without the
+        // check would be an easy way to hand out a counter selling at zero or below.
+        if (price < config.minPrice() || price > config.maxPrice()) {
+            callback.accept(false);
+            return;
+        }
         PlotShop repriced = new PlotShop(shop.id(), shop.plotId(), shop.world(),
                 shop.signX(), shop.signY(), shop.signZ(),
                 shop.chestX(), shop.chestY(), shop.chestZ(),
@@ -594,4 +599,12 @@ public class PlotShopService {
         BUYERS_IN_FLIGHT.remove(buyerId);
         SHOPS_IN_FLIGHT.remove(shopId);
     }
+
+    /** Drops every single-flight guard. Called on module shutdown — these sets are
+     *  static and would otherwise carry a stale lock across a plugin reload. */
+    public static void releaseAll() {
+        BUYERS_IN_FLIGHT.clear();
+        SHOPS_IN_FLIGHT.clear();
+    }
+
 }

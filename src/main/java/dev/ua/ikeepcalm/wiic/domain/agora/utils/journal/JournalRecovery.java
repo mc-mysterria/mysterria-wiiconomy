@@ -59,6 +59,10 @@ public class JournalRecovery {
                 .filter(entry -> entry.type() == MarketJournal.Type.CLAIM_DEPOSITED)
                 .map(MarketJournal.Entry::id)
                 .collect(Collectors.toSet());
+        Set<String> paidAttempts = entries.stream()
+                .filter(entry -> entry.type() == MarketJournal.Type.BUY_PAID)
+                .map(MarketJournal.Entry::id)
+                .collect(Collectors.toSet());
 
         try {
             db.submit(conn -> {
@@ -66,6 +70,7 @@ public class JournalRecovery {
                     // Markers and stash claims carry no repair of their own; they are read
                     // through their parent entry and pruned with it.
                     if (entry.type() == MarketJournal.Type.CLAIM_DEPOSITED
+                            || entry.type() == MarketJournal.Type.BUY_PAID
                             || entry.type() == MarketJournal.Type.STASH_CLAIM) {
                         continue;
                     }
@@ -75,7 +80,7 @@ public class JournalRecovery {
                     boolean auto = conn.getAutoCommit();
                     conn.setAutoCommit(false);
                     try {
-                        afterCommit = recover(conn, entry, depositedBatches);
+                        afterCommit = recover(conn, entry, depositedBatches, paidAttempts);
                         conn.commit();
                     } catch (Exception e) {
                         conn.rollback();
@@ -92,6 +97,7 @@ public class JournalRecovery {
                 }
                 // Markers whose parent entry never made it to disk would otherwise linger.
                 for (String batchId : depositedBatches) journal.remove(batchId);
+                for (String attemptId : paidAttempts) journal.remove(attemptId);
                 return null;
             }).get(30, TimeUnit.SECONDS);
         } catch (Exception e) {
@@ -101,18 +107,18 @@ public class JournalRecovery {
 
     /** @return work to run after the repair commits (a Vault refund), or null. */
     private @Nullable Runnable recover(Connection conn, MarketJournal.Entry entry,
-                                       Set<String> depositedBatches) throws Exception {
+                                       Set<String> depositedBatches, Set<String> paidAttempts) throws Exception {
         return switch (entry.type()) {
             case LIST -> {
                 recoverList(conn, entry);
                 yield null;
             }
-            case BUY -> recoverBuy(conn, entry);
+            case BUY -> recoverBuy(conn, entry, paidAttempts);
             case CLAIM -> {
                 recoverClaim(conn, entry, depositedBatches);
                 yield null;
             }
-            case CLAIM_DEPOSITED, STASH_CLAIM -> null;
+            case BUY_PAID, CLAIM_DEPOSITED, STASH_CLAIM -> null;
         };
     }
 
@@ -131,10 +137,30 @@ public class JournalRecovery {
     }
 
     /** Crash between the buyer's withdraw and the sale commit: finish the sale or refund. */
-    private @Nullable Runnable recoverBuy(Connection conn, MarketJournal.Entry entry) throws Exception {
-        UUID listingId = UUID.fromString(entry.id());
+    private @Nullable Runnable recoverBuy(Connection conn, MarketJournal.Entry entry,
+                                          Set<String> paidAttempts) throws Exception {
+        // Entries predating the intent/proof split carried the listing id directly and were
+        // only ever written after a successful withdraw, so they count as paid.
+        boolean legacy = entry.ref() == null;
+        UUID listingId = UUID.fromString(legacy ? entry.id() : entry.ref());
         Listing listing = ListingDao.findById(conn, listingId);
         if (listing == null) return null;
+
+        if (!legacy && !paidAttempts.contains(entry.id())) {
+            // Intent with no proof: the crash landed around the withdraw and nothing can say
+            // whether the money left. Hand over no goods and issue no refund — either would
+            // invent value. Release the hold so the listing goes back on sale, and make the
+            // ambiguity loud enough that staff can reconcile the one buyer it might affect.
+            if (listing.state() == ListingState.PENDING_PAYMENT && entry.player().equals(listing.buyerUuid())) {
+                ListingDao.releaseReservation(conn, listingId, entry.player());
+            }
+            TransactionDao.log(conn, "RECOVERY", entry.player(), null, listingId, entry.amount(),
+                    "unproven purchase, released - verify buyer balance");
+            plugin.getLogger().severe("Market purchase " + listingId + " by " + entry.player()
+                    + " for " + entry.amount() + " coppets was interrupted before payment could be proven."
+                    + " No goods delivered and no refund issued — check whether the withdraw landed.");
+            return null;
+        }
 
         if (listing.state() == ListingState.SOLD && entry.player().equals(listing.buyerUuid())) {
             return null; // commit landed before the crash
@@ -147,7 +173,7 @@ public class JournalRecovery {
             ListingDao.markSold(conn, listingId, entry.player(), now);
             StashDao.insert(conn, new StashItem(UUID.randomUUID(), entry.player(), listing.itemBytes(),
                     listing.material(), listing.amount(), listing.displayName(),
-                    StashItem.SOURCE_PURCHASE, entry.id(), now));
+                    StashItem.SOURCE_PURCHASE, listingId.toString(), now));
             LedgerDao.insert(conn, new LedgerEntry(UUID.randomUUID(), listing.sellerUuid(),
                     price, tax, price - tax, listingId, now));
             TransactionDao.log(conn, "BUY", entry.player(), listing.sellerUuid(), listingId, price, "journal recovery");

@@ -41,6 +41,24 @@ public class StashService {
         this.db = db;
     }
 
+    /**
+     * Puts {@code item} on the owner's stash shelf. The last resort for goods that could
+     * not be handed over directly — a seller who logged out mid-flow, say — so that the
+     * failure to reach them never becomes a failure to keep them.
+     */
+    public void deposit(UUID owner, ItemStack item, String source, String ref, Consumer<Boolean> callback) {
+        StashItem row = new StashItem(UUID.randomUUID(), owner, item.serializeAsBytes(),
+                item.getType(), item.getAmount(), null, source, ref, System.currentTimeMillis());
+        db.transactionThenMain(conn -> {
+            StashDao.insert(conn, row);
+            return true;
+        }, callback, error -> {
+            plugin.getLogger().severe("Failed to stash undeliverable " + item.getType()
+                    + " x" + item.getAmount() + " for " + owner + ": " + error);
+            callback.accept(false);
+        });
+    }
+
     public void listUnclaimed(Player owner, Consumer<List<StashItem>> callback) {
         db.submitThenMain(conn -> StashDao.unclaimedByOwner(conn, owner.getUniqueId(), BATCH_LIMIT),
                 callback, error -> {
@@ -112,8 +130,16 @@ public class StashService {
                 TransactionLogger.logNote(owner, "MARKET STASH claim " + row.material().name() + " x" + row.amount());
             }
             if (!undeliverable.isEmpty()) {
+                // These rows are marked claimed but nothing was handed over. If the revert
+                // never lands the goods are stranded, so a failure here has to be loud and
+                // name every row a human would need to restore by hand.
                 db.submit(conn -> {
                     for (UUID id : undeliverable) StashDao.revertClaim(conn, id);
+                    return null;
+                }).exceptionally(error -> {
+                    plugin.getLogger().severe("Failed to release undelivered stash rows for "
+                            + owner.getName() + " (" + uuid + "): " + error
+                            + " — rows stranded as claimed: " + undeliverable);
                     return null;
                 });
             }
@@ -141,4 +167,11 @@ public class StashService {
         }
         return free;
     }
+
+    /** Drops every single-flight guard. Called on module shutdown — these sets are
+     *  static and would otherwise carry a stale lock across a plugin reload. */
+    public static void releaseAll() {
+        IN_FLIGHT.clear();
+    }
+
 }

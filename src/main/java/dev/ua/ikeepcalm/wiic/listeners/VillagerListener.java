@@ -184,10 +184,19 @@ public class VillagerListener implements Listener {
                     ingredients.add(CoinUtil.getCoppet(coppets));
                 }
             } else if (ingredients.size() == 1 && coppets > 0) {
-                if (coppets < 64) {
+                // Only one ingredient slot is left, so the price has to fit in a single coin
+                // stack and cannot be split into licks-plus-remainder. Round *up* to the next
+                // representable amount: rounding to nearest silently shaves up to 31 coppets
+                // off the emerald-equivalent cost, which is value handed out for free.
+                if (coppets <= 64) {
                     ingredients.addFirst(CoinUtil.getCoppet(coppets));
                 } else {
-                    ingredients.addFirst(CoinUtil.getLick((int) Math.round(coppets / 64.0)));
+                    int licks = Math.ceilDiv(coppets, 64);
+                    if (licks <= 64) {
+                        ingredients.addFirst(CoinUtil.getLick(licks));
+                    } else {
+                        ingredients.addFirst(CoinUtil.getVerlDor(Math.min(64, Math.ceilDiv(licks, 64))));
+                    }
                 }
             }
         }

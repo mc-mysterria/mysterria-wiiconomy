@@ -33,10 +33,17 @@ import java.util.function.Consumer;
  * pay for the same item.
  *
  * <p>Stages: reserve (ACTIVE → PENDING_PAYMENT, price ceiling + self-buy enforced
- * in the same statement) → async Vault withdraw → journal BUY → one transaction
- * {SOLD + buyer stash row + seller ledger row (net = gross − tax) + audit} →
- * journal remove. A failed withdraw releases the reservation; a crash between
- * withdraw and commit is completed by {@link JournalRecovery} at startup.
+ * in the same statement) → journal BUY intent → async Vault withdraw → journal
+ * BUY_PAID proof → one transaction {SOLD + buyer stash row + seller ledger row
+ * (net = gross − tax) + audit} → journal remove. A failed withdraw releases the
+ * reservation; a crash between withdraw and commit is completed by
+ * {@link JournalRecovery} at startup.
+ *
+ * <p>The intent/proof pair exists because no ordering can make an external Vault
+ * withdraw atomic with a local commit. Writing the intent first guarantees every
+ * debited buyer leaves a record; requiring the proof before goods change hands
+ * guarantees the ambiguous middle is unwound rather than guessed at. The failure
+ * direction is always "no sale", never "free goods".
  */
 public class MarketPurchaseService {
 
@@ -84,6 +91,10 @@ public class MarketPurchaseService {
         }
 
         long now = System.currentTimeMillis();
+        // Identifies this attempt. A listing can be attempted more than once over its life
+        // (a reservation the sweeper released, then a real sale by someone else), so keying
+        // the journal on the listing would let one attempt erase the other's proof of payment.
+        String attemptId = UUID.randomUUID().toString();
         db.transactionThenMain(conn -> {
             if (ListingDao.reserve(conn, listingId, uuid, quotedPrice, now)) {
                 return ListingDao.findById(conn, listingId);
@@ -98,7 +109,7 @@ public class MarketPurchaseService {
                 finish(uuid, callback, Outcome.of(Result.NO_LONGER_AVAILABLE));
                 return;
             }
-            withdrawAndCommit(buyer, uuid, listing, callback);
+            withdrawAndCommit(buyer, uuid, listing, attemptId, callback);
         }, error -> {
             Result result = error instanceof PurchaseAbort abort ? abort.result : Result.ERROR;
             if (result == Result.ERROR) plugin.getLogger().severe("Market reserve failed: " + error);
@@ -106,42 +117,68 @@ public class MarketPurchaseService {
         });
     }
 
-    private void withdrawAndCommit(Player buyer, UUID uuid, Listing listing, Consumer<Outcome> callback) {
+    private void withdrawAndCommit(Player buyer, UUID uuid, Listing listing, String attemptId, Consumer<Outcome> callback) {
         long price = listing.price();
+
+        // Intent goes to disk before the money moves. If the server dies in the window
+        // around the withdraw, recovery finds this entry and can at least account for the
+        // attempt; without it, a crash mid-withdraw leaves a debited buyer and no record
+        // anywhere that it ever happened.
+        try {
+            journal.append(MarketJournal.Type.BUY, attemptId, uuid, price, null, listing.id().toString());
+        } catch (IllegalStateException e) {
+            plugin.getLogger().severe("Market journal unavailable, refusing purchase: " + e.getMessage());
+            releaseThen(listing, uuid, () -> finish(uuid, callback, Outcome.of(Result.ERROR)));
+            return;
+        }
+
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             boolean withdrawn = VaultUtil.withdraw(uuid, price);
             if (!withdrawn) {
                 TransactionLogger.logNote(buyer, "MARKET BUY withdraw of " + price + " coppets failed for listing " + listing.id());
-                db.transactionThenMain(conn -> {
-                    ListingDao.releaseReservation(conn, listing.id(), uuid);
-                    return null;
-                }, ignored -> finish(uuid, callback, Outcome.of(Result.INSUFFICIENT_FUNDS)),
-                   error -> {
-                       plugin.getLogger().severe("Failed to release reservation " + listing.id() + ": " + error
-                               + " (sweeper will release it)");
-                       finish(uuid, callback, Outcome.of(Result.INSUFFICIENT_FUNDS));
-                   });
+                journal.remove(attemptId);
+                releaseThen(listing, uuid, () -> finish(uuid, callback, Outcome.of(Result.INSUFFICIENT_FUNDS)));
                 return;
             }
 
+            // Proof the money moved. Recovery refuses to hand over goods without it, so a
+            // marker that cannot be written has to unwind the purchase here and now —
+            // continuing would leave a paid-for sale that recovery would later treat as
+            // unpaid and release back onto the market.
             try {
-                journal.append(MarketJournal.Type.BUY, listing.id().toString(), uuid, price, null);
+                journal.append(MarketJournal.Type.BUY_PAID, attemptId, uuid, price, null, listing.id().toString());
             } catch (IllegalStateException e) {
-                plugin.getLogger().severe("Market journal unavailable, refunding purchase: " + e.getMessage());
-                refund(buyer, uuid, price, "journal append failed");
-                db.transactionThenMain(conn -> {
-                    ListingDao.releaseReservation(conn, listing.id(), uuid);
-                    return null;
-                }, ignored -> finish(uuid, callback, Outcome.of(Result.ERROR)),
-                   error -> finish(uuid, callback, Outcome.of(Result.ERROR)));
+                plugin.getLogger().severe("Market journal marker write failed after withdraw, refunding: " + e.getMessage());
+                refund(buyer, uuid, price, "journal marker failed");
+                // The intent entry has to go with it. Left behind, startup recovery would
+                // read it as an unproven purchase and tell staff to check whether the buyer
+                // was ever refunded — which they just were, right here.
+                if (!journal.remove(attemptId)) {
+                    plugin.getLogger().severe("Purchase " + listing.id() + " by " + uuid
+                            + " was refunded in full, but its journal entry could not be removed."
+                            + " Startup recovery will report it as unproven — it needs no further action.");
+                }
+                releaseThen(listing, uuid, () -> finish(uuid, callback, Outcome.of(Result.ERROR)));
                 return;
             }
 
-            commitSale(buyer, uuid, listing, callback);
+            commitSale(buyer, uuid, listing, attemptId, callback);
         });
     }
 
-    private void commitSale(Player buyer, UUID uuid, Listing listing, Consumer<Outcome> callback) {
+    /** Hands the listing back to the market, then runs {@code then} on the main thread. */
+    private void releaseThen(Listing listing, UUID uuid, Runnable then) {
+        db.transactionThenMain(conn -> {
+            ListingDao.releaseReservation(conn, listing.id(), uuid);
+            return null;
+        }, ignored -> then.run(), error -> {
+            plugin.getLogger().severe("Failed to release reservation " + listing.id() + ": " + error
+                    + " (sweeper will release it)");
+            then.run();
+        });
+    }
+
+    private void commitSale(Player buyer, UUID uuid, Listing listing, String attemptId, Consumer<Outcome> callback) {
         long price = listing.price();
         long tax = config.saleTax(price);
         long net = price - tax;
@@ -162,7 +199,7 @@ public class MarketPurchaseService {
             if (tax > 0) TransactionDao.log(conn, "TAX", listing.sellerUuid(), null, listing.id(), tax, "sink");
             return null;
         }, done -> {
-            journal.remove(listing.id().toString());
+            journal.remove(attemptId);
             TransactionLogger.logNote(buyer, "MARKET BUY " + listing.material().name() + " x" + listing.amount()
                     + " for " + price + " coppets from " + listing.sellerName() + " (listing " + listing.id() + ")");
             Player seller = Bukkit.getPlayer(listing.sellerUuid());
@@ -186,14 +223,8 @@ public class MarketPurchaseService {
             // plain SQL failure we refund immediately and release the reservation.
             plugin.getLogger().severe("Market sale commit failed for listing " + listing.id() + ": " + error);
             refund(buyer, uuid, price, "sale commit failed");
-            db.transactionThenMain(conn -> {
-                ListingDao.releaseReservation(conn, listing.id(), uuid);
-                return null;
-            }, done -> {
-                journal.remove(listing.id().toString());
-                finish(uuid, callback, Outcome.of(Result.ERROR));
-            }, releaseError -> {
-                journal.remove(listing.id().toString());
+            releaseThen(listing, uuid, () -> {
+                journal.remove(attemptId);
                 finish(uuid, callback, Outcome.of(Result.ERROR));
             });
         });
@@ -221,4 +252,11 @@ public class MarketPurchaseService {
             this.result = result;
         }
     }
+
+    /** Drops every single-flight guard. Called on module shutdown — these sets are
+     *  static and would otherwise carry a stale lock across a plugin reload. */
+    public static void releaseAll() {
+        IN_FLIGHT.clear();
+    }
+
 }

@@ -153,11 +153,30 @@ public class PurchaseService {
                     return;
                 }
 
-                DeliveryResult delivery = deliver(online, material, amount);
-                TransactionLogger.logPurchase(online, material, amount, total, indexAtPurchase, true);
-                Bukkit.getScheduler().runTaskAsynchronously(plugin, () ->
-                        TransactionLogger.logBalance(online, currentBalance(uuid), "after shop purchase"));
-                finish(uuid, callback, new PurchaseOutcome(Result.SUCCESS, chargedUnitPrice, total, delivery.delivered(), delivery.droppedStacks()));
+                // The money is already gone by this point, so nothing below may be allowed to
+                // escape without settling: an exception here used to skip finish() entirely,
+                // leaving the buyer charged, undelivered, and locked out of every future
+                // purchase by a permanently held IN_FLIGHT entry.
+                try {
+                    DeliveryResult delivery = deliver(online, material, amount);
+                    TransactionLogger.logPurchase(online, material, amount, total, indexAtPurchase, true);
+                    Bukkit.getScheduler().runTaskAsynchronously(plugin, () ->
+                            TransactionLogger.logBalance(online, currentBalance(uuid), "after shop purchase"));
+                    finish(uuid, callback, new PurchaseOutcome(Result.SUCCESS, chargedUnitPrice, total, delivery.delivered(), delivery.droppedStacks()));
+                } catch (Throwable t) {
+                    plugin.getLogger().severe("Shop delivery failed for " + online.getName()
+                            + " after charging " + total + " coppets, refunding: " + t);
+                    Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                        boolean refunded = VaultUtil.deposit(uuid, total);
+                        TransactionLogger.logNote(player, "PURCHASE delivery failed — refund of " + total
+                                + " coppets " + (refunded ? "OK" : "FAILED"));
+                        if (!refunded) {
+                            plugin.getLogger().severe("Failed to refund " + total + " coppets to "
+                                    + player.getName() + " (" + uuid + ") after failed shop delivery!");
+                        }
+                    });
+                    finish(uuid, callback, new PurchaseOutcome(Result.WITHDRAW_FAILED, chargedUnitPrice, total, 0, 0));
+                }
             });
         });
     }
@@ -197,4 +216,11 @@ public class PurchaseService {
         BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", uuid);
         return balance != null ? balance : BigDecimal.ZERO;
     }
+
+    /** Drops every single-flight guard. Called from onDisable — the set is static and
+     *  would otherwise carry a stale lock across a plugin reload. */
+    public static void releaseAll() {
+        IN_FLIGHT.clear();
+    }
+
 }

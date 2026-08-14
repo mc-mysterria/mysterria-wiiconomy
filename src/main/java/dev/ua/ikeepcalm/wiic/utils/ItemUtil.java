@@ -53,12 +53,22 @@ public class ItemUtil {
     /**
      * Adds each item to the player's inventory, dropping anything that doesn't fit
      * at their feet so the given amount and the received-or-dropped amount always match.
+     *
+     * @return false if the player had already left and nothing was handed over. Callers
+     * reached from an async continuation must check this — a disconnected Player's
+     * inventory is no longer saved, so the items would quietly cease to exist.
      */
-    public static void giveOrDrop(Player player, ItemStack... items) {
+    public static boolean giveOrDrop(Player player, ItemStack... items) {
+        if (!player.isOnline()) {
+            WIIC.INSTANCE.getLogger().warning("Refusing to hand items to " + player.getName()
+                    + ", who is no longer online — the caller must hold them instead");
+            return false;
+        }
         Map<Integer, ItemStack> notGiven = player.getInventory().addItem(items);
         for (ItemStack leftover : notGiven.values()) {
             player.getWorld().dropItem(player.getLocation(), leftover);
         }
+        return true;
     }
 
 }

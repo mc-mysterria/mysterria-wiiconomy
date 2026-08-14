@@ -1,6 +1,8 @@
 package dev.ua.ikeepcalm.wiic.gui.market;
 
+import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.WalletConfig;
+import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.StashItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.service.MarketServices;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.source.ItemType;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.ListingService;
@@ -280,33 +282,56 @@ public class ListingPriceGUI {
             } else {
                 services.feedback().refused(player);
             }
+            boolean held = outcome.itemRetained();
             switch (outcome.result()) {
                 case SUCCESS -> player.sendMessage(MM.deserialize(config.message("listing-created",
                                 "<green>The fence takes your goods with a nod. Fee: %fee%.")
                         .replace("%fee%", MarketBrowseGUI.plain(
                                 CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(outcome.fee()))))));
-                case ALREADY_IN_PROGRESS -> returnItem(player, snapshot, "in-progress",
+                case ALREADY_IN_PROGRESS -> returnItem(player, snapshot, held, "in-progress",
                         "<red>Finish your current dealing first.");
-                case ITEM_DENIED -> returnItem(player, snapshot,
+                case ITEM_DENIED -> returnItem(player, snapshot, held,
                         outcome.denyMessageKey() != null ? outcome.denyMessageKey() : "listing-denied",
                         "<red>The fence refuses to touch this.");
-                case PRICE_OUT_OF_BOUNDS -> returnItem(player, snapshot, "listing-bad-price",
+                case PRICE_OUT_OF_BOUNDS -> returnItem(player, snapshot, held, "listing-bad-price",
                         "<red>No one would pay that. Pick a saner price.");
-                case DAILY_LIMIT -> returnItem(player, snapshot, "listing-daily-limit",
+                case DAILY_LIMIT -> returnItem(player, snapshot, held, "listing-daily-limit",
                         "<red>The fence waves you off — come back tomorrow.");
-                case MAX_ACTIVE -> returnItem(player, snapshot, "listing-max-active",
+                case MAX_ACTIVE -> returnItem(player, snapshot, held, "listing-max-active",
                         "<red>Your stall is full. Wait for something to sell.");
-                case INSUFFICIENT_FEE -> returnItem(player, snapshot, "listing-fee-unpaid",
+                case INSUFFICIENT_FEE -> returnItem(player, snapshot, held, "listing-fee-unpaid",
                         "<red>You can't afford the listing fee.");
-                case ERROR -> returnItem(player, snapshot, "market-error",
+                case ERROR -> returnItem(player, snapshot, held, "market-error",
                         "<red>The market ledgers are in disarray. Try again later.");
             }
             onBack.run();
         });
     }
 
-    private void returnItem(Player player, ItemStack snapshot, String messageKey, String def) {
-        ItemUtil.giveOrDrop(player, snapshot);
+    /**
+     * Hands the goods back after a refused listing — unless the journal is still holding
+     * them, in which case startup recovery owes them to the seller's stash and giving them
+     * back here as well would make two of one.
+     */
+    private void returnItem(Player player, ItemStack snapshot, boolean retained, String messageKey, String def) {
+        if (retained) {
+            player.sendMessage(MM.deserialize(services.config().message("listing-item-held",
+                    "<yellow>The fence could not take your goods, and will not hand them back here. Ask the Banker for them.")));
+            return;
+        }
+        if (!ItemUtil.giveOrDrop(player, snapshot)) {
+            // They left while the fence was deciding. Their inventory is no longer saved, so
+            // handing the goods to it would destroy them — shelve them at the Banker instead.
+            services.stash().deposit(player.getUniqueId(), snapshot, StashItem.SOURCE_RECOVERY,
+                    "listing refused while offline", ok -> {
+                        if (!ok) {
+                            WIIC.INSTANCE.getLogger().severe("Lost " + snapshot.getType()
+                                    + " x" + snapshot.getAmount() + " belonging to " + player.getUniqueId()
+                                    + ": refused listing could be neither returned nor stashed");
+                        }
+                    });
+            return;
+        }
         player.sendMessage(MM.deserialize(services.config().message(messageKey, def)));
     }
 }

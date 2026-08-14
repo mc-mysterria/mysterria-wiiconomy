@@ -1,5 +1,6 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.entrance.listener;
 
+import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketFeedback;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.model.EntranceItem;
@@ -51,14 +52,18 @@ public class EntranceListener implements Listener {
         // Placing a new secret entrance with the crafted item.
         if (EntranceItem.isEntranceItem(player.getInventory().getItemInMainHand())) {
             event.setCancelled(true);
+            // Remember the slot, not the stack. place() goes through the DB thread, and by
+            // the time it answers the player may be holding something else — re-reading the
+            // main hand then found no entrance item and consumed nothing, handing back a
+            // free entrance item for every door built.
+            int paidSlot = player.getInventory().getHeldItemSlot();
             entrances.place(player, block, result -> {
                 switch (result) {
                     case SUCCESS -> {
-                        // Re-read the hand: place() went through the DB thread, so the stack
-                        // captured at click time may since have been swapped, dropped or
-                        // moved. Consuming a stale reference would eat the wrong item.
-                        ItemStack inHand = player.getInventory().getItemInMainHand();
-                        if (EntranceItem.isEntranceItem(inHand)) inHand.subtract();
+                        if (!consumeEntranceItem(player, paidSlot)) {
+                            WIIC.INSTANCE.getLogger().warning("Entrance placed by " + player.getName()
+                                    + " but no entrance item remained to consume");
+                        }
                         feedback.entranceForged(player, block.getRelative(BlockFace.UP).getLocation());
                         player.sendMessage(MM.deserialize(config.message("entrance-placed", "<dark_purple>The wall shivers... a hidden door now serves this land.")));
                     }
@@ -95,8 +100,39 @@ public class EntranceListener implements Listener {
         }
     }
 
+    /**
+     * Takes exactly one entrance item off the player for a door that was just built. Tries
+     * the slot they paid from first, then anywhere else in the inventory — the door exists
+     * either way, so the one outcome that must not happen is keeping the item.
+     */
+    private boolean consumeEntranceItem(Player player, int paidSlot) {
+        if (takeFromSlot(player, paidSlot)) return true;
+        ItemStack[] storage = player.getInventory().getStorageContents();
+        for (int slot = 0; slot < storage.length; slot++) {
+            if (takeFromSlot(player, slot)) return true;
+        }
+        return false;
+    }
+
+    private boolean takeFromSlot(Player player, int slot) {
+        ItemStack stack = player.getInventory().getItem(slot);
+        if (!EntranceItem.isEntranceItem(stack)) return false;
+        int left = stack.getAmount() - 1;
+        player.getInventory().setItem(slot, left > 0 ? stack.asQuantity(left) : null);
+        return true;
+    }
+
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onBreak(BlockBreakEvent event) {
+        // The exit door is the only way out of the market and is not part of the entrance
+        // registry, so nothing else protects it. Breaking it would strand every player
+        // inside until an admin re-registered one.
+        if (isExitDoor(event.getBlock()) && !event.getPlayer().hasPermission("wiic.market.admin")) {
+            event.setCancelled(true);
+            send(event.getPlayer(), "exit-protected", "<red>The way out will not be moved.");
+            return;
+        }
+
         // Either door half, or the block holding the door up — knocking out the support
         // pops the door without a second BlockBreakEvent, which would leave a ghost row.
         MarketEntrance entrance = entrances.entranceAt(event.getBlock());
@@ -125,10 +161,21 @@ public class EntranceListener implements Listener {
         handleExplosion(event.blockList());
     }
 
+    /** True for either half of the market's registered exit door. */
+    private boolean isExitDoor(Block block) {
+        Location exit = config.exitDoor();
+        if (exit == null || !config.isMarketWorld(block.getWorld())) return false;
+        Block lower = EntranceService.resolveLowerDoorBlock(block);
+        return lower.getX() == exit.getBlockX() && lower.getY() == exit.getBlockY() && lower.getZ() == exit.getBlockZ();
+    }
+
     private void handleExplosion(List<Block> blocks) {
-        if (entrances.isEmpty()) return;
         List<Block> protectedBlocks = new ArrayList<>();
         for (Block block : blocks) {
+            if (isExitDoor(block)) {
+                protectedBlocks.add(block);
+                continue;
+            }
             MarketEntrance entrance = entrances.entranceAt(block);
             if (entrance == null) continue;
             if (config.entranceAllowBreak()) {
@@ -154,8 +201,8 @@ public class EntranceListener implements Listener {
     }
 
     private boolean movesEntrance(List<Block> blocks) {
-        if (entrances.isEmpty()) return false;
         for (Block block : blocks) {
+            if (isExitDoor(block)) return true;
             if (entrances.entranceAt(block) != null) return true;
         }
         return false;
@@ -166,6 +213,10 @@ public class EntranceListener implements Listener {
      */
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onFlow(BlockFromToEvent event) {
+        if (isExitDoor(event.getToBlock())) {
+            event.setCancelled(true);
+            return;
+        }
         if (entrances.isEmpty()) return;
         if (entrances.entranceAt(event.getToBlock()) != null) event.setCancelled(true);
     }

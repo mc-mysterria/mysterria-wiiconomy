@@ -22,10 +22,13 @@ import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.Container;
 import org.bukkit.entity.ArmorStand;
+import org.bukkit.entity.BlockDisplay;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Item;
+import org.bukkit.entity.ItemDisplay;
 import org.bukkit.entity.ItemFrame;
+import org.bukkit.entity.TextDisplay;
 import org.bukkit.entity.Painting;
 import org.bukkit.entity.Player;
 import org.bukkit.entity.Vehicle;
@@ -44,7 +47,6 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -115,7 +117,7 @@ public class PlotService {
     public void load() {
         reloadRegions();
         try {
-            List<PlotRental> all = db.submit(PlotDao::all).get(10, TimeUnit.SECONDS);
+            List<PlotRental> all = db.awaitLoad("plot rental", PlotDao::all);
             for (PlotRental rental : all) rentals.put(rental.plotId(), rental);
             plugin.getLogger().info("Loaded " + regions.size() + " market plots (" + all.size() + " rented)");
         } catch (Exception e) {
@@ -380,10 +382,17 @@ public class PlotService {
             return;
         }
         if (region == null || world == null) {
-            // Region undefined or world unloaded: drop the rental anyway, leave the blocks be.
-            plugin.getLogger().warning("Evicting plot " + plotId + " without cleanup ("
-                    + (world == null ? "market world not loaded" : "region no longer defined") + ")");
-            finishEviction(rental, null, null, reason, callback);
+            // Without the region or the world there is no way to reach the renter's chests,
+            // so evicting here would delete the tenancy and leave their goods sealed in a
+            // plot nobody owns. Hold the rental instead and let an admin sort the config
+            // out — a stall that outstays its rent costs far less than a stall that eats
+            // someone's stock.
+            evicting.remove(plotId);
+            plugin.getLogger().severe("Refusing to evict plot " + plotId + " ("
+                    + (world == null ? "market world not loaded" : "region no longer defined in market.yml")
+                    + "). The rental is left standing so its contents are not stranded —"
+                    + " restore the region definition or load the world, then evict again.");
+            callback.accept(false);
             return;
         }
 
@@ -432,6 +441,14 @@ public class PlotService {
                     spoils.add(new ItemStack(Material.ARMOR_STAND));
                 }
                 case Painting ignored -> spoils.add(new ItemStack(Material.PAINTING));
+                // Display entities are the modern way to dress a stall, and an ItemDisplay
+                // holds a real ItemStack. Left alone they survive every eviction and hang
+                // there through the next renter's tenancy, still showing the last one's goods.
+                case ItemDisplay display -> addIfPresent(spoils, display.getItemStack());
+                case BlockDisplay ignored -> {
+                }
+                case TextDisplay ignored -> {
+                }
                 case InventoryHolder holder when entity instanceof Vehicle -> {
                     for (ItemStack stack : holder.getInventory().getContents()) {
                         addIfPresent(spoils, stack);
@@ -649,4 +666,11 @@ public class PlotService {
             });
         }
     }
+
+    /** Drops every single-flight guard. Called on module shutdown — these sets are
+     *  static and would otherwise carry a stale lock across a plugin reload. */
+    public static void releaseAll() {
+        IN_FLIGHT.clear();
+    }
+
 }

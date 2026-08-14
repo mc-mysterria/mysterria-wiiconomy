@@ -26,7 +26,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -68,7 +67,7 @@ public class EntranceService {
 
     public void load() {
         try {
-            List<MarketEntrance> all = db.submit(EntranceDao::all).get(10, TimeUnit.SECONDS);
+            List<MarketEntrance> all = db.awaitLoad("entrance", EntranceDao::all);
             for (MarketEntrance entrance : all) byLocation.put(key(entrance), entrance);
             plugin.getLogger().info("Loaded " + all.size() + " market entrances");
         } catch (Exception e) {
@@ -246,6 +245,14 @@ public class EntranceService {
 
     /** Sends {@code player} into the market, persisting their current spot as the return point. */
     public void enter(Player player, MarketEntrance entrance) {
+        if (config.entranceRequireTrust() && lands != null && !entrance.isHub()) {
+            Location door = entrance.location();
+            if (door != null && !lands.isTrusted(player, door)) {
+                player.sendMessage(MM.deserialize(config.message("entrance-not-trusted",
+                        "<red>You are not trusted in this land.")));
+                return;
+            }
+        }
         Location arrival = config.arrival();
         if (arrival == null) {
             player.sendMessage(MM.deserialize(config.message("market-unavailable",
@@ -264,8 +271,17 @@ public class EntranceService {
         int descent = config.entranceDescentTicks();
         feedback.descentBegins(player, door != null ? door : from, descent);
 
+        World startWorld = from.getWorld();
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (!player.isOnline()) return;
+            // Only descend if they are still standing where they knocked. Dying, respawning
+            // or being teleported away during the descent used to drag them underground from
+            // wherever they had ended up.
+            if (player.isDead() || !startWorld.equals(player.getWorld())
+                    || player.getLocation().distanceSquared(from) > 64) {
+                feedback.descentAborted(player);
+                return;
+            }
             // The containment refuses every crossing it did not arrange — including this one,
             // unless it is told first. Sanctioned immediately before the call so nothing can
             // slip in between and spend it.
@@ -286,7 +302,11 @@ public class EntranceService {
     public void exit(Player player) {
         db.submitThenMain(conn -> EntranceDao.returnPoint(conn, player.getUniqueId()), serialized -> {
             Location target = serialized != null ? deserialize(serialized) : null;
-            if (target == null) {
+            boolean strayed = target == null || !isSafe(target);
+            if (strayed) {
+                // The way they came in is gone or has become lethal (world unloaded, lava
+                // flowed in, terrain rebuilt). Say so — silently landing them somewhere else
+                // under the usual "you slip back into the daylight" reads as a teleport bug.
                 World fallback = Bukkit.getWorlds().getFirst();
                 target = fallback.getSpawnLocation();
             }
@@ -309,7 +329,10 @@ public class EntranceService {
                         return null;
                     });
                     feedback.departed(player);
-                    player.sendMessage(MM.deserialize(config.message("exited-market",
+                    player.sendMessage(MM.deserialize(strayed
+                            ? config.message("exited-market-astray",
+                            "<yellow>The passage back has collapsed. You surface somewhere else entirely.")
+                            : config.message("exited-market",
                             "<dark_gray>You slip back into the daylight.")));
                 });
             }, ascent);
@@ -336,6 +359,10 @@ public class EntranceService {
             }
             if (lands == null || entrance.isHub()) continue;
             if (!lands.landStillClaims(entrance.landId(), loc)) {
+                // Take the door down with the registration. Leaving it standing turns a
+                // secret entrance into an ordinary door that simply stops working, with
+                // nothing to tell its owner why.
+                clearDoor(loc);
                 remove(entrance, "land no longer exists or moved");
             }
         }
@@ -358,6 +385,37 @@ public class EntranceService {
     private static String serialize(Location loc) {
         return WorldUtil.id(loc.getWorld()) + ";" + loc.getX() + ";" + loc.getY() + ";" + loc.getZ()
                 + ";" + loc.getYaw() + ";" + loc.getPitch();
+    }
+
+    /** Removes both halves of a door the registry is giving up on. */
+    private static void clearDoor(Location loc) {
+        Block lower = loc.getBlock();
+        Block upper = lower.getRelative(BlockFace.UP);
+        if (upper.getBlockData() instanceof Door) upper.setType(Material.AIR, false);
+        if (lower.getBlockData() instanceof Door) lower.setType(Material.AIR, false);
+    }
+
+    /**
+     * Whether a stored return point is still somewhere a player can be put down. Chunks are
+     * loaded to answer this — a return point is worth the load, and refusing to check would
+     * mean dropping people into whatever the world became while they were away.
+     */
+    private static boolean isSafe(Location loc) {
+        World world = loc.getWorld();
+        if (world == null) return false;
+        if (loc.getY() < world.getMinHeight() || loc.getY() > world.getMaxHeight()) return false;
+        Block feet = loc.getBlock();
+        Block head = feet.getRelative(BlockFace.UP);
+        if (feet.getType().isSolid() || head.getType().isSolid()) return false;
+        return !isHarmful(feet) && !isHarmful(head) && !isHarmful(feet.getRelative(BlockFace.DOWN));
+    }
+
+    private static boolean isHarmful(Block block) {
+        return switch (block.getType()) {
+            case LAVA, FIRE, SOUL_FIRE, CAMPFIRE, SOUL_CAMPFIRE, MAGMA_BLOCK, WITHER_ROSE, SWEET_BERRY_BUSH,
+                 POINTED_DRIPSTONE, CACTUS -> true;
+            default -> false;
+        };
     }
 
     private static @Nullable Location deserialize(String serialized) {

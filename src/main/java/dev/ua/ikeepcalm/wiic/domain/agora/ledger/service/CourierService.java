@@ -8,6 +8,7 @@ import dev.ua.ikeepcalm.wiic.domain.agora.db.StashDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.TransactionDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.integration.CourierHook;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.CourierContract;
+import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.StashItem;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
@@ -19,7 +20,6 @@ import org.jetbrains.annotations.Nullable;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
@@ -54,7 +54,7 @@ public class CourierService {
 
     public void load() {
         try {
-            contracted.addAll(db.submit(CourierDao::allOwners).get(10, TimeUnit.SECONDS));
+            contracted.addAll(db.awaitLoad("courier contract", CourierDao::allOwners));
             plugin.getLogger().info("Loaded " + contracted.size() + " market courier contracts");
         } catch (Exception e) {
             plugin.getLogger().severe("Failed to load market courier contracts: " + e);
@@ -208,17 +208,18 @@ public class CourierService {
             claimAndDispatch(buyer, stashId, itemBytes, sellerUuid, sellerName, 0, callback);
             return;
         }
-        // Optional per-delivery sink: charged before the row is claimed, refunded if the
-        // hand-over then falls through.
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (!VaultUtil.withdraw(uuid, fee)) {
-                TransactionLogger.logNote(buyer, "MARKET COURIER fee withdraw of " + fee + " coppets failed");
-                Bukkit.getScheduler().runTask(plugin, () -> callback.accept(false));
+        // Optional per-delivery sink. Affordability is checked here but the money is only
+        // taken once a courier has actually accepted the goods (see claimAndDispatch): the
+        // fee is small and unjournaled, so the one direction that must never happen is
+        // charging for a delivery that a crash or a refusal then cancelled.
+        VaultUtil.getBalance(uuid).thenAccept(balance -> Bukkit.getScheduler().runTask(plugin, () -> {
+            if (balance < fee) {
+                TransactionLogger.logNote(buyer, "MARKET COURIER fee of " + fee + " coppets unaffordable");
+                callback.accept(false);
                 return;
             }
-            Bukkit.getScheduler().runTask(plugin, () ->
-                    claimAndDispatch(buyer, stashId, itemBytes, sellerUuid, sellerName, fee, callback));
-        });
+            claimAndDispatch(buyer, stashId, itemBytes, sellerUuid, sellerName, fee, callback);
+        }));
     }
 
     private void claimAndDispatch(Player buyer, UUID stashId, byte[] itemBytes,
@@ -232,7 +233,6 @@ public class CourierService {
             return contract;
         }, contract -> {
             if (contract == null) {
-                refundFee(buyer, uuid, fee, "no contract / stash row already claimed");
                 callback.accept(false);
                 return;
             }
@@ -243,7 +243,6 @@ public class CourierService {
                 plugin.getLogger().severe("Corrupt purchase blob for courier delivery to "
                         + buyer.getName() + ": " + e);
                 revertClaim(stashId);
-                refundFee(buyer, uuid, fee, "corrupt item blob");
                 callback.accept(false);
                 return;
             }
@@ -256,17 +255,16 @@ public class CourierService {
             boolean dispatched = hook.dispatch(sellerUuid, sellerName, uuid, buyer.getName(), item, tier);
             if (!dispatched) {
                 revertClaim(stashId);
-                refundFee(buyer, uuid, fee, "courier dispatch refused");
                 callback.accept(false);
                 return;
             }
+            chargeFee(buyer, uuid, fee);
             TransactionLogger.logNote(buyer, "MARKET COURIER delivery of " + item.getType().name()
                     + " x" + item.getAmount() + " via " + tier
                     + (fee > 0 ? " (fee " + fee + ")" : ""));
             callback.accept(true);
         }, error -> {
             plugin.getLogger().severe("Courier claim failed for " + buyer.getName() + ": " + error);
-            refundFee(buyer, uuid, fee, "courier claim failed");
             callback.accept(false);
         });
     }
@@ -276,22 +274,46 @@ public class CourierService {
         db.submit(conn -> {
             StashDao.revertClaim(conn, stashId);
             return null;
+        }).exceptionally(error -> {
+            // The row is marked claimed and no courier took it. Silence here would lose the
+            // purchase outright, so name the row for manual restoration.
+            plugin.getLogger().severe("Failed to release undelivered courier stash row " + stashId
+                    + ": " + error + " — row stranded as claimed");
+            return null;
         });
     }
 
-    private void refundFee(Player player, UUID uuid, long fee, String reason) {
+    /**
+     * Takes the delivery fee once the courier has the goods. Nothing is riding on this
+     * succeeding — the delivery is already done and the sink is optional — so a failure is
+     * logged and forgiven rather than unwound.
+     */
+    private void chargeFee(Player player, UUID uuid, long fee) {
         if (fee <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            boolean refunded = VaultUtil.deposit(uuid, fee);
-            TransactionLogger.logNote(player, "MARKET COURIER fee refund of " + fee + " coppets ("
-                    + reason + ") " + (refunded ? "OK" : "FAILED"));
-            if (!refunded) {
-                plugin.getLogger().severe("Failed to refund courier fee of " + fee + " coppets to " + uuid);
+            if (!VaultUtil.withdraw(uuid, fee)) {
+                TransactionLogger.logNote(player, "MARKET COURIER fee of " + fee + " coppets went uncollected");
+                plugin.getLogger().warning("Courier fee of " + fee + " coppets could not be collected from " + uuid);
             }
         });
     }
 
+    /**
+     * Hands an escrowed item back, falling back to the stash if the player has already gone.
+     * The contract row is deleted before this runs, so there is nothing else still holding
+     * the horn — losing it here would lose it for good.
+     */
     private void giveBack(Player player, ItemStack item) {
-        ItemUtil.giveOrDrop(player, item);
+        if (ItemUtil.giveOrDrop(player, item)) return;
+        UUID owner = player.getUniqueId();
+        db.transactionThenMain(conn -> {
+            StashDao.insert(conn, new StashItem(UUID.randomUUID(), owner, item.serializeAsBytes(),
+                    item.getType(), item.getAmount(), null, StashItem.SOURCE_RECOVERY,
+                    "courier escrow", System.currentTimeMillis()));
+            return null;
+        }, ignored -> plugin.getLogger().warning("Escrowed courier item for " + owner
+                + " went to their stash — they were offline when it came back"),
+           error -> plugin.getLogger().severe("Lost escrowed courier item for " + owner
+                   + ": neither returnable nor stashable: " + error));
     }
 }

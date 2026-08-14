@@ -72,7 +72,11 @@ public class MarketDatabase {
             connection = DriverManager.getConnection("jdbc:sqlite:" + file.getAbsolutePath());
             try (Statement st = connection.createStatement()) {
                 st.execute("PRAGMA journal_mode=WAL");
-                st.execute("PRAGMA synchronous=NORMAL");
+                // FULL, not NORMAL: the write-ahead journal fsyncs every entry, and every
+                // flow prunes its journal entry the moment a commit returns. Under NORMAL a
+                // power loss can roll back a commit the journal already treated as proof —
+                // recovery would then read a lie and pay a ledger claim out twice.
+                st.execute("PRAGMA synchronous=FULL");
                 st.execute("PRAGMA foreign_keys=ON");
                 st.execute("PRAGMA busy_timeout=5000");
             }
@@ -285,6 +289,24 @@ public class MarketDatabase {
     );
 
     /**
+     * Blocking cache load for {@code onEnable}, bounded and instrumented.
+     *
+     * <p>Several services each fill a cache this way before the module can serve anyone, and
+     * they queue on the one DB thread, so their timeouts add up into main-thread stall time
+     * the watchdog can notice. Keeping the individual budget short and logging anything slow
+     * makes a degraded disk visible in the boot log instead of as a mystery freeze.
+     */
+    public <T> T awaitLoad(String what, SqlWork<T> work) throws Exception {
+        long started = System.nanoTime();
+        try {
+            return submit(work).get(5, TimeUnit.SECONDS);
+        } finally {
+            long ms = (System.nanoTime() - started) / 1_000_000;
+            if (ms > 1000) plugin.getLogger().warning("Market " + what + " load took " + ms + "ms");
+        }
+    }
+
+    /**
      * Runs {@code work} on the DB thread. The future completes (or fails) on that thread.
      */
     public <T> CompletableFuture<T> submit(SqlWork<T> work) {
@@ -315,15 +337,28 @@ public class MarketDatabase {
         submit(conn -> {
             boolean auto = conn.getAutoCommit();
             conn.setAutoCommit(false);
+            boolean settled = false;
             try {
                 T result = work.run(conn);
                 conn.commit();
+                settled = true;
                 return result;
-            } catch (SQLException | RuntimeException e) {
-                conn.rollback();
-                throw e;
+            } catch (Throwable t) {
+                // Catch Throwable, not just SQLException/RuntimeException: restoring
+                // auto-commit on a connection with an open transaction COMMITS it (JDBC
+                // spec), so an escaping Error would turn a half-finished sale into a
+                // durable one. Roll back first, and only restore auto-commit once the
+                // transaction is definitely settled.
+                try {
+                    conn.rollback();
+                    settled = true;
+                } catch (SQLException rollbackFailed) {
+                    plugin.getLogger().severe("Market DB rollback failed, connection left in transaction: "
+                            + rollbackFailed.getMessage());
+                }
+                throw t;
             } finally {
-                conn.setAutoCommit(auto);
+                if (settled) conn.setAutoCommit(auto);
             }
         }).whenComplete((result, error) -> thenMain(result, error, onMain, onError));
     }

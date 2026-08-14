@@ -20,6 +20,7 @@ import org.bukkit.event.block.Action;
 import org.bukkit.event.block.CrafterCraftEvent;
 import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.inventory.*;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
@@ -113,6 +114,21 @@ public class WalletListener implements Listener {
         // Belt-and-suspenders: block offhand swaps while the wallet session is
         // active but the player is looking at their own crafting view (no chest GUI).
         if (event.getInventory().getType() == InventoryType.CRAFTING && (event.getSlot() == 40 || event.getAction() == InventoryAction.HOTBAR_SWAP)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /**
+     * Dropping is a separate packet from an inventory click, so cancelling clicks does not
+     * cover it — a client can send it with a WIIC window open and change the inventory the
+     * vault snapshot was taken from. The deposit and sell paths already refuse to proceed
+     * when the item can no longer be fully removed, so this closes the last way to desync
+     * that snapshot rather than fixing a live dupe.
+     */
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onItemDrop(PlayerDropItemEvent event) {
+        if (WindowManager.getInstance().getOpenWindow(event.getPlayer()) != null
+                || WalletGUI.playersWithOpenWallets.contains(event.getPlayer())) {
             event.setCancelled(true);
         }
     }

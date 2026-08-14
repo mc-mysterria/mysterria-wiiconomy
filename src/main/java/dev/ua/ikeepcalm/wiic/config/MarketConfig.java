@@ -253,8 +253,21 @@ public class MarketConfig {
         return config.getConfigurationSection("entrance.recipe.ingredients");
     }
 
+    /**
+     * Defaults to false. The hub entrance sits on no claim, so nothing but this setting
+     * stands between a passer-by and the server's public way into the market.
+     */
     public boolean entranceAllowBreak() {
-        return config.getBoolean("entrance.allow-break", true);
+        return config.getBoolean("entrance.allow-break", false);
+    }
+
+    /**
+     * Whether using a land-tied door re-checks that the player is still trusted there.
+     * Off by default: an entrance is placed to serve a place, and owners routinely walk
+     * guests in through it.
+     */
+    public boolean entranceRequireTrust() {
+        return config.getBoolean("entrance.require-trust-to-enter", false);
     }
 
     /**

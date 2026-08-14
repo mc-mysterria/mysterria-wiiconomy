@@ -111,6 +111,9 @@ public class WIIC extends JavaPlugin {
     public void onDisable() {
         if (marketModule != null) marketModule.shutdown();
         if (shopServices != null) shopServices.marketIndex().stop();
+        // Static, so it survives a plugin reload. A purchase whose callback was dropped
+        // during shutdown would otherwise leave that player permanently unable to buy.
+        PurchaseService.releaseAll();
         getLogger().info("WIIC plugin disabled...");
     }
 

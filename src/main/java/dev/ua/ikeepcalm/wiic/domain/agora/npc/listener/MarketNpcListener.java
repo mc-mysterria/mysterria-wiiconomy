@@ -38,8 +38,17 @@ public class MarketNpcListener implements Listener {
     @EventHandler(ignoreCancelled = true)
     public void onNpcClick(NPCRightClickEvent event) {
         MarketNpcRole role = npcs.roleOf(event.getNPC());
-        if (role == null) return;
         Player player = event.getClicker();
+        if (role == null) {
+            // Any NPC in the market world is one of ours; a missing role means Citizens lost
+            // the metadata (registry reset, restored save). Returning silently leaves the
+            // player clicking a Broker that does nothing at all and no way to know why.
+            if (config.isMarketWorld(player.getWorld())) {
+                player.sendMessage(MiniMessage.miniMessage().deserialize(
+                        config.message("npc-no-role", "<gray>They stare through you, their business forgotten. Tell an administrator.")));
+            }
+            return;
+        }
         if (!config.isMarketWorld(player.getWorld())) {
             player.sendMessage(MiniMessage.miniMessage().deserialize(
                     config.message("npc-wrong-world", "<gray>They pretend not to see you.")));
