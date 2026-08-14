@@ -6,7 +6,7 @@ plugins {
 }
 
 group = 'dev.ua.ikeepcalm'
-version = '1.1.0'
+version = '1.2.0'
 
 repositories {
     // Locally published Mysterria plugin APIs (undead-postmans' publishToMavenLocal).
