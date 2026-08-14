@@ -614,6 +614,30 @@ public class PlotService {
         }
     }
 
+    /**
+     * Records {@code npcId} as {@code plotId}'s vendor, retiring whichever NPC held the job
+     * before. Used by the admin place-by-hand path; without the binding the new NPC would
+     * survive the eviction that should have taken it away.
+     */
+    public void bindVendor(String plotId, int npcId) {
+        PlotRental rental = rentals.get(plotId);
+        if (rental != null && rental.vendorNpcId() != null && rental.vendorNpcId() != npcId) {
+            despawnVendor(rental);
+        }
+        db.submit(conn -> {
+            PlotDao.setVendorNpc(conn, plotId, npcId);
+            return null;
+        }).exceptionally(error -> {
+            plugin.getLogger().severe("Failed to record vendor NPC " + npcId + " for plot " + plotId
+                    + ": " + error + " — it will not be removed on eviction");
+            return null;
+        });
+        if (rental != null) {
+            rentals.put(plotId, new PlotRental(rental.plotId(), rental.renterUuid(), rental.renterName(),
+                    rental.rentedAt(), rental.paidUntil(), npcId));
+        }
+    }
+
     private void despawnVendor(PlotRental rental) {
         if (vendors == null || rental.vendorNpcId() == null) return;
         try {

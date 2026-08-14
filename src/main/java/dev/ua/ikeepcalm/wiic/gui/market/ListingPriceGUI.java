@@ -316,7 +316,7 @@ public class ListingPriceGUI {
     private void returnItem(Player player, ItemStack snapshot, boolean retained, String messageKey, String def) {
         if (retained) {
             player.sendMessage(MM.deserialize(services.config().message("listing-item-held",
-                    "<yellow>The fence could not take your goods, and will not hand them back here. Ask the Banker for them.")));
+                    "<yellow>The fence could not take your goods, and will not hand them back here. Ask the Ledger Keeper for them.")));
             return;
         }
         if (!ItemUtil.giveOrDrop(player, snapshot)) {

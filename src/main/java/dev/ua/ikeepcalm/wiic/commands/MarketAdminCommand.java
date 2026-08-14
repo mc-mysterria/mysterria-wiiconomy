@@ -83,6 +83,10 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                 return;
             }
             String plotId = args.length >= 4 ? args[3] : null;
+            if (role == MarketNpcRole.PLOT_VENDOR) {
+                createPlotVendor(player, plotId);
+                return;
+            }
             module.getNpcService().create(role, plotId, player.getLocation());
             player.sendMessage(Component.text("Market NPC (" + role + ") created.").color(NamedTextColor.GREEN));
         } else if (args.length >= 2 && args[1].equalsIgnoreCase("remove")) {
@@ -93,6 +97,36 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
         } else {
             player.sendMessage(Component.text("Usage: /wiicmarket npc <create|remove>").color(NamedTextColor.RED));
         }
+    }
+
+    /**
+     * Places a stall vendor by hand. Unlike every other role this one is normally spawned
+     * by {@code PlotService} when a plot is rented, so a hand-placed one is a repair: the
+     * only way back if Citizens loses its registry and an existing rental's vendor with it.
+     *
+     * <p>It is useless without a plot — a vendor with no plot id opens nothing at all — and
+     * an unregistered one would outlive the tenancy it belongs to, so both are refused here
+     * rather than left to be discovered as an NPC that silently does nothing.
+     */
+    private void createPlotVendor(Player player, @Nullable String plotId) {
+        if (plotId == null) {
+            player.sendMessage(Component.text("A stall vendor needs the plot it serves: "
+                    + "/wiicmarket npc create plot_vendor <plotId>").color(NamedTextColor.RED));
+            return;
+        }
+        PlotService plots = module.getServices().plots();
+        if (plots.region(plotId) == null) {
+            player.sendMessage(Component.text("No plot called '" + plotId
+                    + "'. Define it first with /wiicmarket plot define.").color(NamedTextColor.RED));
+            return;
+        }
+        int npcId = module.getNpcService().spawnPlotVendor(plotId, player.getLocation());
+        plots.bindVendor(plotId, npcId);
+        PlotRental rental = plots.rental(plotId);
+        player.sendMessage(Component.text("Stall vendor for " + plotId + " placed"
+                + (rental == null
+                ? " — the plot is unrented, so it will show an empty storefront until someone takes it."
+                : " and bound to " + rental.renterName() + ".")).color(NamedTextColor.GREEN));
     }
 
     private void handleEntrance(Player player, String[] args) {
@@ -418,6 +452,12 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
         if (args.length == 3 && args[0].equalsIgnoreCase("plot")
                 && Stream.of("vendorspot", "snapshot", "evict").anyMatch(args[1]::equalsIgnoreCase)) {
             return filter(args[2], module.getServices().plots().allRegions().stream().map(PlotRegion::id));
+        }
+        // The plot a stall vendor serves — mandatory, so offer it rather than let an admin
+        // discover the requirement by being refused.
+        if (args.length == 4 && args[0].equalsIgnoreCase("npc") && args[1].equalsIgnoreCase("create")
+                && MarketNpcRole.fromString(args[2]) == MarketNpcRole.PLOT_VENDOR) {
+            return filter(args[3], module.getServices().plots().allRegions().stream().map(PlotRegion::id));
         }
         return List.of();
     }

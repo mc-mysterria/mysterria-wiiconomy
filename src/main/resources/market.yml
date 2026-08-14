@@ -325,7 +325,12 @@ messages:
   market-unavailable: "<red>The passage is sealed... (market world unavailable)"
   entered-market: "<dark_gray>The door closes behind you. Welcome to the Underground Market."
   exited-market: "<dark_gray>You slip back into the daylight."
+  # Shown instead of the above when the way they came in is gone or has turned lethal,
+  # and they surface at world spawn rather than where they left from.
+  exited-market-astray: "<yellow>The passage back has collapsed. You surface somewhere else entirely."
   npc-wrong-world: "<gray>They pretend not to see you."
+  # An NPC whose role metadata Citizens lost — it looks like a Broker and does nothing.
+  npc-no-role: "<gray>They stare through you, their business forgotten. Tell an administrator."
   coming-soon: "<gray>\"ᴄᴏᴍᴇ ʙᴀᴄᴋ ʟᴀᴛᴇʀ...\""
   # entrances
   entrance-placed: "<dark_purple>The wall shivers... a hidden door now serves this land."
@@ -338,6 +343,8 @@ messages:
   entrance-error: "<red>The ritual failed. Try again later."
   entrance-protected: "<red>The door resists your attempts."
   entrance-broken: "<gray>The hidden passage collapses. The land may craft a new one."
+  # The market's single exit door — breaking it would strand everyone inside.
+  exit-protected: "<red>The way out will not be moved."
   # containment — the market refusing a shortcut. Written as things the place does
   # to you rather than as rules, because a rule breaks the spell and this shouldn't.
   containment-no-entry: "<dark_gray><i>Something turns you aside. There is only one way down.</i>"
@@ -362,6 +369,9 @@ messages:
   listing-daily-limit: "<red>The fence waves you off — come back tomorrow."
   listing-max-active: "<red>Your stall is full. Wait for something to sell."
   listing-fee-unpaid: "<red>You can't afford the listing fee."
+  # A refused listing whose goods the journal is still holding. They are NOT handed back
+  # here — startup recovery owes them to the stash, and doing both would duplicate them.
+  listing-item-held: "<yellow>The fence could not take your goods, and will not hand them back here. Ask the Ledger Keeper for them."
   listing-cancelled: "<gray>Withdrawn. The goods wait in your stash at the Ledger Keeper."
   listing-cancel-failed: "<red>Could not withdraw that listing."
   listing-gone: "<red>That offer is no longer on the table."

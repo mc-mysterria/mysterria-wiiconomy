@@ -44,7 +44,7 @@ public class PlotWandListener implements Listener {
     private final Map<UUID, Selection> selections = new ConcurrentHashMap<>();
 
     public static ItemStack create() {
-        ItemStack wand = new ItemStack(Material.GOLDEN_HOE);
+        ItemStack wand = new ItemStack(Material.NETHERITE_HOE);
         ItemUtil.setType(wand, TYPE);
         wand.editMeta(meta -> {
             meta.displayName(Component.text("Plot Wand")
