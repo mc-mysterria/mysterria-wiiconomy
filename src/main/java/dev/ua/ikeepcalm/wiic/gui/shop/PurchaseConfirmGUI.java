@@ -34,7 +34,7 @@ import java.util.Map;
  * {@code background}, {@code items.preview} (slot only), {@code items.confirm}
  * (supports {@code %amount%}/{@code %item%}/{@code %total%}), {@code items.cancel}.
  */
-public final class PurchaseConfirmGUI {
+public class PurchaseConfirmGUI {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final int DEFAULT_PREVIEW_SLOT = 13;

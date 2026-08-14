@@ -32,7 +32,7 @@ import java.util.Map;
  * increase-*}/{@code preset-*}/{@code type-amount} buttons, and {@code
  * items.confirm} (supports {@code %amount%}/{@code %total%}) / {@code items.cancel}.
  */
-public final class QuantityGUI {
+public class QuantityGUI {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final int DEFAULT_PREVIEW_SLOT = 13;

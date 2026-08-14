@@ -34,7 +34,7 @@ import java.util.Map;
  * {@code item-price} ({@code lore} appended to every catalogue item, supports
  * {@code %unit-price%}).
  */
-public final class ItemsGUI {
+public class ItemsGUI {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final int PAGE_SIZE = 36;

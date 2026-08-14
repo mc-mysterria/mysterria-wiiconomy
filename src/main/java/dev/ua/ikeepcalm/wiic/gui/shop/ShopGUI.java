@@ -29,7 +29,7 @@ import java.util.Map;
  * {@link ShopSearchGUI}), and {@code categories.<key>} (one per {@link ShopCategory},
  * opens {@link FamilyGUI} for that category).
  */
-public final class ShopGUI {
+public class ShopGUI {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
 

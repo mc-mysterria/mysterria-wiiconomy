@@ -1,6 +1,5 @@
 package dev.ua.ikeepcalm.wiic.domain.shop.model;
 
-import dev.ua.ikeepcalm.wiic.domain.shop.service.MarketIndex;
 import org.bukkit.Material;
 
 /**
@@ -10,7 +9,7 @@ import org.bukkit.Material;
  * everywhere guarantees the total a player is quoted always equals unit price × amount
  * exactly — no rounding surprises between the quantity screen and the confirm screen.
  */
-public final class ShopPricing {
+public class ShopPricing {
 
     private final ShopCatalog catalog;
     private final MarketIndex marketIndex;

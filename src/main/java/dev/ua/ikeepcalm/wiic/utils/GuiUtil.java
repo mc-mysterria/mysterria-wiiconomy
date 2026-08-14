@@ -23,7 +23,7 @@ import java.util.stream.Collectors;
  * Shared GUI utilities — config item creation, placeholder parsing, slot math.
  * All methods are static; do not instantiate.
  */
-public final class GuiUtil {
+public class GuiUtil {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
 
@@ -71,8 +71,7 @@ public final class GuiUtil {
      * Creates an ItemStack from a config section, substituting {@code extras}
      * placeholders in addition to the standard set (see {@link #replacePlaceholders}).
      */
-    public static ItemStack createConfigItem(ConfigurationSection section, Player player,
-                                              Map<String, String> extras) {
+    public static ItemStack createConfigItem(ConfigurationSection section, Player player, Map<String, String> extras) {
         if (section == null) return new ItemStack(Material.STONE);
 
         String materialName = section.getString("material", "STONE");

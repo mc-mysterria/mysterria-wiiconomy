@@ -21,7 +21,7 @@ import java.util.List;
  *
  * <p>Configured via {@code search-gui} in {@code shop.yml}: {@code title} only.
  */
-public final class ShopSearchGUI {
+public class ShopSearchGUI {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
 

@@ -29,7 +29,7 @@ import java.util.Map;
  * Family tiles themselves are generated from the live catalogue, not configured
  * per-family — there can be a different family set per category.
  */
-public final class FamilyGUI {
+public class FamilyGUI {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final int CONTENT_START = 9;

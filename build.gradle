@@ -9,6 +9,14 @@ group = 'dev.ua.ikeepcalm'
 version = '1.1.0'
 
 repositories {
+    // Locally published Mysterria plugin APIs (undead-postmans' publishToMavenLocal).
+    // Scoped to that group only, so a stale ~/.m2 can never shadow a real repository.
+    mavenLocal {
+        content {
+            includeGroup 'dev.djecka2k19'
+        }
+    }
+
     mavenCentral()
 
     maven { url 'https://repo.codemc.io/repository/creatorfromhell/' }
@@ -33,13 +41,25 @@ repositories {
     maven {
         url = uri('https://repo.minebench.de/')
     }
+
     maven {
         url = uri('https://repo.aikar.co/content/groups/aikar/')
     }
 
+    maven {
+        name = 'citizens-repo'
+        url = 'https://maven.citizensnpcs.co/repo'
+    }
+
+    // Mysterria's own plugin APIs (undeadpostmans-api); readable anonymously, so the
+    // deployment runner can resolve it from a clean checkout.
+    maven { url 'https://nexus.mysterria.net/repository/plugin-public/' }
+
     maven { url 'https://repo.codemc.org/repository/maven-public' }
     maven { url 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
     maven { url 'https://repo.xenondevs.xyz/releases' }
+    maven { url 'https://repo.incredibleplugins.com/releases' }
+    maven { url 'https://jitpack.io' }
 }
 
 shadowJar {
@@ -51,9 +71,6 @@ shadowJar {
 tasks {
     build {
         dependsOn shadowJar
-    }
-    runServer {
-        minecraftVersion("1.21.8")
     }
 }
 
@@ -67,6 +84,11 @@ dependencies {
     implementation("xyz.xenondevs.invui:invui:2.0.0-RC.1")
     compileOnly 'org.projectlombok:lombok:1.18.44'
     annotationProcessor 'org.projectlombok:lombok:1.18.44'
+    compileOnly('net.citizensnpcs:citizens-main:2.0.43-SNAPSHOT') {
+        exclude group: '*', module: '*'
+    }
+    compileOnly 'com.incredibleplugins:lands-api:8.0.0'
+    compileOnly 'dev.djecka2k19:undeadpostmans-api:1.0.0-SNAPSHOT'
 }
 
 
@@ -99,6 +121,6 @@ processResources {
 
 tasks {
     runServer {
-        minecraftVersion("26.1.1")
+        minecraftVersion("26.1.2")
     }
 }

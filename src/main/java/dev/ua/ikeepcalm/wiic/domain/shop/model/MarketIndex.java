@@ -1,4 +1,4 @@
-package dev.ua.ikeepcalm.wiic.domain.shop.service;
+package dev.ua.ikeepcalm.wiic.domain.shop.model;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.ShopConfig;
@@ -30,7 +30,7 @@ import java.util.UUID;
  * must never block a GUI open or a purchase. The index and baseline are persisted to
  * {@code market-state.yml} so a restart doesn't reset the market to neutral.
  */
-public final class MarketIndex {
+public class MarketIndex {
 
     private final WIIC plugin;
     private final ShopConfig shopConfig;

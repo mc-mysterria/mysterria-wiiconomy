@@ -23,7 +23,7 @@ import java.util.regex.Pattern;
  * parameters, purchase limits, and GUI text. Reload with {@link #reload()}
  * (wired into {@code /wiic reload}).
  */
-public final class ShopConfig {
+public class ShopConfig {
 
     private final WIIC plugin;
     private final File file;

@@ -26,7 +26,7 @@ import java.util.UUID;
  * <p>All writes are best-effort: I/O failures are logged to the plugin logger and do not
  * affect the in-game transaction.
  */
-public final class TransactionLogger {
+public class TransactionLogger {
 
     private static final DateTimeFormatter TS = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 

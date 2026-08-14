@@ -3,6 +3,7 @@ version: '${version}'
 main: dev.ua.ikeepcalm.wiic.WIIC
 api-version: '1.21'
 depend: [ iConomyUnlocked, Vault ]
+softdepend: [ Citizens, Lands, Worlds, UndeadPostmans ]
 commands:
   wallet:
     description: Check your wallet debug information
@@ -20,3 +21,16 @@ commands:
     description: WIIC main command
     usage: /wiic <reload|restore|debug|version|shop-audit>
     permission: wiic.admin
+  wiicmarket:
+    description: Underground Market admin command
+    usage: /wiicmarket <npc|entrance|plot|bounds|open|reload>
+    permission: wiic.market.admin
+permissions:
+  wiic.market.admin:
+    description: Full control of the Underground Market; implies wiic.market.bypass
+    default: op
+    children:
+      wiic.market.bypass: true
+  wiic.market.bypass:
+    description: Teleport in and out of the market world freely, ignoring containment
+    default: op

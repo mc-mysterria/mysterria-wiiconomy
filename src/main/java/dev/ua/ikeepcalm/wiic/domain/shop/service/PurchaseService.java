@@ -1,6 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.shop.service;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.domain.shop.model.MarketIndex;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopCatalog;
 import dev.ua.ikeepcalm.wiic.config.ShopConfig;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopEntry;
@@ -35,7 +36,7 @@ import java.util.function.Consumer;
  * <p>Call {@link #purchase} from the main thread; it hops to async for the Vault call
  * and back to main for delivery, exactly like {@code VaultGUI}'s deposit/withdraw/sell.
  */
-public final class PurchaseService {
+public class PurchaseService {
 
     public enum Result {
         SUCCESS, ALREADY_IN_PROGRESS, COOLDOWN, NOT_PURCHASABLE, INVALID_AMOUNT,

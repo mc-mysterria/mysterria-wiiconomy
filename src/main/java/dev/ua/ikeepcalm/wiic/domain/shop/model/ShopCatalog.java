@@ -33,7 +33,7 @@ import java.util.stream.Collectors;
  * <p>Rebuild with {@link #rebuild()} on {@code /wiic reload} — it re-reads {@link ShopConfig}
  * so allow/deny/regex/price changes take effect without a restart.
  */
-public final class ShopCatalog {
+public class ShopCatalog {
 
     // -------------------------------------------------------------------------
     // Hardcoded structural rules — mirrors PriceAppraiser: category *logic* lives

@@ -1,0 +1,517 @@
+# ---------------------------------------------------------------------------
+# Underground Beyonder Market
+# ---------------------------------------------------------------------------
+# The market lives in its own admin-built world (loaded by the Worlds plugin).
+# Ships disabled: build the world, set `world` and `arrival`, place NPCs with
+# /wiicmarket npc create <role>, register the hub entrance and exit door, then
+# flip `enabled` and restart (or /wiicmarket reload for tuning-only changes).
+enabled: false
+world: "mysterria_market"
+# x, y, z, yaw of the spot players arrive at inside the market world
+arrival: [ 0.5, 64.0, 0.5, 0.0 ]
+
+confirm-arm-ms: 400
+
+listings:
+  daily-limit: 5                # listings per player per day
+  max-active-per-player: 15
+  listing-fee-percent: 2.0      # of asking price; money sink
+  listing-fee-min: 1
+  sale-tax-percent: 8.0         # taken from proceeds; money sink
+  duration-hours: 72            # then the item returns to the seller's stash
+  min-price: 1
+  max-price: 1000000            # coppets (1 verldor = 4096 coppets)
+  deny:
+    materials:
+      - "regex:.*SHULKER_BOX"
+      - BUNDLE
+      - BEDROCK
+    pdc-keys: [ ]               # e.g. "circleofimagination:soulbound"
+    allow-containers: false
+
+sweeper:
+  interval-seconds: 300
+  reservation-timeout-seconds: 60
+  transaction-retention-days: 90
+
+# Browse categories — first match wins; CoI-tagged items always land in the
+# implicit "beyonder" category regardless of these rules.
+categories:
+  weapons:
+    icon: IRON_SWORD
+    materials:
+      - "regex:.*_SWORD"
+      - "regex:.*_AXE"
+      - BOW
+      - CROSSBOW
+      - TRIDENT
+      - MACE
+  tools:
+    icon: IRON_PICKAXE
+    materials:
+      - "regex:.*_PICKAXE"
+      - "regex:.*_SHOVEL"
+      - "regex:.*_HOE"
+      - FISHING_ROD
+      - SHEARS
+      - FLINT_AND_STEEL
+  armor:
+    icon: IRON_CHESTPLATE
+    materials:
+      - "regex:.*_HELMET"
+      - "regex:.*_CHESTPLATE"
+      - "regex:.*_LEGGINGS"
+      - "regex:.*_BOOTS"
+      - SHIELD
+      - ELYTRA
+  consumables:
+    icon: POTION
+    materials:
+      - "regex:.*POTION.*"
+      - GOLDEN_APPLE
+      - ENCHANTED_GOLDEN_APPLE
+      - "regex:.*_BUCKET"
+  blocks:
+    icon: BRICKS
+    fallback-if-block: true
+  misc:
+    icon: STRING
+    fallback: true
+
+# ---------------------------------------------------------------------------
+# Valuation - what the Fence offers when you put goods on his counter
+# ---------------------------------------------------------------------------
+# Only ever the price the screen OPENS on; the seller can move it anywhere
+# between listings.min-price and listings.max-price.
+#
+# Beyonder goods are priced off the sequence they serve, exponentially: each step
+# from 9 towards 0 multiplies the worth by `sequence-ratio`. At the defaults a
+# Sequence 9 potion is 256 coppets (4 licks) and a Sequence 0 one is ~310k
+# coppets (~75 verldors) - coppets against verldors, as intended.
+#
+# Ingredients carry no sequence in their PDC, so the sequence they serve comes
+# from coi-ingredients.yml (the deepest formula that consumes them) and they are
+# priced as a fraction of that formula's potion.
+valuation:
+  enabled: true
+  coi:
+    sequence-9-potion: 256      # coppets; the anchor the whole curve hangs off
+    sequence-ratio: 2.2         # worth multiplier per step deeper into a pathway
+    unknown-ingredient-sequence: 9   # for ingredients missing from coi-ingredients.yml
+    kind:
+      potion: 1.0               # the advancement itself - defines the scale
+      characteristic: 2.5       # the half of a formula you cannot farm
+      formula: 0.4              # knowledge of a recipe, not the recipe's contents
+      imbued: 1.2               # imbued armour
+      ingredient-main: 0.12     # a formula's defining component
+      ingredient-supplementary: 0.05
+      other: 0.5                # CoI-tagged but an unrecognised family
+      # Artifacts have a seal level (0 Sealed .. 3 Normal) rather than a sequence,
+      # so their multiplier carries the whole spread on its own.
+      artifact-sealed: 1200.0         # ~75 verldors: a Sequence 0 potion's peer
+      artifact-mystical: 300.0
+      artifact-extraordinary: 60.0
+      artifact-normal: 12.0
+  # What the market has actually been paying beats any formula. Once this many
+  # sales of the same kind of goods exist, their median is blended in at `weight`.
+  history:
+    sample-size: 9
+    min-sales: 3
+    weight: 0.7
+
+# ---------------------------------------------------------------------------
+# Sale rumours - word reaching a seller out in the world
+# ---------------------------------------------------------------------------
+# Says that something sold, never what or for how much: counting it is the
+# Ledger Keeper's job, in person. Collapsed to one message per cooldown however
+# much sells, since the message carries no numbers to lose.
+notifications:
+  enabled: true
+  cooldown-seconds: 300
+
+entrance:
+  craftable: true
+  door-material: CRIMSON_DOOR
+  allow-break: true
+  validation-interval-minutes: 30
+  # The staged descent: how long between stepping through a door and landing on
+  # the other side, and how long the dark lingers after arrival. Set both to 0
+  # for an instant teleport.
+  descent-ticks: 30
+  fade-ticks: 40
+  # Set with /wiicmarket entrance exit-here (block coordinates in the market world)
+  exit-door: [ ]
+  item:
+    material: CRIMSON_DOOR
+    name: "<dark_purple>sᴇᴄʀᴇᴛ ᴇɴᴛʀᴀɴᴄᴇ"
+    lore:
+      - "<gray>A door that remembers a place"
+      - "<gray>no map has ever shown."
+      - ""
+      - "<dark_gray>Place inside your land — one per land."
+  recipe:
+    shape:
+      - "OEO"
+      - "EDE"
+      - "OEO"
+    ingredients:
+      O: OBSIDIAN
+      E: ECHO_SHARD
+      D: DARK_OAK_DOOR
+
+# ---------------------------------------------------------------------------
+# Containment — the door is the only way in, and the only way out
+# ---------------------------------------------------------------------------
+# The market only means anything if getting there means something. On a server
+# with homes, warps, pearls, blinks and party teleports there are dozens of ways
+# to skip the door, so this works the other way round: every teleport crossing
+# the market's threshold is refused unless WIIC itself arranged it, and anyone
+# who ends up outside the envelope below is put back.
+#
+# Admin setup, inside the market world:
+#   /wiicmarket plot wand      -> click two opposite corners of the whole market
+#   /wiicmarket bounds set     -> writes the envelope below
+#   /wiicmarket bounds show    -> where it is, and whether you are inside it
+#
+# Draw it generously — a few blocks of slack past the outermost wall costs
+# nothing, while a box drawn tight will shove players about in doorways. Leave
+# it undefined and only the void floor is enforced. The arrival point MUST be
+# inside it, or every visitor is bounced straight back out.
+#
+# wiic.market.bypass (implied by wiic.market.admin) passes through all of this.
+containment:
+  enabled: true
+  bounds:
+    min: [ ]                    # set by /wiicmarket bounds set
+    max: [ ]
+  patrol-interval-ticks: 40     # sweep for anyone outside the envelope (2s)
+  message-cooldown-ms: 2500     # so a looping ability can't spam chat
+  # Teleport causes still allowed *within* the market. Everything else — pearls,
+  # blinks, plugin teleports, spectate, gateways — is refused inside as well as
+  # across the threshold. The two defaults are vanilla mechanics that move a
+  # player half a block and would strand them if blocked.
+  allow-internal-causes:
+    - DISMOUNT
+    - EXIT_BED
+  # Stopped at the throw and the bite rather than at the teleport, so the market
+  # doesn't quietly eat the item before refusing the trip.
+  block-ender-pearls: true
+  block-chorus-fruit: true
+  block-elytra: true            # no flying out over the walls
+  block-vehicles: true          # boats/minecarts/mounts move by rules of their own
+
+# ---------------------------------------------------------------------------
+# Prestige plots — rentable storefronts inside the market world
+# ---------------------------------------------------------------------------
+# Admin flow, all inside the market world:
+#   /wiicmarket plot wand              -> click the two corners of the stall
+#   /wiicmarket plot define <id>       -> writes min/max below + stores the
+#                                         pristine block snapshot for evictions
+#   /wiicmarket plot vendorspot <id>   -> where the stall's vendor NPC stands
+#   /wiicmarket plot list|snapshot|evict
+# Renters get build + container rights inside their own cuboid; on eviction the
+# stall's containers go to their market stash and the blocks are restored.
+plots:
+  enabled: true
+  rent-price: 20480             # coppets per period; money sink like listing fees
+  period-days: 7
+  grace-hours: 48               # unpaid rent is tolerated this long before eviction
+  max-per-player: 1
+  upkeep-check-minutes: 30
+  max-volume: 20000             # block cap per plot; snapshot/eviction walk the cuboid
+
+  # -------------------------------------------------------------------------
+  # Stall counters — a sign on a chest, the plot's own way to trade
+  # -------------------------------------------------------------------------
+  # The renter puts a sign on a chest inside their own stall:
+  #
+  #     [Market]        <- the tag below
+  #     500             <- price, in coppets (or shorthand: 3v 12l 5c)
+  #     1               <- items handed over per purchase (optional, default 1)
+  #
+  # then right-clicks the finished sign holding the goods to stock it. The sign
+  # redraws itself with the item, the price and the owner's name. Customers click
+  # it twice: once to be quoted, once to pay — money never leaves a wallet because
+  # somebody brushed past the scenery.
+  #
+  # Stock is the chest's real contents, not a number in the database, so restocking
+  # is just putting more in. Proceeds follow the broker's path: sale-tax to the
+  # sink, the rest into the owner's ledger to claim at the Ledger Keeper.
+  #
+  # Owner controls, on their own counter:
+  #   right-click holding goods -> stock / restock the sign
+  #   right-click empty-handed  -> what it sells, what's in the chest, what it sold
+  #   sneak + right-click       -> close the counter (leaves the sign standing)
+  #   break the sign or chest   -> retire it
+  shops:
+    enabled: true
+    sign-tag: "[Market]"
+    max-per-plot: 12
+    confirm-seconds: 6
+    # Rendered onto both faces. Placeholders: %item% %price% %amount% %owner%
+    sign-lines:
+      - "<dark_purple>сᴛɪйᴋᴀ"
+      - "<black>%item%"
+      - "<dark_green>%price%"
+      - "<dark_gray>%owner%"
+
+  regions: { }                  # filled in by /wiicmarket plot define
+
+# ---------------------------------------------------------------------------
+# Courier deliveries (needs the UndeadPostmans plugin)
+# ---------------------------------------------------------------------------
+# A player leaves a summoning horn at the Courier Post NPC and every purchase is
+# then flown to them by a postman at their own courier tier instead of waiting in
+# the stash. Taking the horn back switches it off. Without UndeadPostmans the
+# Courier Post politely refuses and everything falls back to the stash.
+courier:
+  enabled: true
+  delivery-fee: 0               # optional coppet sink per delivery; the horn is the price
+
+# ---------------------------------------------------------------------------
+# Sound cues — "<sound id>:<volume>:<pitch>", volume and pitch optional.
+# Sounds are addressed by vanilla string id, so a resource pack's own sounds
+# work here too ("mypack:market.chime:0.8:1.0"). Set a key to "" to silence it.
+# ---------------------------------------------------------------------------
+sounds:
+  entrance-open: "block.iron_door.open:0.7:0.5"     # heard at the door, by everyone
+  entrance-forged: "block.respawn_anchor.set_spawn:0.8:0.6"
+  descend: "ambient.cave:0.9:0.5"                   # the dark closing in
+  arrive: "block.sculk_catalyst.bloom:0.7:0.6"
+  depart: "block.iron_door.close:0.7:0.7"
+  surface: "block.beacon.deactivate:0.5:1.4"
+  rumour: "block.amethyst_block.hit:0.4:0.7"        # word that something sold
+  listed: "block.vault.insert_item:0.8:1.0"
+  purchase: "block.amethyst_block.chime:0.8:1.2"
+  refused: "block.note_block.didgeridoo:0.6:0.6"
+  coins: "block.amethyst_block.resonate:0.8:1.4"
+  stash: "block.barrel.open:0.7:1.1"
+  horn: "item.goat_horn.sound.0:0.5:1.0"
+
+npcs:
+  broker:
+    name: "<gray>ᴛʜᴇ ꜰᴇɴᴄᴇ"
+    skin: ""
+  clerk:
+    name: "<gray>ʙᴀᴢᴀᴀʀ ᴄʟᴇʀᴋ"
+    skin: ""
+  banker:
+    name: "<gold>ʟᴇᴅɢᴇʀ ᴋᴇᴇᴘᴇʀ"
+    skin: ""
+  shopkeeper:
+    name: "<gold>ǫᴜᴀʀᴛᴇʀᴍᴀsᴛᴇʀ"
+    skin: ""
+  informant:
+    name: "<dark_purple>ᴛʜᴇ ɪɴꜰᴏʀᴍᴀɴᴛ"
+    skin: ""
+  plot_warden:
+    name: "<gray>ᴘʟᴏᴛ ᴡᴀʀᴅᴇɴ"
+    skin: ""
+  plot_vendor:
+    name: "<gold>sᴛᴀʟʟ ᴋᴇᴇᴘᴇʀ"
+    skin: ""
+  courier_post:
+    name: "<gray>ᴄᴏᴜʀɪᴇʀ ᴘᴏsᴛ"
+    skin: ""
+
+messages:
+  shop-moved: "<gray>The builders' market has gone underground. Seek the hidden entrance beneath the towns..."
+  market-error: "<red>The market ledgers are in disarray. Try again later."
+  market-unavailable: "<red>The passage is sealed... (market world unavailable)"
+  entered-market: "<dark_gray>The door closes behind you. Welcome to the Underground Market."
+  exited-market: "<dark_gray>You slip back into the daylight."
+  npc-wrong-world: "<gray>They pretend not to see you."
+  coming-soon: "<gray>\"ᴄᴏᴍᴇ ʙᴀᴄᴋ ʟᴀᴛᴇʀ...\""
+  # entrances
+  entrance-placed: "<dark_purple>The wall shivers... a hidden door now serves this land."
+  entrance-no-lands: "<red>Secret entrances require the Lands plugin."
+  entrance-not-in-land: "<red>The door must be hidden inside a claimed land."
+  entrance-not-trusted: "<red>You are not trusted in this land."
+  entrance-already-exists: "<red>This land already hides an entrance."
+  entrance-in-market: "<red>You cannot place an entrance here."
+  entrance-bad-spot: "<red>The door needs two blocks of open space above this spot."
+  entrance-error: "<red>The ritual failed. Try again later."
+  entrance-protected: "<red>The door resists your attempts."
+  entrance-broken: "<gray>The hidden passage collapses. The land may craft a new one."
+  # containment — the market refusing a shortcut. Written as things the place does
+  # to you rather than as rules, because a rule breaks the spell and this shouldn't.
+  containment-no-entry: "<dark_gray><i>Something turns you aside. There is only one way down.</i>"
+  containment-no-exit: "<dark_gray><i>The dark closes around you. The market lets you leave by the door, or not at all.</i>"
+  containment-no-blink: "<dark_gray><i>Whatever you reached for finds no purchase down here.</i>"
+  containment-edge: "<dark_gray><i>The dark past this point does not want you in it.</i>"
+  containment-returned: "<dark_gray><i>The dark folds over, and you are standing where you started.</i>"
+  containment-expelled: "<dark_gray><i>The passage rejects you, and the daylight takes you back.</i>"
+  containment-no-pearl: "<dark_gray><i>The pearl goes dead in your hand. Nothing here answers it.</i>"
+  containment-no-chorus: "<dark_gray><i>The fruit tastes of nothing. Wherever it wanted to send you, it cannot reach.</i>"
+  containment-no-spectator: "<dark_gray><i>Down here you are as solid as anyone else.</i>"
+  containment-no-vehicle: "<dark_gray><i>You go through the market on your own two feet.</i>"
+  # listings
+  listing-created: "<green>The fence takes your goods with a nod. Fee: %fee%."
+  listing-item-missing: "<red>The goods slipped out of your hands. Nothing was listed."
+  listing-denied: "<red>The fence looks at it, then at you. \"No.\""
+  listing-denied-invalid: "<red>The fence squints at your empty hands and says nothing."
+  listing-denied-material: "<red>\"I've a rule about those. Ask me again in another life.\""
+  listing-denied-container: "<red>\"Nothing sealed. I bought a box once. It bought me back.\""
+  listing-denied-tagged: "<red>\"That's bound to you, friend. It would only find its way home.\""
+  listing-bad-price: "<red>No one would pay that. Pick a saner price."
+  listing-daily-limit: "<red>The fence waves you off — come back tomorrow."
+  listing-max-active: "<red>Your stall is full. Wait for something to sell."
+  listing-fee-unpaid: "<red>You can't afford the listing fee."
+  listing-cancelled: "<gray>Withdrawn. The goods wait in your stash at the Ledger Keeper."
+  listing-cancel-failed: "<red>Could not withdraw that listing."
+  listing-gone: "<red>That offer is no longer on the table."
+  # the Fence's appraisal, shown on the goods in the price screen
+  appraisal-header: "<gray>ᴛʜᴇ ꜰᴇɴᴄᴇ ʀᴇᴄᴋᴏɴs: <gold>%worth%"
+  appraisal-observed: "<dark_gray>\"%count% have crossed my counter lately.\""
+  appraisal-sequence: "<dark_purple>\"Sequence %sequence% goods. I know what that means.\""
+  appraisal-ingredient: "<dark_gray>\"Not much alone. Part of something a great deal more.\""
+  appraisal-mundane: "<dark_gray>\"Ordinary stock. I know the going rate.\""
+  appraisal-unknown: "<dark_gray>\"Never seen its like. Name your own price.\""
+  # sale rumours
+  sale-rumour: "<dark_gray><i>Somewhere beneath the streets, a coin is set aside in your name.</i>"
+  sale-rumour-market: "<dark_gray><i>The Ledger Keeper catches your eye and taps the ledger.</i>"
+  sale-rumour-return: "<dark_gray><i>While you were away, business was done in your name. The Ledger Keeper is waiting.</i>"
+  # purchases
+  purchase-success: "<green>Deal struck. The goods await you in your market stash — see the Ledger Keeper."
+  purchase-success-courier: "<green>Deal struck. Your courier is already on its way with the goods."
+  detail-courier-line: "<dark_purple>ʏᴏᴜʀ ᴄᴏᴜʀɪᴇʀ ᴡɪʟʟ ʙʀɪɴɢ ɪᴛ"
+  in-progress: "<red>Finish your current dealing first."
+  price-changed: "<red>The terms shifted while you hesitated — look again."
+  self-purchase: "<red>Buying your own goods? The fence raises an eyebrow."
+  insufficient-funds: "<red>Your purse is too light for this."
+  # stash & ledger
+  stash-claimed: "<green>The keeper hands over %count% parcel(s)."
+  stash-nothing: "<gray>Nothing could be handed over — check your inventory space."
+  stash-remaining: "<gray>%count% parcel(s) remain in your stash."
+  ledger-claimed: "<green>The keeper counts out %total% into your purse."
+  ledger-claim-failed: "<red>The keeper's coffers jammed. Try again."
+  # plots
+  plots-disabled: "<gray>The warden has no stalls to let."
+  plot-rented: "<green>The warden hands you the keys to %plot%."
+  plot-extended: "<green>Upkeep paid. %plot% stays yours."
+  plot-taken: "<red>That stall belongs to %renter%."
+  plot-max: "<red>One stall is all the warden will let you hold."
+  plot-poor: "<red>Your purse is too light for the rent."
+  plot-rent-overdue: "<red>Your stall's rent is overdue. Pay the Plot Warden or lose it."
+  plot-released: "<gray>The warden takes back the keys. Anything you left is in your stash."
+  plot-release-failed: "<red>The warden is still settling that stall."
+  # stall counters (sign on a chest)
+  stall-created: "<green>The counter is yours. Right-click it holding what you mean to sell."
+  stall-stocked: "<green>The counter now sells <white>%item%</white> at "
+  stall-closed: "<gray>The counter is bare again."
+  stall-disabled: "<red>Stall counters are closed for business."
+  stall-not-in-plot: "<red>Counters only stand inside a rented stall."
+  stall-not-renter: "<red>This stall is not yours to trade from."
+  stall-no-container: "<red>\"A counter wants a chest behind it. Put the sign on one.\""
+  stall-container-outside: "<red>The chest must stand inside your own stall."
+  stall-bad-price: "<red>Write the price on the second line — 500, or 3v 12l."
+  stall-too-many: "<red>This stall already has as many counters as it can hold."
+  stall-duplicate: "<red>That sign is already a counter."
+  stall-error: "<red>The counter refuses to trade. Try again later."
+  stall-empty-line: "—"
+  stall-quote: "<gray>%item% <dark_gray>x%amount%<gray> — click again to pay "
+  stall-bought: "<green>Taken. <white>%item%</white> x%amount% for "
+  stall-empty: "<gray>The counter is bare. Nothing is for sale here yet."
+  stall-out-of-stock: "<gray>The chest is empty. Whatever was here, someone was quicker."
+  stall-cannot-afford: "<red>You cannot afford that."
+  stall-self: "<gray>You already own everything in this chest."
+  stall-gone: "<gray>This stall has changed hands. The counter is dead."
+  stall-busy: "<gray>Someone is already at the counter. A moment."
+  stall-report-header: "<gold>Your counter"
+  stall-report-goods: "<gray>Selling: <white>%item%</white> <dark_gray>x%amount%"
+  stall-report-stock: "<gray>In the chest: <white>%stock%</white>  ·  sold so far: <white>%sold%"
+  stall-report-hint: "<dark_gray>Right-click holding goods to restock · sneak+right-click to close"
+  # courier
+  courier-unavailable: "<gray>The post is shuttered — no couriers ride today."
+  courier-deposited: "<green>The clerk hangs your horn on the wall. Your purchases will be flown to you."
+  courier-withdrawn: "<gray>The horn is yours again. Purchases will wait in your stash."
+  courier-withdraw-failed: "<red>The clerk cannot find room in your pack for it."
+  courier-not-a-horn: "<red>That is no summoning horn."
+  courier-already: "<gray>Your horn already hangs on the wall."
+  courier-item-missing: "<red>The horn slipped out of your hands."
+
+# ---------------------------------------------------------------------------
+# GUI screens — same item-config schema as shop.yml
+# (slot: [col,row], material, name, lore in MiniMessage; all optional, the code
+# falls back to sensible built-ins when a section or item is missing)
+# ---------------------------------------------------------------------------
+browse-gui:
+  title: "ᴜɴᴅᴇʀɢʀᴏᴜɴᴅ ᴍᴀʀᴋᴇᴛ"
+  search-title: "sᴇᴀʀᴄʜ ᴛʜᴇ ʙᴀᴢᴀᴀʀ"
+  background: GRAY_STAINED_GLASS_PANE
+  items:
+    listing:
+      lore:
+        - ""
+        - "<gold>%price%"
+        - "<gray>sᴏʟᴅ ʙʏ <white>%seller%"
+        - "<dark_gray>ᴇxᴘɪʀᴇs ɪɴ %expires%"
+
+detail-gui:
+  title: "ɪɴsᴘᴇᴄᴛ ᴏꜰꜰᴇʀ"
+  background: GRAY_STAINED_GLASS_PANE
+
+broker-gui:
+  title: "ᴛʜᴇ ꜰᴇɴᴄᴇ"
+  background: GRAY_STAINED_GLASS_PANE
+
+price-gui:
+  title: "ɴᴀᴍᴇ ʏᴏᴜʀ ᴘʀɪᴄᴇ"
+  background: GRAY_STAINED_GLASS_PANE
+
+my-listings-gui:
+  title: "ʏᴏᴜʀ ʟɪsᴛɪɴɢs"
+  background: GRAY_STAINED_GLASS_PANE
+
+stash-gui:
+  title: "ʏᴏᴜʀ sᴛᴀsʜ"
+  background: GRAY_STAINED_GLASS_PANE
+
+ledger-gui:
+  title: "ᴛʜᴇ ʟᴇᴅɢᴇʀ"
+  background: GRAY_STAINED_GLASS_PANE
+
+banker-gui:
+  title: "ᴛʜᴇ ʟᴇᴅɢᴇʀ ᴋᴇᴇᴘᴇʀ"
+  background: GRAY_STAINED_GLASS_PANE
+
+informant-gui:
+  title: "ᴛʜᴇ ɪɴꜰᴏʀᴍᴀɴᴛ"
+  background: GRAY_STAINED_GLASS_PANE
+
+courier-gui:
+  title: "ᴛʜᴇ ᴄᴏᴜʀɪᴇʀ ᴘᴏsᴛ"
+  background: GRAY_STAINED_GLASS_PANE
+  # Lore of the escrowed horn; %tier% %seconds% %fee%
+  lore:
+    contract:
+      - ""
+      - "<green>ᴏɴ ᴅᴜᴛʏ"
+      - "<gray>ᴛɪᴇʀ: <white>%tier%"
+      - "<gray>ᴅᴇʟɪᴠᴇʀʏ: <white>%seconds%s"
+      - ""
+      - "<dark_gray>ᴘᴜʀᴄʜᴀsᴇs ꜰʟʏ sᴛʀᴀɪɢʜᴛ ᴛᴏ ʏᴏᴜ"
+
+plot-gui:
+  title: "sᴛᴀʟʟs ᴛᴏ ʟᴇᴛ"
+  rent-title: "ᴛᴀᴋᴇ ᴛʜᴇ sᴛᴀʟʟ?"
+  manage-title: "ʏᴏᴜʀ sᴛᴀʟʟ"
+  background: GRAY_STAINED_GLASS_PANE
+  # Plot icon lore per status; %plot% %price% %period% %renter% %expires%
+  lore:
+    available:
+      - ""
+      - "<green>ᴀᴠᴀɪʟᴀʙʟᴇ"
+      - "<gray>%price% <dark_gray>/ %period%"
+      - ""
+      - "<dark_gray>ᴄʟɪᴄᴋ ᴛᴏ ʀᴇɴᴛ"
+    yours:
+      - ""
+      - "<gold>ʏᴏᴜʀ sᴛᴀʟʟ"
+      - "<gray>ᴘᴀɪᴅ ꜰᴏʀ %expires%"
+      - ""
+      - "<dark_gray>ᴄʟɪᴄᴋ ᴛᴏ ᴍᴀɴᴀɢᴇ"
+    taken:
+      - ""
+      - "<red>ᴛᴀᴋᴇɴ"
+      - "<gray>ʀᴇɴᴛᴇᴅ ʙʏ <white>%renter%"

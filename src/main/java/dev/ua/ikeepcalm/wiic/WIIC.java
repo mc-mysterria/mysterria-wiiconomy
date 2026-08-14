@@ -1,19 +1,17 @@
 package dev.ua.ikeepcalm.wiic;
 
-import dev.ua.ikeepcalm.wiic.commands.ShatterCommand;
-import dev.ua.ikeepcalm.wiic.commands.ShopCommand;
-import dev.ua.ikeepcalm.wiic.commands.WalletCommand;
-import dev.ua.ikeepcalm.wiic.commands.WiicCommand;
-import dev.ua.ikeepcalm.wiic.domain.wallet.models.WalletRecipe;
+import dev.ua.ikeepcalm.wiic.commands.*;
+import dev.ua.ikeepcalm.wiic.config.ShopConfig;
 import dev.ua.ikeepcalm.wiic.config.WalletConfig;
+import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketModule;
+import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopCatalog;
+import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopPricing;
+import dev.ua.ikeepcalm.wiic.domain.shop.model.MarketIndex;
+import dev.ua.ikeepcalm.wiic.domain.shop.service.PurchaseService;
+import dev.ua.ikeepcalm.wiic.domain.shop.service.ShopServices;
+import dev.ua.ikeepcalm.wiic.domain.wallet.models.WalletRecipe;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
-import dev.ua.ikeepcalm.wiic.domain.shop.service.MarketIndex;
-import dev.ua.ikeepcalm.wiic.domain.shop.service.PurchaseService;
-import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopCatalog;
-import dev.ua.ikeepcalm.wiic.config.ShopConfig;
-import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopPricing;
-import dev.ua.ikeepcalm.wiic.domain.shop.service.ShopServices;
 import lombok.Getter;
 import lombok.Setter;
 import net.milkbowl.vault2.economy.Economy;
@@ -28,7 +26,7 @@ import java.util.Objects;
 
 @Getter
 @Setter
-public final class WIIC extends JavaPlugin {
+public class WIIC extends JavaPlugin {
 
     public static WIIC INSTANCE;
 
@@ -42,6 +40,9 @@ public final class WIIC extends JavaPlugin {
 
     @Getter
     private ShopServices shopServices;
+
+    @Getter
+    private MarketModule marketModule;
 
     public static String getNamespace() {
         return pluginNamespace;
@@ -73,6 +74,15 @@ public final class WIIC extends JavaPlugin {
         if (!setupEconomy()) {
             getLogger().severe(String.format("[%s] - Disabled due to no Vault dependency found!", getDescription().getName()));
             getServer().getPluginManager().disablePlugin(this);
+            return;
+        }
+
+        // Underground Market — optional module; needs Vault, so wired after setupEconomy().
+        marketModule = MarketModule.enableIfConfigured(this);
+        if (marketModule != null) {
+            MarketAdminCommand marketCommand = new MarketAdminCommand(marketModule);
+            Objects.requireNonNull(getCommand("wiicmarket")).setExecutor(marketCommand);
+            Objects.requireNonNull(getCommand("wiicmarket")).setTabCompleter(marketCommand);
         }
     }
 
@@ -99,6 +109,7 @@ public final class WIIC extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        if (marketModule != null) marketModule.shutdown();
         if (shopServices != null) shopServices.marketIndex().stop();
         getLogger().info("WIIC plugin disabled...");
     }

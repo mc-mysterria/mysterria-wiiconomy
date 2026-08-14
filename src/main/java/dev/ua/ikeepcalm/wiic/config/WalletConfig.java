@@ -13,7 +13,7 @@ import java.util.UUID;
  * Persists per-player GUI theme preferences to {@code preferences.yml}
  * in the plugin data folder. Call {@link #init()} once during plugin enable.
  */
-public final class WalletConfig {
+public class WalletConfig {
 
     private static File file;
     private static YamlConfiguration config;

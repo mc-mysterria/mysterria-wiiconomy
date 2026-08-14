@@ -1,6 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.shop.service;
 
 import dev.ua.ikeepcalm.wiic.config.ShopConfig;
+import dev.ua.ikeepcalm.wiic.domain.shop.model.MarketIndex;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopCatalog;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopPricing;
 
