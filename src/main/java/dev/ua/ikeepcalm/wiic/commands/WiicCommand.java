@@ -1,10 +1,10 @@
 package dev.ua.ikeepcalm.wiic.commands;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
-import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopCatalog;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopEntry;
 import dev.ua.ikeepcalm.wiic.domain.shop.service.ShopServices;
+import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -66,6 +66,11 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
                 if (plugin.getShopServices() != null) {
                     plugin.getShopServices().config().reload();
                     plugin.getShopServices().catalog().rebuild();
+                }
+                // The Fence's derived prices are built on the catalogue that just changed
+                // underneath them, so they have to go with it.
+                if (plugin.getMarketModule() != null) {
+                    plugin.getMarketModule().getServices().prices().invalidate();
                 }
                 sender.sendMessage(Component.text("Configuration reloaded!")
                         .color(NamedTextColor.GREEN));

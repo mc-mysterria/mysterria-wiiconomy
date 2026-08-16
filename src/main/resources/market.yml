@@ -103,9 +103,20 @@ categories:
 # between listings.min-price and listings.max-price.
 #
 # Beyonder goods are priced off the sequence they serve, exponentially: each step
-# from 9 towards 0 multiplies the worth by `sequence-ratio`. At the defaults a
-# Sequence 9 potion is 256 coppets (4 licks) and a Sequence 0 one is ~310k
-# coppets (~75 verldors) - coppets against verldors, as intended.
+# from 9 towards 0 multiplies the worth by `sequence-ratio`. The two numbers below
+# are fitted to what Sequence 1 goods ACTUALLY change hands for - 32 licks at the
+# low end, two to three verldors at the high - which pins both ends of the curve at
+# once, since the kind multipliers already say how far a family sits from its potion:
+#
+#   seq   formula     potion       characteristic
+#     9        26         64 (1l)             160
+#     7        76        189                  473
+#     5       224        560 (8l 48c)       1,400
+#     3       663      1,657 (25l 57c)      4,143 (1v 47c)
+#     1     1,961      4,902 (1v 12l)      12,256 (2v 63l)
+#
+# Raise `sequence-9-potion` to make the whole beyonder economy dearer; raise
+# `sequence-ratio` to make depth matter more without moving the shallow end.
 #
 # Ingredients carry no sequence in their PDC, so the sequence they serve comes
 # from coi-ingredients.yml (the deepest formula that consumes them) and they are
@@ -113,23 +124,96 @@ categories:
 valuation:
   enabled: true
   coi:
-    sequence-9-potion: 256      # coppets; the anchor the whole curve hangs off
-    sequence-ratio: 2.2         # worth multiplier per step deeper into a pathway
-    unknown-ingredient-sequence: 9   # for ingredients missing from coi-ingredients.yml
+    sequence-9-potion: 64       # coppets (1 lick); the anchor the whole curve hangs off
+    sequence-ratio: 1.72        # worth multiplier per step deeper into a pathway
+    # Assumed depth for an ingredient coi-ingredients.yml has never heard of. The
+    # middle of the live range, not the shallow end: an id is usually missing
+    # because CoI added it AFTER this WIIC build, which makes it far more likely
+    # to be a deep ingredient than a Sequence 9 trinket. The price screen labels
+    # these as an estimate rather than a valuation, and the console names the id
+    # once so it can be added here.
+    unknown-ingredient-sequence: 6
     kind:
       potion: 1.0               # the advancement itself - defines the scale
       characteristic: 2.5       # the half of a formula you cannot farm
       formula: 0.4              # knowledge of a recipe, not the recipe's contents
       imbued: 1.2               # imbued armour
-      ingredient-main: 0.12     # a formula's defining component
-      ingredient-supplementary: 0.05
+      # Ingredients are the grind: low drop/find/mine chances, gathered by hand,
+      # and between them they are most of what a formula actually costs. At these
+      # multipliers two main ingredients plus a supplementary come to about half
+      # the potion they brew into, so gathering undercuts buying without making
+      # the finished potion pointless to sell.
+      ingredient-main: 0.20     # a formula's defining component
+      ingredient-supplementary: 0.09
       other: 0.5                # CoI-tagged but an unrecognised family
       # Artifacts have a seal level (0 Sealed .. 3 Normal) rather than a sequence,
-      # so their multiplier carries the whole spread on its own.
-      artifact-sealed: 1200.0         # ~75 verldors: a Sequence 0 potion's peer
-      artifact-mystical: 300.0
-      artifact-extraordinary: 60.0
-      artifact-normal: 12.0
+      # so their multiplier carries the whole spread on its own. Anchored so a
+      # Sealed Artifact outvalues a Sequence 1 characteristic - the deepest thing
+      # anyone can currently brew - and a Normal Item sits near a Sequence 9 one.
+      artifact-sealed: 220.0          # ~3.4 verldors
+      artifact-mystical: 55.0         # ~55 licks
+      artifact-extraordinary: 12.0    # ~12 licks
+      artifact-normal: 2.5
+  # Ordinary, non-beyonder goods.
+  #
+  # /shop only stocks plain building BLOCKS, so anchoring everything else to it
+  # priced a beacon, a netherite axe and a stack of rotten flesh identically, at
+  # the floor. Four sources are consulted instead, first match winning:
+  #
+  #   1. `overrides` below - an absolute price, no further questions.
+  #   2. raw materials - ore, mob drops, crops, treasure. WIIC ships a built-in
+  #      table of these (nothing crafts them, so they have to be asserted);
+  #      `seeds` below overrides and extends it.
+  #   3. the /shop catalogue's base price, where /shop stocks the material.
+  #   4. the server's own recipe graph - anything craftable, smeltable, cuttable
+  #      or forgeable is worth what it takes to make one, recursively, by the
+  #      cheapest route. This is what separates a beacon from cobblestone without
+  #      anyone writing either number down, and it picks up recipes added by
+  #      other plugins for free.
+  #
+  # Anything still unresolved falls back to stack size (an unstackable item is a
+  # tool or a treasure) and finally to `default-price`.
+  #
+  # SCALE. The built-in raw-material table is calibrated against what a player can
+  # actually earn, because a price nobody can pay is not a price:
+  #   - the appraiser (/wallet -> sell) pays what config.yml `ores` says - diamond
+  #     ore 2 coppets, emerald ore 3, ancient debris 5, everything else nothing -
+  #     and is capped at config.yml `daily-limit` (128) coppets a day;
+  #   - villagers convert at `villagers.emeralds-to-coppets-multiplier` (1 emerald
+  #     = 1 coppet, an emerald block = 64).
+  # That puts an active player somewhere around 150 coppets a day, and a dedicated
+  # trader at three or four times that. So the table is built so the best ordinary
+  # loot in the game - a beacon, an elytra, netherite - lands at a few days' work
+  # rather than a year's, and a diamond sword at an afternoon's.
+  #
+  # `scale` below multiplies that whole built-in table and nothing else, so if your
+  # server is richer or poorer than the numbers above, change this one figure
+  # instead of a hundred and fifty seeds. Seeds and overrides you write yourself
+  # are absolute and are never scaled.
+  vanilla:
+    use-recipes: true
+    scale: 1.0
+    # What assembling something is worth over the sum of its parts. Also keeps a
+    # long derivation chain from losing value at every step until a beacon is
+    # priced below its own nether star.
+    craft-markup: 1.15
+    # How many recipe steps to walk. Ore -> ingot -> block -> beacon is four.
+    max-recipe-depth: 6
+    # Added per enchantment level, on top of the item's own worth. Enchantments
+    # are most of why anyone wants a diamond sword rather than two diamonds.
+    enchant-per-level: 4
+    # Opening price for an ordinary item nothing above could explain.
+    default-price: 4
+    # Absolute per-material prices, in coppets. Final - nothing overrides these.
+    # overrides:
+    #   ELYTRA: 8000
+    overrides: { }
+    # Raw-material prices, in coppets. Merged over the built-in table, so listing
+    # one here corrects it; everything crafted FROM these follows automatically.
+    # seeds:
+    #   DIAMOND: 240
+    seeds: { }
+
   # What the market has actually been paying beats any formula. Once this many
   # sales of the same kind of goods exist, their median is blended in at `weight`.
   history:
@@ -401,6 +485,13 @@ messages:
   listing-denied-container: "<red>\"Nothing sealed. I bought a box once. It bought me back.\""
   listing-denied-tagged: "<red>\"That's bound to you, friend. It would only find its way home.\""
   listing-bad-price: "<red>No one would pay that. Pick a saner price."
+  # Typing a price outright, instead of stepping to it. The anvil's own text field
+  # is prefilled with the current price, so these are only the hints beneath it.
+  listing-price-hint-plain: "<dark_gray>A number is coppets: <gray>1200"
+  listing-price-hint-coins: "<dark_gray>Or coins: <gray>3v 10l 5c"
+  listing-price-hint-range: "<dark_gray>Between <gray>%min%<dark_gray> and <gray>%max%"
+  listing-price-unreadable: "<red>That isn't a price. Try a number, or something like \"3v 10l\"."
+  listing-price-range: "<red>The fence deals between %min% and %max%."
   listing-daily-limit: "<red>The fence waves you off — come back tomorrow."
   listing-max-active: "<red>Your stall is full. Wait for something to sell."
   listing-fee-unpaid: "<red>You can't afford the listing fee."
@@ -412,10 +503,16 @@ messages:
   listing-gone: "<red>That offer is no longer on the table."
   # the Fence's appraisal, shown on the goods in the price screen
   appraisal-header: "<gray>ᴛʜᴇ ꜰᴇɴᴄᴇ ʀᴇᴄᴋᴏɴs: <gold>%worth%"
+  # Per-unit breakdown, shown only on a stack. %amount% %unit%
+  appraisal-unit: "<dark_gray>%amount% x <gray>%unit%"
   appraisal-observed: "<dark_gray>\"%count% have crossed my counter lately.\""
   appraisal-sequence: "<dark_purple>\"Sequence %sequence% goods. I know what that means.\""
   appraisal-ingredient: "<dark_gray>\"Not much alone. Part of something a great deal more.\""
+  # Beyonder goods whose depth the index could not place - openly a guess.
+  appraisal-estimated: "<dark_purple>\"Of the Order, but I cannot place it. A guess — name your own.\""
   appraisal-mundane: "<dark_gray>\"Ordinary stock. I know the going rate.\""
+  # Priced from what it takes to make one.
+  appraisal-crafted: "<dark_gray>\"I know what goes into one of these.\""
   appraisal-unknown: "<dark_gray>\"Never seen its like. Name your own price.\""
   # sale rumours
   sale-rumour: "<dark_gray><i>Somewhere beneath the streets, a coin is set aside in your name.</i>"
@@ -509,7 +606,15 @@ broker-gui:
 
 price-gui:
   title: "ɴᴀᴍᴇ ʏᴏᴜʀ ᴘʀɪᴄᴇ"
+  type-title: "ᴛʏᴘᴇ ᴀ ᴘʀɪᴄᴇ"
   background: GRAY_STAINED_GLASS_PANE
+  items:
+    type-price:
+      material: WRITABLE_BOOK
+      name: "<yellow>ɴᴀᴍᴇ ɪᴛ ʏᴏᴜʀsᴇʟꜰ"
+      lore:
+        - "<dark_gray>Type an exact figure instead of"
+        - "<dark_gray>stepping to it."
 
 my-listings-gui:
   title: "ʏᴏᴜʀ ʟɪsᴛɪɴɢs"

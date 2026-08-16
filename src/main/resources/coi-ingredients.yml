@@ -3,42 +3,62 @@
 # ---------------------------------------------------------------------------
 # Beyonder ingredients carry only `circleofimagination:ingredient` in their PDC -
 # no pathway, no sequence. Their worth comes from the formula they feed: an
-# ingredient for a Sequence 4 potion is a different order of thing from one for a
+# ingredient for a Sequence 2 potion is a different order of thing from one for a
 # Sequence 9 potion. This file records, for every ingredient CoI defines, the
 # DEEPEST (lowest-numbered, most powerful) sequence whose formula consumes it.
 #
 # `main` ingredients are the rare, defining components of a formula;
 # `supplementary` ones are the filler. The Fence values them differently
-# (see `valuation.coi.ingredient-*` in market.yml).
+# (see `valuation.coi.ingredient-*` in market.yml). An ingredient that is a main
+# component of ANY formula is listed under `main`, even where another formula
+# uses it as filler - being the defining half of a formula is what makes it rare.
 #
 # Regenerate after CoI adds pathways or sequences. Ingredients missing from this
 # file are valued at `valuation.coi.unknown-ingredient-sequence` and logged once,
 # so a gap shows up in the console rather than silently mispricing goods.
 #
-# Generated from CircleOfImagination pathway sources (sequences 0-3 are not yet
-# implemented upstream, so the live range is 4-9).
+# Generated from CircleOfImagination pathway sources (origin/development), covering
+# sequences 1-9 across 32 pathways.
 
 main:
+  1-demonic-wolf-of-fogs-transformed-heart: 2
+  a-pale-object-from-the-depths-of-the-underworld: 2
+  abomination-essence: 1
   absolute-law-scroll: 4
-  abyssal-cuttlefish-ink: 4
+  absolute-order-fragment: 1
   abyss-fish-blood: 7
   abyss-heart: 4
   abyss-shard: 6
+  abyssal-cuttlefish-ink: 4
+  active-void: 2
   agate-peacock-egg: 7
+  ageless-mirror-shard: 3
+  amniotic-fluid-from-oneselfs-conception: 1
+  ancient-bane-essence: 2
+  ancient-cursed-seal: 3
   ancient-demon-horn: 4
+  ancient-dream-weaver-eye: 2
   ancient-forge-ember: 6
   ancient-law-tome: 9
   ancient-manuscript-fragment: 9
   ancient-mechanism-core: 4
   ancient-pen: 8
+  ancient-storm-essence: 2
+  ancient-sun-covenant: 3
   ancient-wraith-dust: 5
+  angels-insight: 2
+  apocalypse-demoness-soul: 1
   appraiser-monocle: 7
   arbiter-badge: 9
+  arcane-beast-core: 3
   arcane-catalyst: 5
   ascetics-blood: 7
   asmann-complete-brain: 6
   astral-mist-essence: 5
+  authors-quill: 1
   baboon-wisdom-stone: 4
+  balance-scale-fragment: 3
+  balancer-emblem: 2
   binding-thread: 6
   bizarro-bane-main-eye: 4
   black-hunting-lizard-spinal-fluid: 6
@@ -46,16 +66,25 @@ main:
   black-spotted-frog: 9
   black-widow-silk-gland: 6
   blade-wraith-essence: 7
+  blatherer-tome: 3
+  blazing-sun-core: 2
   blessed-poplar-bark: 8
   blood-infused-flesh: 6
+  blood-of-a-high-summoner-sanguine-marquis: 3
+  blood-of-a-life-giver-sanguine-duke: 2
   bloodthirsty-beast-heart: 7
   blue-shadow-falcon-feather: 6
+  boundary-shard-of-reality: 3
+  brain-of-an-adult-deathered-serpent: 3
   brilliance-rock: 8
   broken-mirror-shard: 8
   calamity-nexus-crystal: 6
+  catastrophe-demoness-hair: 2
   celestial-navigator-astrolabe: 5
   cemetery-blood-rose: 8
   champion-soul: 8
+  chaos-crystal: 3
+  chaos-hunter-mark: 3
   chaos-shard: 5
   cheshire-fox-grin: 8
   ciphered-mind-core: 7
@@ -63,24 +92,35 @@ main:
   clockwork-gear: 8
   code-of-law-tablet: 6
   combat-manuscript: 8
+  condensed-corruption-crystal: 2
+  condensed-depravation-crystal: 3
+  condensed-shadow-essence: 1
   constellation-fragment: 5
   core-horn-crystal: 8
   corrupted-heart: 5
   corrupted-paladin-heart: 6
   corrupted-rose-root: 6
   corrupted-soul-fragment: 6
+  corrupted-world-fragment: 1
+  corruption-essence: 3
+  cosmic-scale-fragment: 2
   criminal-mark: 9
   crimson-rose-thorn: 9
   crown-fragment: 5
-  crystalline-moon-orchid: 8
-  crystallized-lightning-essence: 5
-  crystallized-starlight: 5
+  crown-of-storms: 2
   crystal-of-clarity: 9
   crystal-sunflower: 9
   crystal-threadworm: 6
+  crystalline-moon-orchid: 8
+  crystallised-silence: 3
+  crystallized-insight: 3
+  crystallized-lightning-essence: 5
+  crystallized-starlight: 5
+  crystallized-time-marrow: 1
   cursed-doll-heart: 4
   cursed-ore: 4
   cursed-wraith-artifact: 6
+  dark-angel-soul-remnant: 1
   dark-brain: 4
   dark-prowler-poison-sac: 8
   dawn-crystal: 6
@@ -91,26 +131,41 @@ main:
   demon-blood: 8
   demon-core: 4
   demon-eye: 4
+  demonic-wolf-of-fog-heart: 3
   desire-crystal: 5
   desolate-servant-crystal: 4
+  destiny-anchor-shard: 2
+  destiny-core: 2
   destiny-thread: 5
   detectives-lens: 7
   devil-horn: 6
   dimensional-wanderer-eye: 9
   distorted-misfortune-essence: 6
   distorted-raven-feather: 9
+  divine-beast-core: 2
+  divine-conqueror-relic: 1
   divine-essence: 9
   diviners-crystal: 9
   dragon-eyed-sea-condor-eyeball: 6
   dream-catcher-heart: 5
+  dream-core: 1
   dream-eating-rat-heart: 5
-  echoing-conch: 8
+  dream-weaver-silk: 3
+  duke-of-entropy-blood: 2
   echo-specter-veil: 4
+  echoing-conch: 8
   elderly-mind-dragon-brain: 4
   elemental-core: 4
   elf-spring-consciousness-core: 4
   elf-spring-marrow-crystal: 8
+  emperor-knowledge-crystal: 1
+  essence-of-aurmirs-blood: 3
+  eternal-shadow-pool: 2
   evaluation-crystal: 7
+  eye-of-providence: 1
+  eye-of-the-king-of-green-wings: 3
+  eye-of-the-leviathan: 2
+  eye-of-the-seer: 3
   fallen-angel-feather: 4
   fallen-feather: 8
   fallen-guardian-shell: 5
@@ -123,41 +178,69 @@ main:
   forest-hunter-fangs: 5
   fortune-clover: 9
   fortune-tear: 5
+  fractured-fate-stone: 3
+  fragment-of-solomons-skull: 1
+  fulgrim-divine-tear: 1
   full-moon-fur: 7
   gamblers-dice: 7
   giant-monster-sage-brain: 6
   gladiator-spirit: 8
   goat-horned-blackfish-blood: 9
   golden-gorilla-brain: 9
+  grand-arcane-tome: 3
   grass-of-madness: 8
+  gravitational-anchor: 1
   gray-demonic-wolf-blood: 5
   guardian-core: 5
+  hand-of-aurmirs: 1
+  hand-of-badheil: 1
+  hand-of-order-seal: 1
   harvest-giant-guardian-head: 5
   harvest-giant-kidney: 7
   harvest-giant-priest-heart: 4
   harvest-giant-scholar-brain: 6
+  heart-of-a-black-mountain-lord: 3
+  heart-of-a-daughter-of-desolation: 2
+  heart-of-a-kings-court-chaser: 3
+  heart-of-a-kings-court-watchman: 3
   heart-of-darkness: 6
+  heart-of-the-dark-treant: 3
+  heart-of-the-storm-god: 1
   holy-brilliance-rock: 4
   holy-law-codex: 5
   honeyguide-heart: 8
   hornacis-goat-horn: 8
+  hound-of-fulgrim-blood: 2
+  hound-of-fulgrim-eyes: 3
+  hourglass-of-stolen-eons: 1
+  howling-wolf-skull: 3
   human-faced-rose: 8
   human-skined-shadow-characteristic: 6
+  illuminator-divine-core: 1
   illusory-chime-tree-fruit: 6
   immortal-cicada-molt: 4
   imperative-mage-staff-core: 4
+  infinite-knowledge-scroll: 2
   insomnia-essence: 9
   iron-cage-fragment: 9
+  iron-crusader-core: 3
   judge-gavel-fragment: 6
+  justice-mentor-relic: 3
+  key-of-stars: 1
   king-dawn-rooster-comb: 5
   king-sword-flower-fruit: 8
   knowledge-crystal: 6
   knowledge-fragment: 9
   lake-spirit-dust: 7
   lavos-squid-blood: 7
+  legacy-of-a-sanguine-duke: 2
+  legacy-of-sanguine-marquis: 3
+  lightseeker-relic: 1
+  lord-of-void-relic: 1
   luck-essence: 4
   lunatic-essence: 7
   madness-essence: 8
+  magister-wisdom-core: 2
   magma-elf-core: 7
   magma-giant-core: 4
   malignant-moon-guardian-heart: 4
@@ -166,7 +249,9 @@ main:
   master-weapon-fragment: 7
   mechanical-gear: 9
   meteorite-crystal: 7
+  mind-dragon-dream-core: 3
   mind-illusion-crystal: 5
+  mind-shattering-essence: 1
   mirage-trickster-veil: 8
   mirror-dragon-eyes: 7
   mirror-hedgehog-blood: 8
@@ -177,32 +262,47 @@ main:
   mythical-creature-blood: 4
   nightmare-crystal: 7
   oak-of-life-crystal: 7
+  omniscience-core: 2
+  omniscience-lens: 3
+  omniscients-core: 1
+  oracle-crystal: 3
   paladin-sanctified-armor: 5
   pale-lich-soul: 6
   persons-crystal: 9
   phantom-cat-forepaw: 7
   phantom-mirage-pearl: 9
   philosophers-stone-fragment: 4
+  pillar-of-all-knowledge: 1
+  pillar-of-sun: 1
   plague-mother-serpent-venom-sac: 4
   poets-ink: 8
   poison-bat-stomach: 6
   polymathic-core: 6
   precision-crystal: 8
   preserved-corpse-skin: 6
+  primordial-chaos-crystal: 1
+  primordial-mystery-relic: 1
   prisoner-shackles: 9
+  profane-presbyter-soul-remnant: 1
   prophets-third-eye: 4
   provoker-tongue: 8
   puppet-parasitic-worm: 4
   puppet-strings: 4
+  pure-information-essence: 2
   pure-white-brilliant-rock: 5
+  purple-phoenix-eye: 2
+  pus-core-of-a-styx-servant: 3
   radiance-spirit-fruit: 6
   rage-coral: 8
   rainbird-eyeball: 9
+  reality-dream-crystal: 1
   red-wolf-heart: 9
   remnant-curtain-shadow-knight: 4
+  reporductive-organs-of-a-child-of-harvest: 2
   ritual-blade: 7
   ritual-candle: 8
   royal-jellyfish-venom-crystal: 9
+  sage-knowledge-crystal: 2
   sages-quill: 8
   sanguine-baron-legacy: 6
   sanguine-blood-essence: 7
@@ -212,17 +312,26 @@ main:
   scholar-inkwell: 8
   scroll-forgotten-runes: 7
   scroll-master-quill: 6
+  sea-of-subconscious-essence: 2
   sea-serpent-scale: 5
+  serpent-scale: 1
   shadow-ink-vial: 7
   shadow-of-death: 6
+  shattered-spirit-mirror: 3
   shepherd-soul: 5
   silver-hunter-crystal: 4
   silver-war-bear-palm: 8
   siren-rock: 9
   six-winged-gargoyle-crystal: 5
+  skin-of-the-harvest-giant-elder: 3
+  skull-of-a-deep-sea-python: 3
+  skull-of-an-ancient-feathered-serpent: 2
+  solar-envoy-relic: 2
+  solomons-knuckle: 2
   soul-binding-chain: 6
   soul-essence: 5
   soul-snatcher-postmortem-crystal: 4
+  sovereign-fate-crystal: 2
   spectral-chains: 5
   spell-weaver-core: 7
   sphinx-brain: 6
@@ -241,26 +350,49 @@ main:
   strange-faced-cannabis-crystal: 7
   succubus-eyes: 6
   sun-divine-bird-feather: 4
+  supreme-war-banner: 1
+  tail-of-a-violent-man-ape: 3
   tainted-soul: 9
   tempest-eagle-eye: 7
   terror-demon-worm-eyes: 8
+  the-beyonder-characteristic-of-auernia: 1
+  the-blood-of-a-filthy-monarch: 1
+  the-crown-of-aurmir: 2
+  the-crystallization-of-a-glorious-giant: 2
+  the-flesh-of-a-filthy-monarch: 1
+  the-head-of-a-demon-prince: 2
+  the-heart-of-a-twin-serpent-lord: 2
+  the-left-claw-of-gregrace: 1
+  the-right-eye-of-salinger: 1
   third-eye-crystal: 9
   thought-essence: 8
   thousand-armed-wraith-core: 5
   thousand-faced-hunter-pituitary-gland: 6
+  thread-of-reversed-fate: 2
   tome-of-ratiocination: 8
   tree-blessed-spine: 5
   tree-mentor-crystalline-heart: 4
   tree-of-elders-fruit: 7
   tree-of-elders-roots: 6
   tree-of-knowledge-sap: 4
+  trinity-templar-soul-remnant: 3
   true-soul-body-of-spirit-world-plunderer: 4
   truth-seekers-eye: 7
+  twilight-sovereign-core: 2
   two-tailed-black-snake-gallbladder: 5
+  underworld-supplicant-spirit-crystal: 3
   underworld-wanderer-skull: 5
+  undying-witch-soul-remnant: 3
+  veil-of-dimensional-rifts: 3
+  veil-of-false-reality: 3
+  vial-of-blood-of-a-prince: 1
   victims-essence: 7
+  void-chain-fragment: 2
   void-drifter-heart: 5
+  void-lord-crystal: 1
+  war-lion-heart: 3
   warlock-catalyst: 7
+  warlord-soul-crystal: 2
   warrior-blood: 9
   water-of-life-core: 8
   weeping-infant-flower: 7
@@ -268,23 +400,51 @@ main:
   whispered-scroll: 8
   wind-essence-crystal: 8
   wraith-essence: 5
+  wrath-of-the-deep-throne: 1
   zombie-heart: 6
 
 supplementary:
+  100-milliliters-of-hound-of-fulgrim-blood: 2
+  100-souls-drowning-in-desire: 1
+  10000-souls-of-creatures-that-died-of-starvation: 2
+  200-milliliters-blood-of-the-harvest-giant-elder: 3
+  30-grams-of-white-frost-crystal-of-demonic-wolf-of-fog: 2
+  300-milliliters-blood-of-a-child-of-harvest-or-daughter-of-desolation: 2
+  50-grams-of-freshly-sun-dried-sea-salt: 3
+  9-drops-of-pus-from-a-styx-servant: 3
+  9-drops-of-underworld-river-water: 1
+  90-milliliteres-of-fluid-from-an-ancient-feathered-serpent: 2
+  90-milliliteres-of-one-owns-blood: 3
+  a-coffin-that-once-held-your-own-body: 2
+  a-creatures-limb-with-vigorous-vitality-and-strong-self-healing-ability: 2
+  a-crown-that-once-symbolized-royal-authority: 2
+  a-large-amount-of-real-ancient-historical-records: 2
+  a-piece-of-rotten-plank-from-a-coffin: 3
+  a-spark-of-fire-from-the-earths-core: 1
+  absolute-darkness-shard: 1
   aconite-juice: 8
   acorn: 4
   adult-mind-dragon-blood: 5
   alchemical-mercury: 4
   alchemy-tome: 4
+  an-inverted-mausoleum: 1
   ancient-combat-manual: 9
+  ancient-command-rune: 2
   ancient-corruption-core: 4
   ancient-scroll-fragment: 8
+  ancient-symbol-shard: 1
+  ancient-war-chant-scroll: 3
+  ancient-wisdom-shard: 2
+  angel-corpse-without-characteristic: 1
   apostle-mark: 5
   arena-trophy: 8
+  armor-plate-from-high-sequence-twilight-giant: 3
   arsenic-powder: 9
   asylum-key: 8
+  authority-essence: 2
   authority-stone: 6
   autumn-crocus-essence: 9
+  balancer-contaminants: 2
   binding-ritual-scroll: 4
   biological-embryo: 6
   bizarro-bane-blood: 4
@@ -294,21 +454,43 @@ supplementary:
   black-jimsonweed-juice: 6
   black-lily-hydrosol: 9
   black-liquid-shadow-knight: 4
+  black-mountain-lords-blood: 3
   blade-of-midsummer-grass: 9
   blessed-leaf: 7
   blessed-poplar-leaf: 8
+  blood-from-a-gods-child: 1
+  blood-from-a-true-sovereign: 1
+  blood-from-the-glorious-giant: 2
+  blood-moon-crystal: 1
   blood-moon-water: 5
+  blood-of-a-angel-that-lost-control: 1
+  blood-of-a-true-god: 1
   blood-stained-coin: 9
   boiling-magma: 4
+  branch-from-a-thousand-year-old-oak-tree: 1
   broken-time-fragment: 9
   burial-shroud: 9
+  chamomile-essential-oil: 3
   characteristic-extract: 5
   cloaked-specter-residue: 6
   cloud-essence: 6
+  cognizers-dust: 3
   coin-deceptive-fortune: 8
+  compressed-storm-core: 2
+  concealment-void-fragment: 2
+  condensed-glamour-fragment: 3
   condensed-sea-fog: 8
   condensed-storm-cloud: 7
+  conquering-supreme-seal: 1
+  corpse-buried-for-over-a-thousand-years: 2
   corpse-scented-oil: 8
+  corrupted-divine-creature: 1
+  corruption-shard: 3
+  cosmic-void-essence: 1
+  crimson-marshal-seal: 2
+  crystallized-arcane-ore: 3
+  crystallized-wisdom: 1
+  crystallized-wrath: 2
   cursed-ash: 8
   cursed-obsidian: 4
   dark-bat-wings: 6
@@ -325,61 +507,99 @@ supplementary:
   desolate-servant-hair: 4
   despiritualized-decaying-breath: 5
   destiny-shard: 4
+  deviant-soul: 1
   devil-parchment: 7
   discipline-essence: 5
   disorder-crystal: 5
+  disorder-essence: 3
+  distilled-calamity-essence: 1
+  distorted-gold: 3
+  divine-law-essence: 1
+  divine-light-fragment: 1
+  doorway-between-worlds: 3
   drago-bark: 5
   dragon-tooth-grass-powder: 6
+  dream-crystal: 3
   dream-eating-rat-blood: 5
   dream-fragment: 7
   droplet-gem-powder: 7
+  drops-of-blood-of-a-bloody-archduke: 2
+  drops-of-corpse-fluid-from-a-betrayed-true-god: 1
+  drops-of-water-from-the-river-styx: 1
   earthquake-stone: 4
   echo-false-promise: 8
   echo-lost-thought: 9
+  echo-of-crossed-thresholds: 3
+  echo-of-stolen-years: 1
+  echo-of-unchosen-path: 2
+  echo-of-unspoken-lies: 3
   echo-specter-fingertip: 4
+  eden-flower-pollen: 1
   elder-bat-eye: 5
+  elder-mind-dragon-eye: 3
   elderly-mind-dragon-blood: 4
   elf-flower-petals: 9
   elf-spring-water: 8
   enchanted-parchment: 6
   enigma-dust: 7
+  entropy-essence: 3
+  equilibrium-crystal: 2
   essence-of-transmutation: 4
+  eternal-charm-fragment: 1
+  eternal-darkness-relic: 2
   eternal-darkness-stone: 4
+  eternal-light-essence: 1
   ethereal-bone: 5
   ethereal-dust: 7
+  ethereal-mind-fragment: 1
   ethereal-mist: 5
   ever-shifting-lotus: 9
   fate-fragment: 4
   fire-salamander-blood: 7
+  flesh-blood-essence-trinity: 3
+  flower-blooming-from-one-owns-decayed-flesh: 3
   flower-faced-bat-blood: 5
+  flower-from-a-true-gods-divine-kingdom: 1
   flying-unicorn-blood: 9
   forest-hunter-tongue: 5
+  fragment-of-fate: 3
+  fragment-of-gods-wrath: 1
   fragrance-hornet-grass: 8
   freshly-stored-wine: 6
   frost-essence: 6
+  fruit-of-the-dark-treant: 3
+  gold-mint-leaves: 9
   golden-gorilla-blood: 9
   golden-jimsonweed: 7
   golden-rimmed-sunflower: 6
   golden-sap: 9
   golden-spring-water: 5
-  gold-mint-leaves: 9
   grapevine-powder: 8
   gray-demonic-wolf-claws: 5
+  hair-from-blood-offspring: 2
   harvest-giant-guardian-blood: 5
   harvest-giant-organ: 7
   harvest-giant-priest-blood: 4
   healing-herbs: 8
   history-dust: 8
-  holy-brilliance-rock-liquid: 4
+  holy-brillilliance-rock-liquid: 4
   holy-scripture: 6
   honeyguide-syrinx: 8
+  howling-wolf-blood: 3
+  hundred-grams-of-newly-born-gold: 1
+  hundred-grams-of-soil-blessed-by-one-owns-mother: 1
   hurricane-essence: 4
   ill-human-blood: 5
   imbued-ink-sac: 6
   imprisoned-soul: 4
+  incomparable-work-of-art: 1
   ink-reversed-truths: 7
+  insect-trapped-in-amber: 3
+  inverted-truth-crystal: 3
   investigators-notes: 7
   iridescent-pearl-dust: 8
+  item-corrupted-by-dark-power: 2
+  judgment-crystal: 3
   judgment-seal: 6
   june-snow-oil: 6
   knowledge-shard: 7
@@ -391,76 +611,114 @@ supplementary:
   lockpick-set: 9
   logical-essence: 8
   lucky-coins: 7
+  luminous-gem: 2
   lunar-crystal: 7
   madness-bloom: 5
+  magister-crystallized-mind: 2
   malice-essence: 4
   malignant-moon-guardian-blood: 4
   mechanical-oil: 8
+  mercury-essence: 1
   mind-crystal-powder: 6
   mind-piercing-shard: 7
   mirror-dragon-blood: 7
-  mistletoe-branch: 4
+  mirror-essence-crystal: 3
   mist-treant-juice: 7
+  mistletoe-branch: 4
+  moon-paper-substitute-of-oneself: 3
   moonflower-oil: 4
+  mystery-void-water: 1
   mystic-tome-fragment: 9
+  nails-of-high-summoner-sanguine-marquis: 3
   nebula-essence: 5
   nightshade-leaf: 9
   oak-of-life-fruit: 7
+  oak-seed: 2
   observatory-lens-fragment: 5
   obsidian-shard: 9
+  omniscient-divine-crystal: 1
+  one-undead-being-from-the-depths-of-the-underworld: 3
   oracle-stone: 4
   orchid-petal: 9
   order-crystal: 9
   osmanthus-flower-water: 7
   pale-lich-bone: 6
   pale-red-spider-lily: 4
+  paper-recording-of-100-inner-deaths: 3
   pearl-powder: 9
   phantom-cat-blood: 7
+  poem-of-praise-oneself: 2
   poison-bat-blood: 6
   poison-hemlock: 8
   powdered-sea-glass: 7
   precision-crystal-dust: 6
   precision-oil: 9
+  primordial-mind-crystal: 2
   probability-stone: 4
+  profane-scripture-fragment: 2
+  prophecy-ink: 3
+  prophetic-essence: 2
   prophetic-ink-dust: 9
   protection-rune: 5
   pulsating-flesh-sac: 6
   puppet-parasitic-worm-secretions: 4
   purified-water: 6
+  radiant-contract-seal: 3
+  radiant-solar-seal: 2
   rainbird-feather: 9
+  real-ancient-historical-records: 3
   reality-anchor: 4
   reality-fragment: 4
+  realm-anchor-crystal: 2
   red-chestnut-flower: 8
   red-headed-bat-teeth: 7
   red-spider-lily-oil: 5
   red-wine: 9
   refined-blood-crystal: 6
+  religious-text-of-legends-and-deeds-of-loyalty: 1
+  remnant-of-a-desertified-oasis: 2
   resilience-stone: 8
   righteousness-crystal: 5
   rock-water: 5
   rosemary: 5
   rotten-essence: 6
+  royal-martial-law-decree: 2
   royal-seal-fragment: 4
   runic-engraver-eye: 6
   rusty-chain: 9
+  sacrificial-food-already-used: 3
   salted-seaweed: 9
   scholars-ink: 9
+  scholars-mastery-seal: 3
+  section-of-the-original-laws-of-an-empire: 1
+  set-of-widely-circulated-currency-issued-by-concoctor: 1
+  shadow-binding-seal: 2
   shadow-essence: 6
+  shadow-knight-core: 3
   shadow-lizard-scales: 7
   shadow-remnant: 5
   shadow-traces-griegel: 4
+  shadow-world-fragment: 1
   sheriff-star: 8
   shield-of-ancients: 5
+  silent-oath-scroll: 3
   silver-hunter-fragment: 4
   siren-vocal-cord: 5
+  skin-harvested-from-mutations: 3
+  small-idol-imbued-with-sea-god-faith: 3
   soul-anchor: 5
   soul-shard: 6
+  sovereign-law-tablet: 1
   spellweavers-gem: 5
   sphinx-blood: 6
   spirit-world-plunderer-dust: 4
+  spiritual-corruption-essence: 2
   split-personality-essence: 6
   star-chart-parchment: 5
+  star-fragment-shard: 1
   starfaced-stone: 7
+  stellar-data-fragment: 2
+  stellar-knowledge-shard: 2
   storm-crystal: 6
   storm-quartz-needle: 6
   story-essence: 4
@@ -468,22 +726,43 @@ supplementary:
   string-grass-powder: 8
   sulfur-crystal: 6
   sun-divine-bird-blood: 4
+  sun-essence-crystal: 1
   sun-essential-oil: 7
   supplicant-teardrop: 9
+  teeth-of-a-violent-man-ape: 3
+  tempest-feather: 2
+  ten-drops-of-ichor: 1
   thousand-faced-hunter-blood: 6
   tree-blessed-pelt: 5
   tree-mentor-golden-leaf: 4
+  true-gods-blood: 2
   truth-serum: 7
   twilight-ore: 4
   twisted-dice: 5
   twisted-mind-fragment: 8
   universal-cipher: 6
+  veteran-commander-badge: 3
   vigilance-gem: 8
   void-crystal: 6
+  void-darkness-water: 1
+  void-dream-shard: 2
   void-essence: 5
+  void-shard: 3
+  volcanic-ash: 2
   voodoo-needle: 4
+  waters-contaminted-by-death: 3
   wayfinder-tree-root: 5
   weapon-shard: 7
+  whisper-crystal: 3
   whispering-ghost-mist: 9
   wild-eggplant-extract: 8
+  wisdom-dust: 2
+  withered-moment-shard: 1
   wolf-fang: 7
+  word-of-creation-essence: 1
+  world-crusher-core: 1
+  world-ending-resonance: 1
+  worm-of-spirit: 2
+  worm-of-star: 2
+  worm-of-time: 2
+  woven-paradox-silk: 2

@@ -1,8 +1,8 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.utils.coi;
 
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
-import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.source.ItemType;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.ItemSnapshot;
+import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.source.ItemType;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Material;
@@ -131,7 +131,8 @@ public class ItemInspector {
         // three it is. CoI builds potions as POTION, characteristics as PLAYER_HEAD and
         // formulae as written books.
         ItemType kind;
-        if (pdc.has(key("sequencePotion")) || item.getType() == Material.POTION
+
+        if (pdc.has(key("sequencepotion")) || item.getType() == Material.POTION
                 || item.getType() == Material.SPLASH_POTION || item.getType() == Material.LINGERING_POTION) {
             kind = ItemType.POTION;
         } else if (item.getType() == Material.PLAYER_HEAD || item.getType() == Material.PLAYER_WALL_HEAD) {

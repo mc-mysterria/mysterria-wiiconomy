@@ -3,13 +3,14 @@ package dev.ua.ikeepcalm.wiic.gui.market;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.WalletConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.StashItem;
-import dev.ua.ikeepcalm.wiic.domain.agora.market.service.MarketServices;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.source.ItemType;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.ListingService;
+import dev.ua.ikeepcalm.wiic.domain.agora.market.service.MarketServices;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.PriceGuide;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.GuiUtil;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.PriceInput;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -20,6 +21,7 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
 import xyz.xenondevs.invui.gui.Gui;
 import xyz.xenondevs.invui.item.Item;
+import xyz.xenondevs.invui.window.AnvilWindow;
 import xyz.xenondevs.invui.window.Window;
 
 import java.util.ArrayList;
@@ -44,6 +46,7 @@ public class ListingPriceGUI {
     private static final int PRICE_SLOT = 4;
     private static final int PREVIEW_SLOT = 13;
     private static final int CONFIRM_SLOT = 21;
+    private static final int TYPE_SLOT = 22;
     private static final int CANCEL_SLOT = 23;
     /** Step sizes as a fraction of the opening estimate, finest first. */
     private static final double[] STEP_FRACTIONS = {0.01, 0.05, 0.25, 1.0};
@@ -60,10 +63,16 @@ public class ListingPriceGUI {
 
     /** Asks the Fence what the goods are worth, then opens on that number. */
     public void open(Player player, ItemStack item) {
-        services.prices().suggest(item, suggestion -> render(player, item, suggestion));
+        services.prices().suggest(item, suggestion -> render(player, item, suggestion, suggestion.total()));
     }
 
-    private void render(Player player, ItemStack item, PriceGuide.Suggestion suggestion) {
+    /**
+     * @param opening the figure the screen starts on. Normally the Fence's suggestion, but
+     *                a re-render after the seller typed their own price carries theirs
+     *                instead — re-appraising would throw the typed number away, and asking
+     *                the database again for an answer already in hand would be waste.
+     */
+    private void render(Player player, ItemStack item, PriceGuide.Suggestion suggestion, long opening) {
         // The appraisal is a DB read, so the player had a tick or two to put the goods
         // down. `item` mirrors the inventory slot, so it may be air by now.
         if (item.getType().isAir() || item.getAmount() <= 0) {
@@ -76,7 +85,7 @@ public class ListingPriceGUI {
         // Single mutable price for the lifetime of the window: the steppers edit this
         // and repaint the display slot in place. Re-opening the window per click would
         // fire this window's own close handler and bounce the player back to the broker.
-        long[] price = {Math.clamp(suggestion.total(),
+        long[] price = {Math.clamp(opening,
                 services.config().minPrice(), services.config().maxPrice())};
 
         Material bg = WalletConfig.getThemeBackground(player.getUniqueId(), GuiUtil.backgroundMaterial(config));
@@ -112,6 +121,21 @@ public class ListingPriceGUI {
                 })
                 .build());
 
+        // The steppers can only ever walk away from the Fence's opening figure, and when
+        // that figure is wrong — a supplementary ingredient he could not place, an item he
+        // has never valued — walking is hundreds of clicks. Typing is the way out.
+        ItemStack type = MarketBrowseGUI.configItem(config, "items.type-price", player,
+                Material.WRITABLE_BOOK, "<yellow>ɴᴀᴍᴇ ɪᴛ ʏᴏᴜʀsᴇʟꜰ", Map.of());
+        gui.setItem(TYPE_SLOT, Item.builder().setItemProvider(type)
+                .addClickHandler(_ -> {
+                    if (acted[0]) return;
+                    // Opening the anvil closes this window, which would otherwise fire the
+                    // close handler below and drop the seller back at the broker.
+                    acted[0] = true;
+                    openTypePrice(player, item, suggestion, price[0]);
+                })
+                .build());
+
         ItemStack cancel = MarketBrowseGUI.configItem(config, "items.cancel", player,
                 Material.RED_CONCRETE, "<red>ᴄᴀɴᴄᴇʟ", Map.of());
         gui.setItem(CANCEL_SLOT, Item.builder().setItemProvider(cancel)
@@ -136,6 +160,98 @@ public class ListingPriceGUI {
     }
 
     /**
+     * A vanilla anvil text field for naming a price outright, in coppets or in the coins
+     * players actually think in — see {@link PriceInput}.
+     *
+     * <p>Closing it without a valid figure returns to the price screen on the same number
+     * it left on, so a mistyped price costs a click rather than the whole listing.
+     */
+    private void openTypePrice(Player player, ItemStack item, PriceGuide.Suggestion suggestion, long current) {
+        String[] latest = {String.valueOf(current)};
+        boolean[] returned = {false};
+        long min = services.config().minPrice();
+        long max = services.config().maxPrice();
+
+        Runnable back = () -> {
+            if (returned[0]) return;
+            returned[0] = true;
+            render(player, item, suggestion, current);
+        };
+
+        Gui upperGui = Gui.builder()
+                .setStructure("i # r")
+                .addIngredient('i', Item.builder().setItemProvider(typePrompt(current, min, max)).build())
+                .addIngredient('#', GuiUtil.emptyPane(Material.GRAY_STAINED_GLASS_PANE))
+                .addIngredient('r', Item.builder().setItemProvider(
+                                MarketBrowseGUI.plainItem(Material.GOLD_NUGGET, "<green>ꜱᴇᴛ ᴘʀɪᴄᴇ"))
+                        .addClickHandler(_ -> {
+                            long parsed = PriceInput.parse(latest[0]);
+                            if (parsed < 0) {
+                                player.sendMessage(MM.deserialize(services.config().message("listing-price-unreadable",
+                                        "<red>That isn't a price. Try a number, or something like \"3v 10l\".")));
+                                return;
+                            }
+                            if (parsed < min || parsed > max) {
+                                player.sendMessage(MM.deserialize(services.config().message("listing-price-range",
+                                                "<red>The fence deals between %min% and %max%.")
+                                        .replace("%min%", MarketBrowseGUI.plain(
+                                                CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(min))))
+                                        .replace("%max%", MarketBrowseGUI.plain(
+                                                CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(max))))));
+                                return;
+                            }
+                            if (returned[0]) return;
+                            returned[0] = true;
+                            render(player, item, suggestion, parsed);
+                        })
+                        .build())
+                .build();
+
+        ConfigurationSection config = services.config().guiSection("price-gui");
+        String titleStr = config != null
+                ? config.getString("type-title", "ᴛʏᴘᴇ ᴀ ᴘʀɪᴄᴇ")
+                : "ᴛʏᴘᴇ ᴀ ᴘʀɪᴄᴇ";
+        AnvilWindow.builder()
+                .setViewer(player)
+                .setUpperGui(upperGui)
+                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of())))
+                .setTextFieldAlwaysEnabled(true)
+                .setResultAlwaysValid(true)
+                .addRenameHandler(text -> latest[0] = text)
+                .addCloseHandler(_ -> back.run())
+                .build()
+                .open();
+    }
+
+    /**
+     * The anvil's left-hand slot: what the seller may type, and how.
+     *
+     * <p>Its display name is the anvil's text field, so it is the current price in plain
+     * digits and nothing else — the seller edits a number rather than clearing a label
+     * before they can start.
+     */
+    private ItemStack typePrompt(long current, long min, long max) {
+        ItemStack prompt = new ItemStack(Material.PAPER);
+        prompt.editMeta(meta -> {
+            meta.displayName(Component.text(String.valueOf(current))
+                    .decoration(TextDecoration.ITALIC, false));
+            meta.lore(List.of(
+                    line(services.config().message("listing-price-hint-plain",
+                            "<dark_gray>ᴀ ɴᴜᴍʙᴇʀ ɪs ᴄᴏᴘᴘᴇᴛs: <gray>1200")),
+                    line(services.config().message("listing-price-hint-coins",
+                            "<dark_gray>ᴏʀ ᴄᴏɪɴs: <gray>3v 10l 5c")),
+                    Component.empty(),
+                    line(services.config().message("listing-price-hint-range",
+                                    "<dark_gray>ʙᴇᴛᴡᴇᴇɴ <gray>%min%<dark_gray> ᴀɴᴅ <gray>%max%")
+                            .replace("%min%", MarketBrowseGUI.plain(
+                                    CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(min))))
+                            .replace("%max%", MarketBrowseGUI.plain(
+                                    CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(max)))))));
+        });
+        return prompt;
+    }
+
+    /**
      * The item as the Fence sees it: the goods themselves, plus what he reckons they are
      * worth and why. Saying where the number came from matters — "eleven of these have
      * changed hands" is a fact about the market, while a sequence estimate is an opinion,
@@ -155,6 +271,16 @@ public class ListingPriceGUI {
             lore.add(line("<dark_gray>──────────────"));
             lore.add(line(services.config().message("appraisal-header", "<gray>ᴛʜᴇ ꜰᴇɴᴄᴇ ʀᴇᴄᴋᴏɴs: <gold>%worth%")
                     .replace("%worth%", worth)));
+            // On a stack the header is the total, which says nothing about whether the
+            // Fence values the goods correctly. The per-unit figure is the one a seller
+            // can actually check against what they know a single one is worth.
+            if (item.getAmount() > 1) {
+                lore.add(line(services.config().message("appraisal-unit",
+                                "<dark_gray>%amount% x <gray>%unit%")
+                        .replace("%amount%", String.valueOf(item.getAmount()))
+                        .replace("%unit%", MarketBrowseGUI.plain(CoinUtil.getFormattedPrice(
+                                MarketBrowseGUI.clampToInt(suggestion.unitPrice()))))));
+            }
 
             switch (suggestion.basis()) {
                 case OBSERVED -> lore.add(line(services.config().message("appraisal-observed",
@@ -171,8 +297,15 @@ public class ListingPriceGUI {
                                 "<dark_gray>\"ɴᴏᴛ ᴍᴜᴄʜ ᴀʟᴏɴᴇ. ᴘᴀʀᴛ ᴏꜰ ꜱᴏᴍᴇᴛʜɪɴɢ ᴍᴜᴄʜ ᴍᴏʀᴇ.\"")));
                     }
                 }
+                // He can tell they are of the Order, but not how deep they run. Said out
+                // loud, because a guess presented as a valuation is how goods get sold for
+                // a hundredth of their worth.
+                case ESTIMATED -> lore.add(line(services.config().message("appraisal-estimated",
+                        "<dark_purple>\"ᴏꜰ ᴛʜᴇ ᴏʀᴅᴇʀ, ʙᴜᴛ ɪ ᴄᴀɴɴᴏᴛ ᴘʟᴀᴄᴇ ɪᴛ. ᴀ ɢᴜᴇꜱꜱ — ɴᴀᴍᴇ ʏᴏᴜʀ ᴏᴡɴ.\"")));
                 case SHOP -> lore.add(line(services.config().message("appraisal-mundane",
                         "<dark_gray>\"ᴏʀᴅɪɴᴀʀʏ ꜱᴛᴏᴄᴋ. ɪ ᴋɴᴏᴡ ᴛʜᴇ ɢᴏɪɴɢ ʀᴀᴛᴇ.\"")));
+                case CRAFTED -> lore.add(line(services.config().message("appraisal-crafted",
+                        "<dark_gray>\"ɪ ᴋɴᴏᴡ ᴡʜᴀᴛ ɢᴏᴇꜱ ɪɴᴛᴏ ᴏɴᴇ ᴏꜰ ᴛʜᴇꜱᴇ.\"")));
                 case NONE -> lore.add(line(services.config().message("appraisal-unknown",
                         "<dark_gray>\"ɴᴇᴠᴇʀ ꜱᴇᴇɴ ɪᴛꜱ ʟɪᴋᴇ. ɴᴀᴍᴇ ʏᴏᴜʀ ᴏᴡɴ ᴘʀɪᴄᴇ.\"")));
             }

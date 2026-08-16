@@ -1,14 +1,14 @@
 package dev.ua.ikeepcalm.wiic.commands;
 
-import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketModule;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.model.EntranceItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.EntranceService;
-import dev.ua.ikeepcalm.wiic.domain.agora.plots.listener.PlotWandListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketBounds;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketEntrance;
+import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketModule;
+import dev.ua.ikeepcalm.wiic.domain.agora.npc.model.source.MarketNpcRole;
+import dev.ua.ikeepcalm.wiic.domain.agora.plots.listener.PlotWandListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.model.PlotRegion;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.model.PlotRental;
-import dev.ua.ikeepcalm.wiic.domain.agora.npc.model.source.MarketNpcRole;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.service.PlotService;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import net.kyori.adventure.text.Component;
@@ -19,6 +19,7 @@ import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -61,14 +62,51 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                 ItemUtil.giveOrDrop(player, EntranceItem.create(module.getConfig()));
                 player.sendMessage(Component.text("Secret entrance item given.").color(NamedTextColor.GREEN));
             }
+            case "appraise" -> handleAppraise(player);
             case "reload" -> {
                 module.getConfig().reload();
                 module.getServices().plots().reloadRegions();
+                module.getServices().prices().invalidate();
                 player.sendMessage(Component.text("market.yml reloaded.").color(NamedTextColor.GREEN));
             }
             default -> usage(player);
         }
         return true;
+    }
+
+    /**
+     * Asks the Fence about the held item and prints the answer in full — the figure, the
+     * per-unit figure, and which of his sources produced it.
+     *
+     * <p>Every complaint about the price guide is really a complaint about one of those
+     * three, and there is otherwise no way to tell "the sequence index has never heard of
+     * this ingredient" apart from "the sequence index says it is shallow": both come out
+     * of the listing screen as one number.
+     */
+    private void handleAppraise(Player player) {
+        ItemStack held = player.getInventory().getItemInMainHand();
+        if (held.getType().isAir()) {
+            player.sendMessage(Component.text("Hold the item you want appraised.").color(NamedTextColor.RED));
+            return;
+        }
+        module.getServices().prices().suggest(held, suggestion -> {
+            var facts = suggestion.facts();
+            player.sendMessage(Component.text(held.getType().name() + " x" + held.getAmount())
+                    .color(NamedTextColor.GOLD));
+            player.sendMessage(Component.text("  total " + suggestion.total()
+                            + " coppets, unit " + suggestion.unitPrice())
+                    .color(NamedTextColor.YELLOW));
+            player.sendMessage(Component.text("  basis " + suggestion.basis()
+                            + " (from " + suggestion.sampled() + " past sales)")
+                    .color(NamedTextColor.GRAY));
+            player.sendMessage(Component.text("  kind " + facts.kind()
+                            + ", pathway " + facts.pathway()
+                            + ", declared sequence " + facts.declaredSequence()
+                            + ", served sequence " + facts.servedSequence()
+                            + ", ingredient " + facts.ingredientKey())
+                    .color(NamedTextColor.DARK_GRAY));
+            player.sendMessage(Component.text("  value key " + facts.valueKey()).color(NamedTextColor.DARK_GRAY));
+        });
     }
 
     private void handleNpc(Player player, String[] args) {
@@ -426,14 +464,14 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
 
     private void usage(Player player) {
         player.sendMessage(Component.text(
-                "/wiicmarket <npc|entrance|plot|bounds|open|give-entrance|reload>").color(NamedTextColor.GOLD));
+                "/wiicmarket <npc|entrance|plot|bounds|open|give-entrance|appraise|reload>").color(NamedTextColor.GOLD));
     }
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                 @NotNull String alias, @NotNull String[] args) {
         if (args.length == 1) {
-            return filter(args[0], Stream.of("npc", "entrance", "plot", "bounds", "open", "give-entrance", "reload"));
+            return filter(args[0], Stream.of("npc", "entrance", "plot", "bounds", "open", "give-entrance", "appraise", "reload"));
         }
         if (args.length == 2) {
             return switch (args[0].toLowerCase(Locale.ROOT)) {

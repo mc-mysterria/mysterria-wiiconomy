@@ -556,26 +556,110 @@ public class MarketConfig {
         return config.getBoolean("valuation.enabled", true);
     }
 
-    /** Worth of a Sequence 9 potion, in coppets — the anchor the whole curve hangs off. */
+    /**
+     * Worth of a Sequence 9 potion, in coppets — the anchor the whole curve hangs off.
+     * One lick: the shallowest advancement on any pathway, and about a day's earnings.
+     */
     public long valuationSequenceBase() {
-        return Math.max(1, config.getLong("valuation.coi.sequence-9-potion", 256));
+        return Math.max(1, config.getLong("valuation.coi.sequence-9-potion", 64));
     }
 
     /**
-     * Multiplier per step deeper into a pathway. At the default 2.2 a Sequence 0 potion
-     * is worth ~1200x a Sequence 9 one — verldors against coppets, which is the intent.
+     * Multiplier per step deeper into a pathway.
+     *
+     * <p>This and {@link #valuationSequenceBase()} are fitted to observed Sequence 1
+     * prices — roughly 32 licks for the cheapest goods of that depth up to two or three
+     * verldors for the dearest. Both ends matter: the kind multipliers already fix how
+     * far a formula or a characteristic sits from its potion, so a single observed
+     * <em>band</em> at one sequence determines the base and the ratio together. At the
+     * default a Sequence 1 potion is ~1.2 verldors and a Sequence 9 one is a lick.
      */
     public double valuationSequenceRatio() {
-        return Math.max(1.01, config.getDouble("valuation.coi.sequence-ratio", 2.2));
+        return Math.max(1.01, config.getDouble("valuation.coi.sequence-ratio", 1.72));
     }
 
     public double valuationKindMultiplier(String kind, double def) {
         return Math.max(0, config.getDouble("valuation.coi.kind." + kind.toLowerCase(Locale.ROOT), def));
     }
 
-    /** Sequence assumed for an ingredient missing from {@code coi-ingredients.yml}. */
+    /**
+     * Sequence assumed for an ingredient missing from {@code coi-ingredients.yml}.
+     *
+     * <p>Defaults to the middle of the live range rather than the shallowest end. An
+     * ingredient the index has never heard of is far more likely to be <em>new</em> —
+     * a sequence CoI has only just implemented, and therefore a deep one — than to be
+     * a Sequence 9 trinket that somehow escaped a generated file. Guessing 9 priced
+     * every unknown ingredient at the floor, which is the one answer guaranteed to be
+     * wrong; the guide also reports these as an estimate rather than a valuation, so
+     * the seller knows to name their own figure.
+     */
     public int valuationUnknownIngredientSequence() {
-        return Math.clamp(config.getInt("valuation.coi.unknown-ingredient-sequence", 9), 0, 9);
+        return Math.clamp(config.getInt("valuation.coi.unknown-ingredient-sequence", 6), 0, 9);
+    }
+
+    // -- Ordinary goods (see MaterialValuator) ---------------------------------
+
+    /**
+     * Whether the Fence may derive a price from the server's recipe graph.
+     */
+    public boolean valuationVanillaCraftingEnabled() {
+        return config.getBoolean("valuation.vanilla.use-recipes", true);
+    }
+
+    /**
+     * What a crafted item is worth over the sum of its parts. Above 1.0 because assembling
+     * something is work, and because a chain of derivations that loses value at every step
+     * ends up pricing a beacon below its own nether star.
+     */
+    public double valuationCraftMarkup() {
+        return Math.clamp(config.getDouble("valuation.vanilla.craft-markup", 1.15), 1.0, 4.0);
+    }
+
+    /**
+     * How many recipe steps the derivation walks before giving up.
+     */
+    public int valuationMaxRecipeDepth() {
+        return Math.clamp(config.getInt("valuation.vanilla.max-recipe-depth", 6), 1, 6);
+    }
+
+    /**
+     * Multiplies WIIC's built-in raw-material table — how expensive the whole ordinary
+     * half of the economy is, as one number. Admin-written seeds and overrides are
+     * absolute and are not touched by it.
+     */
+    public double valuationVanillaScale() {
+        return Math.clamp(config.getDouble("valuation.vanilla.scale", 1.0), 0.01, 100.0);
+    }
+
+    /**
+     * Worth of a single enchantment level, added on top of the item's own price. Small
+     * next to the item, but it adds up: at the default a Sharpness V, Unbreaking III
+     * diamond sword is worth roughly three plain ones, which is about right for the work
+     * of getting there.
+     */
+    public long valuationEnchantPerLevel() {
+        return Math.max(0, config.getLong("valuation.vanilla.enchant-per-level", 4));
+    }
+
+    /**
+     * Opening price for an ordinary item nothing else could explain.
+     */
+    public long valuationVanillaDefault() {
+        return Math.max(1, config.getLong("valuation.vanilla.default-price", 4));
+    }
+
+    /**
+     * An absolute per-material price, or {@code -1} when the admin hasn't named one.
+     */
+    public long valuationVanillaOverride(String materialName) {
+        return config.getLong("valuation.vanilla.overrides." + materialName.toUpperCase(Locale.ROOT), -1);
+    }
+
+    /**
+     * Admin additions to (and overrides of) the built-in raw-material seed table.
+     */
+    public @Nullable ConfigurationSection valuationVanillaSeeds() {
+        return config.getConfigurationSection("valuation.vanilla.seeds");
     }
 
     /** How many past sales of the same kind of goods the guide averages over. */
@@ -611,12 +695,32 @@ public class MarketConfig {
         return ingredients().contains("main." + ingredientKey);
     }
 
+    /**
+     * The ingredient → sequence index, with the copy bundled in the jar layered underneath
+     * the admin's on-disk one as defaults.
+     *
+     * <p>The layering matters. {@code saveResource(..., false)} writes the file once and
+     * never again, so a server that has been running since before CoI implemented a
+     * sequence keeps an index that predates it forever — and every ingredient added since
+     * falls to {@link #valuationUnknownIngredientSequence()} and is priced as a trinket.
+     * Reading the jar's copy as defaults means new ingredients appear the moment WIIC is
+     * updated, while anything the admin has deliberately written on disk still wins. This
+     * is the same defaults-merge {@link #reload()} does for {@code market.yml} itself.
+     */
     private FileConfiguration ingredients() {
         FileConfiguration loaded = ingredientIndex;
         if (loaded != null) return loaded;
         File file = new File(plugin.getDataFolder(), "coi-ingredients.yml");
         if (!file.exists()) plugin.saveResource("coi-ingredients.yml", false);
         loaded = YamlConfiguration.loadConfiguration(file);
+        try (InputStream in = plugin.getResource("coi-ingredients.yml")) {
+            if (in != null) {
+                loaded.setDefaults(YamlConfiguration.loadConfiguration(
+                        new InputStreamReader(in, StandardCharsets.UTF_8)));
+            }
+        } catch (IOException e) {
+            plugin.getLogger().warning("Failed to load bundled coi-ingredients.yml: " + e.getMessage());
+        }
         ingredientIndex = loaded;
         return loaded;
     }
