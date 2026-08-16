@@ -21,9 +21,14 @@ import java.util.Map;
  * the chosen one. Knows only what's actually for sale — pathways with no live
  * listings simply don't appear, which is very much in character.
  *
+ * <p>Ingredients get a shelf of their own. CoI tags them with nothing but
+ * {@code circleofimagination:ingredient} — no pathway, no sequence — so they are
+ * invisible to a pathway index however many of them are listed.
+ *
  * <p>Configured via {@code informant-gui} in {@code market.yml}: {@code title},
  * {@code background}, {@code items.pathway} ({@code %pathway%}), {@code
- * items.nothing} (shown when no beyonder goods are listed).
+ * items.ingredients} ({@code %count%}), {@code items.nothing} (shown when no
+ * beyonder goods are listed at all).
  */
 public class InformantSearchGUI {
 
@@ -37,13 +42,14 @@ public class InformantSearchGUI {
     }
 
     public void open(Player player) {
-        services.db().submitThenMain(ListingDao::distinctPathways,
-                pathways -> render(player, pathways),
+        services.db().submitThenMain(ListingDao::coiIndex,
+                index -> render(player, index),
                 error -> player.sendMessage(MM.deserialize(services.config().message("market-error",
                         "<red>The market ledgers are in disarray. Try again later."))));
     }
 
-    private void render(Player player, List<String> pathways) {
+    private void render(Player player, ListingDao.CoiIndex index) {
+        List<String> pathways = index.pathways();
         ConfigurationSection config = services.config().guiSection("informant-gui");
 
         Material bg = WalletConfig.getThemeBackground(player.getUniqueId(), GuiUtil.backgroundMaterial(config));
@@ -56,7 +62,7 @@ public class InformantSearchGUI {
                 .addIngredient('#', GuiUtil.emptyPane(bg))
                 .build();
 
-        if (pathways.isEmpty()) {
+        if (pathways.isEmpty() && index.unaligned() == 0) {
             gui.setItem(13, Item.builder().setItemProvider(
                     MarketBrowseGUI.configItem(config, "items.nothing", player, Material.GLASS_BOTTLE,
                             "<gray>\"ɴᴏᴛʜɪɴɢ ᴍʏsᴛɪᴄᴀʟ ᴏɴ ᴛʜᴇ sʜᴇʟᴠᴇs ᴛᴏᴅᴀʏ...\"", Map.of())).build());
@@ -73,6 +79,18 @@ public class InformantSearchGUI {
                             .open(player, MarketBrowseGUI.Filter.pathway(pathway, null), ListingDao.Sort.NEWEST, 0))
                     .build());
             slot++;
+        }
+
+        // Ingredients carry no pathway of their own, so they can never appear above —
+        // without their own shelf a stall full of them reads as an empty market.
+        if (index.unaligned() > 0 && slot < 36) {
+            Map<String, String> extras = Map.of("%count%", String.valueOf(index.unaligned()));
+            var icon = MarketBrowseGUI.configItem(config, "items.ingredients", player,
+                    Material.GLOW_BERRIES, "<dark_purple>ɪɴɢʀᴇᴅɪᴇɴᴛs <dark_gray>(%count%)", extras);
+            gui.setItem(slot, Item.builder().setItemProvider(icon)
+                    .addClickHandler(_ -> new MarketBrowseGUI(services, () -> open(player))
+                            .open(player, MarketBrowseGUI.Filter.ingredients(), ListingDao.Sort.NEWEST, 0))
+                    .build());
         }
 
         String titleStr = config != null ? config.getString("title", "The Informant") : "The Informant";

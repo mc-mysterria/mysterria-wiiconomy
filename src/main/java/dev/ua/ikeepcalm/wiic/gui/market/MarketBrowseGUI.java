@@ -41,25 +41,31 @@ public class MarketBrowseGUI {
 
     /** Immutable browse filter; also used by the Informant and plot vendors. */
     public record Filter(@Nullable String category, @Nullable String pathway,
-                         @Nullable Integer sequence, @Nullable String plotId, @Nullable String query) {
+                         @Nullable Integer sequence, @Nullable String plotId, @Nullable String query,
+                         boolean coiUnaligned) {
         public static Filter all() {
-            return new Filter(null, null, null, null, null);
+            return new Filter(null, null, null, null, null, false);
         }
 
         public static Filter category(String category) {
-            return new Filter(category, null, null, null, null);
+            return new Filter(category, null, null, null, null, false);
         }
 
         public static Filter pathway(String pathway, @Nullable Integer sequence) {
-            return new Filter(null, pathway, sequence, null, null);
+            return new Filter(null, pathway, sequence, null, null, false);
         }
 
         public static Filter plot(String plotId) {
-            return new Filter(null, null, null, plotId, null);
+            return new Filter(null, null, null, plotId, null, false);
         }
 
         public static Filter search(String query) {
-            return new Filter(null, null, null, null, query);
+            return new Filter(null, null, null, null, query, false);
+        }
+
+        /** Beyonder goods CoI gives no pathway — ingredients. */
+        public static Filter ingredients() {
+            return new Filter(null, null, null, null, null, true);
         }
     }
 
@@ -92,6 +98,9 @@ public class MarketBrowseGUI {
             }
             if (filter.pathway() != null) {
                 return ListingDao.searchByPathway(conn, filter.pathway(), filter.sequence(), PAGE_SIZE + 1);
+            }
+            if (filter.coiUnaligned()) {
+                return ListingDao.searchUnalignedCoi(conn, PAGE_SIZE + 1);
             }
             return ListingDao.browse(conn, filter.category(), null, filter.plotId(),
                     sort, PAGE_SIZE + 1, page * PAGE_SIZE);
@@ -226,19 +235,31 @@ public class MarketBrowseGUI {
     }
 
     private ItemStack buildListingIcon(Listing listing, List<String> loreTemplate) {
-        ItemStack display = new ItemStack(listing.material(),
-                Math.clamp(listing.amount(), 1, listing.material().getMaxStackSize()));
+        ItemStack restored = restoreItem(listing);
+        boolean snapshotOnly = restored == null;
+        ItemStack display = snapshotOnly
+                ? new ItemStack(listing.material(),
+                        Math.clamp(listing.amount(), 1, listing.material().getMaxStackSize()))
+                : restored;
+        if (!snapshotOnly) {
+            display.setAmount(Math.clamp(listing.amount(), 1, display.getMaxStackSize()));
+        }
+
         String price = plain(CoinUtil.getFormattedPrice(clampToInt(listing.price())));
         String expires = formatRemaining(listing.expiresAt() - System.currentTimeMillis());
         display.editMeta(meta -> {
-            if (listing.displayName() != null && !listing.displayName().isEmpty()) {
+            // The restored item brings its own name, styled the way its own plugin styled
+            // it; the snapshot column is plain text and would flatten the colour out of it.
+            if (!meta.hasDisplayName() && listing.displayName() != null && !listing.displayName().isEmpty()) {
                 meta.displayName(Component.text(listing.displayName()).decoration(TextDecoration.ITALIC, false));
             }
-            // Browse icons are built from the snapshot columns, never the item blob, so a
-            // beyonder artefact would otherwise sit on the shelf looking like plain glass.
-            // The glint costs nothing and makes the mystical stock findable at a glance.
-            if (listing.coiItem()) meta.setEnchantmentGlintOverride(true);
-            List<Component> lore = new ArrayList<>();
+            // Only the fallback icon needs help standing out — a restored item already
+            // carries its own model, glint and trim.
+            if (snapshotOnly && listing.coiItem()) meta.setEnchantmentGlintOverride(true);
+
+            // Market lines are appended, never substituted: an item's own lore is part of
+            // what a buyer is judging, and a beyonder item's lore is most of its identity.
+            List<Component> lore = meta.hasLore() ? new ArrayList<>(meta.lore()) : new ArrayList<>();
             List<String> template = loreTemplate.isEmpty()
                     ? List.of("", "<gold>%price%", "<gray>sᴏʟᴅ ʙʏ <white>%seller%", "<dark_gray>ᴇxᴘɪʀᴇs ɪɴ %expires%")
                     : loreTemplate;
@@ -257,6 +278,26 @@ public class MarketBrowseGUI {
             meta.lore(lore);
         });
         return display;
+    }
+
+    /**
+     * The listed item itself, so custom item models, trims and components survive onto
+     * the shelf — an icon rebuilt from the snapshot columns renders a beyonder
+     * ingredient as the plain material CoI happened to base it on.
+     *
+     * @return null when the blob is missing or unreadable, leaving the caller to fall
+     *         back to the snapshot rather than dropping the listing off the shelf.
+     */
+    private static @Nullable ItemStack restoreItem(Listing listing) {
+        byte[] bytes = listing.itemBytes();
+        if (bytes == null || bytes.length == 0) return null;
+        try {
+            ItemStack restored = ItemStack.deserializeBytes(bytes);
+            return restored == null || restored.getType().isAir() ? null : restored;
+        } catch (RuntimeException e) {
+            // Written by an older server, or corrupt. The snapshot still describes it.
+            return null;
+        }
     }
 
     // -------------------------------------------------------------------------

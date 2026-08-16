@@ -137,6 +137,38 @@ public class MarketConfig {
         return resolved;
     }
 
+    /**
+     * Adopts a world WIIC loaded itself. {@code world:} may be written in a world
+     * manager's namespace ({@code worlds:agora}) while a world WIIC creates lands in
+     * Bukkit's ({@code minecraft:agora}), and then {@link #world()} would never resolve
+     * the very world it just loaded.
+     */
+    public void adoptWorld(World world) {
+        worldCache = world;
+    }
+
+    public boolean worldBootstrapEnabled() {
+        return config.getBoolean("world-bootstrap.enabled", false);
+    }
+
+    /**
+     * Level folder to load. Defaults to {@code world:} minus any namespace — a
+     * {@code WorldCreator} takes a folder name, and {@code worlds:agora} is not one.
+     */
+    public String worldBootstrapFolder() {
+        String configured = config.getString("world-bootstrap.folder", "");
+        if (configured != null && !configured.isBlank()) return configured.strip();
+        String id = worldName();
+        int colon = id.indexOf(':');
+        return colon >= 0 ? id.substring(colon + 1) : id;
+    }
+
+    /** Chunk generator id for the bootstrap load; blank means a flat void. */
+    public String worldBootstrapGenerator() {
+        String generator = config.getString("world-bootstrap.generator", "");
+        return generator == null ? "" : generator.strip();
+    }
+
     /** Hot path — called from every world-scoped listener, in every world. */
     public boolean isMarketWorld(@Nullable World world) {
         if (world == null) return false;

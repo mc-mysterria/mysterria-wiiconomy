@@ -228,6 +228,38 @@ public class ListingDao {
         }
     }
 
+    /**
+     * Everything the Informant can point at: pathways with live goods, and how many
+     * beyonder items carry no pathway at all.
+     *
+     * @param unaligned live beyonder listings with a null pathway — ingredients, in
+     *                  practice, since CoI tags those with only
+     *                  {@code circleofimagination:ingredient}. Counting them separately
+     *                  is what keeps a shelf full of ingredients from reading as empty.
+     */
+    public record CoiIndex(List<String> pathways, int unaligned) {}
+
+    public static CoiIndex coiIndex(Connection c) throws SQLException {
+        List<String> pathways = distinctPathways(c);
+        try (PreparedStatement ps = c.prepareStatement("""
+                SELECT COUNT(*) FROM listings
+                WHERE state = 'ACTIVE' AND is_coi_item = 1 AND coi_pathway IS NULL""");
+             ResultSet rs = ps.executeQuery()) {
+            return new CoiIndex(pathways, rs.next() ? rs.getInt(1) : 0);
+        }
+    }
+
+    /** Beyonder goods with no pathway of their own — ingredients. */
+    public static List<Listing> searchUnalignedCoi(Connection c, int limit) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("""
+                SELECT * FROM listings
+                WHERE state = 'ACTIVE' AND is_coi_item = 1 AND coi_pathway IS NULL
+                ORDER BY created_at DESC LIMIT ?""")) {
+            ps.setInt(1, limit);
+            return mapAll(ps);
+        }
+    }
+
     public static List<Listing> bySeller(Connection c, UUID seller) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement("""
                 SELECT * FROM listings WHERE seller_uuid = ? AND state IN ('ACTIVE', 'PENDING_PAYMENT')

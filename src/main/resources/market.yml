@@ -10,6 +10,24 @@ world: "mysterria_market"
 # x, y, z, yaw of the spot players arrive at inside the market world
 arrival: [ 0.5, 64.0, 0.5, 0.0 ]
 
+# Loads the market world at startup when no world manager has already done it.
+# A world manager that forgets its registration between restarts leaves the level
+# folder on disk but never loads it, and every entrance then refuses to teleport;
+# with this on, WIIC loads the folder itself and the market comes back untouched.
+# It is a load, not a generate — an existing folder keeps its builds and NPCs.
+world-bootstrap:
+  enabled: false
+  # Level folder under the server root. Only used when Worlds is NOT installed and
+  # WIIC loads the level through Bukkit itself — with Worlds present, `world` above
+  # is the level key. Blank = `world` with any namespace stripped, because a folder
+  # cannot be named "worlds:agora".
+  folder: ""
+  # Chunk generator, as given to /world create ... generator <name>. Blank generates
+  # a flat void level. Only consulted when the world has to be created from nothing:
+  # a level Worlds already knows keeps the generator it was registered with, and an
+  # existing level folder keeps its own settings either way.
+  generator: ""
+
 confirm-arm-ms: 400
 
 listings:
@@ -493,6 +511,22 @@ banker-gui:
 informant-gui:
   title: "ᴛʜᴇ ɪɴꜰᴏʀᴍᴀɴᴛ"
   background: GRAY_STAINED_GLASS_PANE
+  items:
+    # One per pathway with live goods; %pathway%
+    pathway:
+      material: ENCHANTED_BOOK
+      name: "<dark_purple>%pathway%"
+    # Ingredients have no pathway, so they get their own shelf; %count%
+    ingredients:
+      material: GLOW_BERRIES
+      name: "<dark_purple>ɪɴɢʀᴇᴅɪᴇɴᴛs <dark_gray>(%count%)"
+      lore:
+        - ""
+        - "<gray>ᴄᴏᴍᴘᴏɴᴇɴᴛs ᴡɪᴛʜ ɴᴏ ᴘᴀᴛʜᴡᴀʏ"
+        - "<gray>ᴏꜰ ᴛʜᴇɪʀ ᴏᴡɴ."
+    nothing:
+      material: GLASS_BOTTLE
+      name: "<gray>\"ɴᴏᴛʜɪɴɢ ᴍʏsᴛɪᴄᴀʟ ᴏɴ ᴛʜᴇ sʜᴇʟᴠᴇs ᴛᴏᴅᴀʏ...\""
 
 courier-gui:
   title: "ᴛʜᴇ ᴄᴏᴜʀɪᴇʀ ᴘᴏsᴛ"

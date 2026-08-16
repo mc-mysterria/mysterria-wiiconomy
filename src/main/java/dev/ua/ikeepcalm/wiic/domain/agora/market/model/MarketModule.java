@@ -3,48 +3,43 @@ package dev.ua.ikeepcalm.wiic.domain.agora.market.model;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.config.WalletConfig;
-import dev.ua.ikeepcalm.wiic.domain.agora.market.service.MarketServices;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.MarketDatabase;
-import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.ContainmentService;
-import dev.ua.ikeepcalm.wiic.domain.agora.entrance.model.EntranceItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.listener.EntranceListener;
+import dev.ua.ikeepcalm.wiic.domain.agora.entrance.model.EntranceItem;
+import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.ContainmentService;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.EntranceService;
-import dev.ua.ikeepcalm.wiic.domain.agora.integration.LandsHook;
 import dev.ua.ikeepcalm.wiic.domain.agora.integration.CourierHook;
+import dev.ua.ikeepcalm.wiic.domain.agora.integration.LandsHook;
+import dev.ua.ikeepcalm.wiic.domain.agora.integration.WorldsHook;
+import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.CourierService;
+import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.LedgerService;
+import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.ListingService;
+import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.StashService;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.listener.MarketContainmentListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.listener.MarketPlayerListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.listener.MarketProtectionListener;
-import dev.ua.ikeepcalm.wiic.domain.agora.plots.listener.PlotShopListener;
-import dev.ua.ikeepcalm.wiic.domain.agora.plots.listener.PlotWandListener;
+import dev.ua.ikeepcalm.wiic.domain.agora.market.service.MarketPurchaseService;
+import dev.ua.ikeepcalm.wiic.domain.agora.market.service.MarketServices;
 import dev.ua.ikeepcalm.wiic.domain.agora.npc.listener.MarketNpcListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.npc.model.source.MarketNpcRole;
 import dev.ua.ikeepcalm.wiic.domain.agora.npc.service.MarketNpcService;
-import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
-import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.CourierService;
-import dev.ua.ikeepcalm.wiic.domain.agora.utils.ExpirySweeper;
-import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.JournalRecovery;
-import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.LedgerService;
-import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.ListingService;
-import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.MarketJournal;
-import dev.ua.ikeepcalm.wiic.domain.agora.market.service.MarketPurchaseService;
+import dev.ua.ikeepcalm.wiic.domain.agora.plots.listener.PlotShopListener;
+import dev.ua.ikeepcalm.wiic.domain.agora.plots.listener.PlotWandListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.service.PlotService;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.service.PlotShopService;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.ExpirySweeper;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.PriceGuide;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.SaleNotifier;
-import dev.ua.ikeepcalm.wiic.domain.agora.ledger.service.StashService;
-import dev.ua.ikeepcalm.wiic.gui.market.BrokerGUI;
-import dev.ua.ikeepcalm.wiic.gui.market.CourierPostGUI;
-import dev.ua.ikeepcalm.wiic.gui.market.InformantSearchGUI;
-import dev.ua.ikeepcalm.wiic.gui.market.LedgerGUI;
-import dev.ua.ikeepcalm.wiic.gui.market.MarketBrowseGUI;
-import dev.ua.ikeepcalm.wiic.gui.market.PlotManageGUI;
-import dev.ua.ikeepcalm.wiic.gui.market.StashGUI;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.JournalRecovery;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.MarketJournal;
+import dev.ua.ikeepcalm.wiic.gui.market.*;
 import dev.ua.ikeepcalm.wiic.gui.shop.ShopGUI;
 import dev.ua.ikeepcalm.wiic.utils.GuiUtil;
+import dev.ua.ikeepcalm.wiic.utils.WorldUtil;
 import lombok.Getter;
 import net.kyori.adventure.text.minimessage.MiniMessage;
-import org.bukkit.Bukkit;
-import org.bukkit.Material;
+import org.bukkit.*;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 import xyz.xenondevs.invui.gui.Gui;
@@ -91,10 +86,7 @@ public class MarketModule {
     private MarketModule(WIIC plugin, MarketConfig config) throws Exception {
         this.config = config;
 
-        if (config.world() == null) {
-            plugin.getLogger().warning("Market world '" + config.worldName()
-                    + "' is not loaded — entrances will refuse to teleport until it is (check the Worlds plugin)");
-        }
+        if (config.world() == null) bootstrapWorld(plugin, config);
 
         MarketDatabase db = new MarketDatabase(plugin);
         db.open();
@@ -155,6 +147,70 @@ public class MarketModule {
         this.sweeper = new ExpirySweeper(plugin, config, db);
         sweeper.start();
         plugin.getLogger().info("Underground Market enabled (world: " + config.worldName() + ")");
+    }
+
+    /**
+     * Loads the market world when no world manager has. The level folder survives on
+     * disk even when a world manager forgets its registration between restarts, so this
+     * is a load rather than a generate — the builds, plots and NPCs come back with it.
+     * Off by default: a server whose world manager is reliable should keep owning the
+     * world, and creating a folder from a typo'd name would be worse than a warning.
+     */
+    private static void bootstrapWorld(WIIC plugin, MarketConfig config) {
+        if (!config.worldBootstrapEnabled()) {
+            plugin.getLogger().warning("Market world '" + config.worldName()
+                    + "' is not loaded — entrances will refuse to teleport until it is."
+                    + " Load it with your world manager, or set world-bootstrap.enabled in market.yml");
+            return;
+        }
+
+        // Worlds owns the level when it's installed, so ask it first: a world it loads
+        // keeps the key and settings it was registered under, where a WorldCreator would
+        // adopt the same folder into Bukkit's own namespace behind Worlds' back.
+        World world = null;
+        WorldsHook worlds = WorldsHook.createIfAvailable(plugin);
+        if (worlds != null) {
+            world = worlds.loadOrCreate(config.worldName(), config.worldBootstrapGenerator());
+        }
+        if (world == null) world = createWorldDirect(plugin, config);
+        if (world == null) {
+            plugin.getLogger().severe("Failed to load market world '" + config.worldName()
+                    + "' — entrances will refuse to teleport");
+            return;
+        }
+
+        // The created world lands in Bukkit's namespace, which need not be the namespace
+        // `world:` is written in; adopting it keeps every lookup resolving either way.
+        config.adoptWorld(world);
+        String key = WorldUtil.id(world);
+        plugin.getLogger().info("Loaded market world '" + world.getName() + "' (" + key + ")");
+        if (!WorldUtil.matches(world, config.worldName())) {
+            plugin.getLogger().warning("market.yml says world: '" + config.worldName()
+                    + "' but the loaded world is '" + key + "'. Set world: \"" + key
+                    + "\" so stored entrances and plots keep matching it.");
+        }
+    }
+
+    /**
+     * Fallback for a server without Worlds: load the level folder straight through
+     * Bukkit. The world lands in Bukkit's own namespace, which is why the caller checks
+     * the resulting key against {@code world:} and says so when they differ.
+     */
+    private static @Nullable World createWorldDirect(WIIC plugin, MarketConfig config) {
+        String folder = config.worldBootstrapFolder();
+        String generator = config.worldBootstrapGenerator();
+        WorldCreator creator = new WorldCreator(folder)
+                .environment(World.Environment.NORMAL)
+                .type(WorldType.FLAT)
+                .generateStructures(false);
+        if (!generator.isEmpty()) creator.generator(generator);
+        try {
+            return creator.createWorld();
+        } catch (RuntimeException | LinkageError e) {
+            plugin.getLogger().severe("Failed to load market world '" + folder + "': " + e
+                    + (generator.isEmpty() ? "" : " — is the '" + generator + "' generator plugin installed?"));
+            return null;
+        }
     }
 
     /**
