@@ -153,6 +153,11 @@ public class MarketConfig {
         return config.getBoolean("abilities.blocked", true);
     }
 
+    /** Whether breaking a secret entrance hands the crafted door item back. */
+    public boolean entranceRefundOnBreak() {
+        return config.getBoolean("entrance.refund-on-break", true);
+    }
+
     public boolean worldBootstrapEnabled() {
         return config.getBoolean("world-bootstrap.enabled", false);
     }

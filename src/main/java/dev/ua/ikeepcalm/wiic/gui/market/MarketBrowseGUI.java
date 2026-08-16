@@ -1,5 +1,6 @@
 package dev.ua.ikeepcalm.wiic.gui.market;
 
+import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.config.WalletConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.service.MarketServices;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.ListingDao;
@@ -148,7 +149,7 @@ public class MarketBrowseGUI {
         List<String> loreTemplate = config != null ? config.getStringList("items.listing.lore") : List.of();
         int slot = CONTENT_START;
         for (Listing listing : listings) {
-            ItemStack display = buildListingIcon(listing, loreTemplate);
+            ItemStack display = buildListingIcon(listing, loreTemplate, player);
             gui.setItem(slot, Item.builder().setItemProvider(display)
                     .addClickHandler(_ -> new ListingDetailGUI(services, () -> open(player, filter, sort, page))
                             .open(player, listing.id()))
@@ -234,7 +235,7 @@ public class MarketBrowseGUI {
                 .open();
     }
 
-    private ItemStack buildListingIcon(Listing listing, List<String> loreTemplate) {
+    private ItemStack buildListingIcon(Listing listing, List<String> loreTemplate, Player viewer) {
         ItemStack restored = restoreItem(listing);
         boolean snapshotOnly = restored == null;
         ItemStack display = snapshotOnly
@@ -261,11 +262,12 @@ public class MarketBrowseGUI {
             // what a buyer is judging, and a beyonder item's lore is most of its identity.
             List<Component> lore = meta.hasLore() ? new ArrayList<>(meta.lore()) : new ArrayList<>();
             List<String> template = loreTemplate.isEmpty()
-                    ? List.of("", "<gold>%price%", "<gray>sᴏʟᴅ ʙʏ <white>%seller%", "<dark_gray>ᴇxᴘɪʀᴇs ɪɴ %expires%")
+                    ? List.of("", "<gold>%price%", "<dark_gray>ᴇxᴘɪʀᴇs ɪɴ %expires%")
                     : loreTemplate;
+            String seller = sellerLabel(services.config(), listing, viewer);
             for (String line : template) {
                 String resolved = line.replace("%price%", price)
-                        .replace("%seller%", listing.sellerName())
+                        .replace("%seller%", seller)
                         .replace("%expires%", expires);
                 lore.add(resolved.isEmpty() ? Component.empty()
                         : MM.deserialize(resolved).decoration(TextDecoration.ITALIC, false));
@@ -303,6 +305,26 @@ public class MarketBrowseGUI {
     // -------------------------------------------------------------------------
     // Shared small helpers for the market GUI family
     // -------------------------------------------------------------------------
+
+    /**
+     * What a listing says about who is selling it: nothing that identifies them.
+     *
+     * <p>The market's whole proposition is that buyer and seller never learn each other's
+     * names, and the 8% cut is what it charges for standing between them. Printing the
+     * seller on the shelf sells that position away — the pair can read the label, meet in
+     * the overworld and trade the same goods for nothing. So the name never reaches a
+     * viewer who isn't the seller.
+     *
+     * <p>{@code %seller%} stays substituted rather than dropped, because market.yml files
+     * already deployed have it in their lore, and an unsubstituted placeholder would print
+     * itself verbatim. Owners see their own listings marked, which is not a leak — they
+     * already know — and saves them clicking into their own goods.
+     */
+    static String sellerLabel(MarketConfig config, Listing listing, Player viewer) {
+        return listing.sellerUuid().equals(viewer.getUniqueId())
+                ? config.message("listing-seller-self", "<dark_gray>ʏᴏᴜʀ ᴏᴡɴ ᴏꜰꜰᴇʀ")
+                : config.message("listing-seller-anonymous", "<dark_gray>sᴏᴍᴇᴏɴᴇ");
+    }
 
     public static Item configButton(@Nullable ConfigurationSection config, String path, Player player,
                                     Material fallback, String fallbackName, Runnable onClick) {

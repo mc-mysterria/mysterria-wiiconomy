@@ -130,7 +130,7 @@ public class ListingDetailGUI {
             lore.add(Component.empty());
             lore.add(line("<dark_gray>──────────────"));
             lore.add(line("<gold>" + price));
-            lore.add(line("<gray>sᴏʟᴅ ʙʏ <white>" + listing.sellerName()));
+            lore.add(line(MarketBrowseGUI.sellerLabel(services.config(), listing, viewer)));
             lore.add(line("<dark_gray>ᴇxᴘɪʀᴇs ɪɴ " + expires));
             // Tells the buyer up front where the goods will land — stash or courier.
             if (services.courier() != null && services.courier().hasContract(viewer.getUniqueId())) {

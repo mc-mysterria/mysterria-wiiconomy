@@ -373,6 +373,10 @@ messages:
   entrance-protected: "<red>The door resists your attempts."
   entrance-broken: "<gray>The hidden passage collapses. The land may craft a new one."
   entrance-recovered: "<gray>You work the door free of the wall. The passage closes behind it."
+  # What %seller% resolves to on a listing. Never set this to a name: anonymity is
+  # what the market's sale tax is charging for.
+  listing-seller-anonymous: "<dark_gray>sᴏᴍᴇᴏɴᴇ"
+  listing-seller-self: "<dark_gray>ʏᴏᴜʀ ᴏᴡɴ ᴏꜰꜰᴇʀ"
   # The market's single exit door — breaking it would strand everyone inside.
   exit-protected: "<red>The way out will not be moved."
   # containment — the market refusing a shortcut. Written as things the place does
@@ -487,10 +491,12 @@ browse-gui:
   background: GRAY_STAINED_GLASS_PANE
   items:
     listing:
+      # %seller% never resolves to a name — see `listing-seller-anonymous` under
+      # messages. Trades are anonymous by design: a buyer and seller who can read
+      # each other's names off the shelf can meet outside and skip the sale tax.
       lore:
         - ""
         - "<gold>%price%"
-        - "<gray>sᴏʟᴅ ʙʏ <white>%seller%"
         - "<dark_gray>ᴇxᴘɪʀᴇs ɪɴ %expires%"
 
 detail-gui:

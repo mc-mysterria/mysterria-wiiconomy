@@ -95,12 +95,25 @@ public class EntranceDao {
         }
     }
 
-    public static @Nullable String returnPoint(Connection c, UUID player) throws SQLException {
+    /**
+     * Where a player came in, and through which door.
+     *
+     * @param entranceId the entrance they used, or null for a row written before the
+     *                   column existed. It is the second chance at getting them home:
+     *                   when the exact spot they left has become unusable, the door
+     *                   itself is still a far better answer than the world spawn.
+     */
+    public record ReturnPoint(String location, @Nullable UUID entranceId) {}
+
+    public static @Nullable ReturnPoint returnPoint(Connection c, UUID player) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT location FROM return_points WHERE player_uuid = ?")) {
+                "SELECT location, entrance_id FROM return_points WHERE player_uuid = ?")) {
             ps.setString(1, player.toString());
             try (ResultSet rs = ps.executeQuery()) {
-                return rs.next() ? rs.getString(1) : null;
+                if (!rs.next()) return null;
+                String entranceId = rs.getString(2);
+                return new ReturnPoint(rs.getString(1),
+                        entranceId == null ? null : UUID.fromString(entranceId));
             }
         }
     }
