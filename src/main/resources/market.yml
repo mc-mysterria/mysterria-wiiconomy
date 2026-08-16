@@ -202,6 +202,13 @@ entrance:
 # inside it, or every visitor is bounced straight back out.
 #
 # wiic.market.bypass (implied by wiic.market.admin) passes through all of this.
+# Beyonder abilities inside the market (requires CircleOfImagination; ignored when
+# it isn't installed). Kept out of `containment` on purpose: an ability is not a way
+# out of the market, it is a way to damage or dismantle what is in it, so this stays
+# in force even on a server that has switched teleport containment off.
+abilities:
+  blocked: true
+
 containment:
   enabled: true
   bounds:
@@ -375,6 +382,7 @@ messages:
   containment-no-chorus: "<dark_gray><i>The fruit tastes of nothing. Wherever it wanted to send you, it cannot reach.</i>"
   containment-no-spectator: "<dark_gray><i>Down here you are as solid as anyone else.</i>"
   containment-no-vehicle: "<dark_gray><i>You go through the market on your own two feet.</i>"
+  containment-no-ability: "<dark_gray><i>You reach for it, and nothing answers. Down here that part of you is quiet.</i>"
   # listings
   listing-created: "<green>The fence takes your goods with a nod. Fee: %fee%."
   listing-item-missing: "<red>The goods slipped out of your hands. Nothing was listed."

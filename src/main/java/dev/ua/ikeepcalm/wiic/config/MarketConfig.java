@@ -17,11 +17,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 import java.util.regex.PatternSyntaxException;
@@ -145,6 +141,16 @@ public class MarketConfig {
      */
     public void adoptWorld(World world) {
         worldCache = world;
+    }
+
+    /**
+     * Whether Beyonder abilities are refused inside the market. Deliberately not part of
+     * {@code containment}: an ability is not a way out of the market, it is a way to
+     * damage or dismantle what's in it, so it stays blocked even where teleport
+     * containment is switched off.
+     */
+    public boolean blockAbilities() {
+        return config.getBoolean("abilities.blocked", true);
     }
 
     public boolean worldBootstrapEnabled() {

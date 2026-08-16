@@ -8,6 +8,7 @@ import dev.ua.ikeepcalm.wiic.domain.agora.entrance.listener.EntranceListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.model.EntranceItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.ContainmentService;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.EntranceService;
+import dev.ua.ikeepcalm.wiic.domain.agora.integration.CoiGuardListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.integration.CourierHook;
 import dev.ua.ikeepcalm.wiic.domain.agora.integration.LandsHook;
 import dev.ua.ikeepcalm.wiic.domain.agora.integration.WorldsHook;
@@ -137,6 +138,8 @@ public class MarketModule {
         Bukkit.getPluginManager().registerEvents(new PlotShopListener(config, shops, feedback), plugin);
         Bukkit.getPluginManager().registerEvents(new MarketPlayerListener(plugin, db, notifier), plugin);
         Bukkit.getPluginManager().registerEvents(this.plotWand, plugin);
+        CoiGuardListener coiGuard = CoiGuardListener.createIfAvailable(plugin, config, containment);
+        if (coiGuard != null) Bukkit.getPluginManager().registerEvents(coiGuard, plugin);
         EntranceItem.registerRecipe(plugin, config);
 
         if (npcService != null) {
