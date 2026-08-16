@@ -42,7 +42,14 @@ public class EntranceListener implements Listener {
         this.feedback = feedback;
     }
 
-    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    /**
+     * Runs first and looks at cancelled events on purpose. A secret entrance normally
+     * stands inside a claim, and a protection plugin refusing the right-click before WIIC
+     * ever saw it left people unable to use their own door — and, worse, unable to use the
+     * market's exit door if anything at all claimed the ground it stands on. Who may walk
+     * through a door is this plugin's question to answer, not the claim's.
+     */
+    @EventHandler(priority = EventPriority.LOWEST)
     public void onInteract(PlayerInteractEvent event) {
         if (event.getAction() != Action.RIGHT_CLICK_BLOCK || event.getHand() != EquipmentSlot.HAND) return;
         Block block = event.getClickedBlock();
@@ -138,13 +145,29 @@ public class EntranceListener implements Listener {
         MarketEntrance entrance = entrances.entranceAt(event.getBlock());
         if (entrance == null) entrance = entrances.entranceAt(event.getBlock().getRelative(BlockFace.UP));
         if (entrance == null) return;
-        if (!config.entranceAllowBreak() && !event.getPlayer().hasPermission("wiic.market.admin")) {
+        Player breaker = event.getPlayer();
+        if (!entrances.canBreak(breaker, entrance)) {
             event.setCancelled(true);
-            send(event.getPlayer(), "entrance-protected", "<red>The door resists your attempts.");
+            send(breaker, "entrance-protected", "<red>The door resists your attempts.");
             return;
         }
-        entrances.remove(entrance, "broken by " + event.getPlayer().getName());
-        send(event.getPlayer(), "entrance-broken", "<gray>The hidden passage collapses. The land may craft a new one.");
+        entrances.remove(entrance, "broken by " + breaker.getName());
+        // Handing the item back is what makes a door movable at all: without it, relocating
+        // one costs a fresh set of echo shards, so nobody ever does.
+        if (config.entranceRefundOnBreak()) {
+            giveOrDrop(breaker, EntranceItem.create(config));
+            send(breaker, "entrance-recovered",
+                    "<gray>You work the door free of the wall. The passage closes behind it.");
+        } else {
+            send(breaker, "entrance-broken", "<gray>The hidden passage collapses. The land may craft a new one.");
+        }
+    }
+
+    /** Into the breaker's hands, or at their feet when there is no room for it. */
+    private static void giveOrDrop(Player player, ItemStack item) {
+        for (ItemStack leftover : player.getInventory().addItem(item).values()) {
+            player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+        }
     }
 
     /**

@@ -150,9 +150,13 @@ notifications:
 entrance:
   craftable: true
   door-material: CRIMSON_DOOR
-  # Whether a player may mine a registered entrance door. The hub entrance is on no
-  # claim, so with this on anyone can destroy the server's public way in.
+  # Whether ANYONE may mine a registered entrance door. Off by default, which still
+  # lets the door's owner and anyone trusted in its land break it — that is how an
+  # entrance gets moved. The hub entrance is always admin-only regardless.
   allow-break: false
+  # Hand the crafted door item back when an entrance is broken, so relocating one
+  # doesn't cost a fresh set of echo shards.
+  refund-on-break: true
   # Re-check land trust each time someone uses a door, not just when placing it.
   # Off by default: owners walk guests in through their own entrance.
   require-trust-to-enter: false
@@ -368,6 +372,7 @@ messages:
   entrance-error: "<red>The ritual failed. Try again later."
   entrance-protected: "<red>The door resists your attempts."
   entrance-broken: "<gray>The hidden passage collapses. The land may craft a new one."
+  entrance-recovered: "<gray>You work the door free of the wall. The passage closes behind it."
   # The market's single exit door — breaking it would strand everyone inside.
   exit-protected: "<red>The way out will not be moved."
   # containment — the market refusing a shortcut. Written as things the place does

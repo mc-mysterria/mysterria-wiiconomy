@@ -50,8 +50,13 @@ public class EntranceService {
     private final MarketFeedback feedback;
     private final ContainmentService containment;
 
+    /** Consecutive "land no longer claims this" answers tolerated before a door comes down. */
+    private static final int UNCLAIMED_STRIKES = 3;
+
     /** Cache keyed by "world:x:y:z" of the lower door block; maintained on add/remove. */
     private final Map<String, MarketEntrance> byLocation = new ConcurrentHashMap<>();
+    /** Per-entrance strike count for {@link #validate()}; cleared the moment Lands agrees again. */
+    private final Map<UUID, Integer> unclaimedStrikes = new ConcurrentHashMap<>();
     private BukkitTask validationTask;
 
     public EntranceService(WIIC plugin, MarketConfig config, MarketDatabase db,
@@ -213,6 +218,7 @@ public class EntranceService {
 
     public void remove(MarketEntrance entrance, String reason) {
         byLocation.remove(key(entrance));
+        unclaimedStrikes.remove(entrance.id());
         db.submit(conn -> {
             EntranceDao.delete(conn, entrance.id());
             return null;
@@ -222,6 +228,40 @@ public class EntranceService {
 
     public List<MarketEntrance> all() {
         return List.copyOf(byLocation.values());
+    }
+
+    /**
+     * Whether {@code player} may take this door down.
+     *
+     * <p>The land's own people can, always. A door whose only removal is "unclaim the
+     * chunk, wait for the sweep, claim it again" is a door nobody can move, and moving a
+     * secret entrance is the most ordinary thing an owner will ever want to do with one.
+     * The hub is the exception: it is the server's public way in, so it stays admin-only
+     * however {@code allow-break} is set.
+     */
+    public boolean canBreak(Player player, MarketEntrance entrance) {
+        if (player.hasPermission(MarketConfig.ADMIN_PERMISSION)) return true;
+        if (entrance.isHub()) return false;
+        if (config.entranceAllowBreak()) return true;
+        if (player.getUniqueId().equals(entrance.createdBy())) return true;
+        Location door = entrance.location();
+        return lands != null && door != null && lands.isTrusted(player, door);
+    }
+
+    /**
+     * A standing spot in the doorway of {@code entranceId}, or null when that door is
+     * gone. Centred in the block so the arrival isn't wedged against the frame.
+     */
+    private @Nullable Location doorwayOf(@Nullable UUID entranceId) {
+        if (entranceId == null) return null;
+        for (MarketEntrance entrance : byLocation.values()) {
+            if (!entrance.id().equals(entranceId)) continue;
+            Location loc = entrance.location();
+            if (loc == null) return null;
+            Location doorway = loc.clone().add(0.5, 0, 0.5);
+            return isSafe(doorway) ? doorway : null;
+        }
+        return null;
     }
 
     /**
@@ -300,17 +340,29 @@ public class EntranceService {
 
     /** Sends {@code player} back to their stored return point (fallbacks: main world spawn). */
     public void exit(Player player) {
-        db.submitThenMain(conn -> EntranceDao.returnPoint(conn, player.getUniqueId()), serialized -> {
-            Location target = serialized != null ? deserialize(serialized) : null;
+        db.submitThenMain(conn -> EntranceDao.returnPoint(conn, player.getUniqueId()), stored -> {
+            Location target = stored != null ? deserialize(stored.location()) : null;
             boolean strayed = target == null || !isSafe(target);
-            if (strayed) {
+            if (strayed && stored != null) {
+                // Before giving up on them entirely: the door they came in through is still
+                // the right side of the world, and standing in an open doorway is safe by
+                // definition. Only a door that has since been destroyed sends them to spawn.
+                Location door = doorwayOf(stored.entranceId());
+                if (door != null) {
+                    target = door;
+                    strayed = false;
+                }
+            }
+            if (target == null || strayed) {
                 // The way they came in is gone or has become lethal (world unloaded, lava
                 // flowed in, terrain rebuilt). Say so — silently landing them somewhere else
                 // under the usual "you slip back into the daylight" reads as a teleport bug.
                 World fallback = Bukkit.getWorlds().getFirst();
                 target = fallback.getSpawnLocation();
+                strayed = true;
             }
             Location destination = target;
+            boolean astray = strayed;
             int ascent = config.entranceDescentTicks() / 2;
             feedback.departing(player, ascent);
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
@@ -329,7 +381,7 @@ public class EntranceService {
                         return null;
                     });
                     feedback.departed(player);
-                    player.sendMessage(MM.deserialize(strayed
+                    player.sendMessage(MM.deserialize(astray
                             ? config.message("exited-market-astray",
                             "<yellow>The passage back has collapsed. You surface somewhere else entirely.")
                             : config.message("exited-market",
@@ -352,19 +404,30 @@ public class EntranceService {
         for (MarketEntrance entrance : byLocation.values()) {
             Location loc = entrance.location();
             if (loc == null) continue; // world not loaded; leave it alone
-            if (loc.getWorld().isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4)
-                    && loc.getBlock().getType().isAir()) {
+            boolean chunkLoaded = loc.getWorld().isChunkLoaded(loc.getBlockX() >> 4, loc.getBlockZ() >> 4);
+            if (chunkLoaded && loc.getBlock().getType().isAir()) {
                 remove(entrance, "door block is gone");
                 continue;
             }
             if (lands == null || entrance.isHub()) continue;
-            if (!lands.landStillClaims(entrance.landId(), loc)) {
-                // Take the door down with the registration. Leaving it standing turns a
-                // secret entrance into an ordinary door that simply stops working, with
-                // nothing to tell its owner why.
-                clearDoor(loc);
-                remove(entrance, "land no longer exists or moved");
+            // The same rule the air check above follows, and it was missing here: an
+            // entrance in an unloaded chunk is not evidence of anything. Asking Lands about
+            // terrain nobody has loaded — and then demolishing a door on the answer — is how
+            // entrances went missing while their owners were away.
+            if (!chunkLoaded) continue;
+            if (lands.landStillClaims(entrance.landId(), loc)) {
+                unclaimedStrikes.remove(entrance.id());
+                continue;
             }
+            // One "not claimed" is not proof. Lands loads its own data asynchronously and
+            // can answer for a land it hasn't finished reading; demolishing a door on a
+            // single answer is unrecoverable, and waiting costs nothing but time.
+            if (unclaimedStrikes.merge(entrance.id(), 1, Integer::sum) < UNCLAIMED_STRIKES) continue;
+            // Take the door down with the registration. Leaving it standing turns a
+            // secret entrance into an ordinary door that simply stops working, with
+            // nothing to tell its owner why.
+            clearDoor(loc);
+            remove(entrance, "land no longer exists or moved");
         }
     }
 
@@ -406,8 +469,21 @@ public class EntranceService {
         if (loc.getY() < world.getMinHeight() || loc.getY() > world.getMaxHeight()) return false;
         Block feet = loc.getBlock();
         Block head = feet.getRelative(BlockFace.UP);
-        if (feet.getType().isSolid() || head.getType().isSolid()) return false;
+        if (wouldTrap(feet) || wouldTrap(head)) return false;
         return !isHarmful(feet) && !isHarmful(head) && !isHarmful(feet.getRelative(BlockFace.DOWN));
+    }
+
+    /**
+     * Whether standing in this block would bury a player.
+     *
+     * <p>Not {@code isSolid()}: a slab, a stair, a path block, soul sand and an open door
+     * are all "solid", and a player standing on any of them has their own feet inside that
+     * very block — so the spot they were standing on when they walked into the market read
+     * back as a wall, and they were posted to the world spawn instead. Occlusion is the
+     * question actually being asked, and it is false for everything a player can stand in.
+     */
+    private static boolean wouldTrap(Block block) {
+        return block.getType().isOccluding();
     }
 
     private static boolean isHarmful(Block block) {
