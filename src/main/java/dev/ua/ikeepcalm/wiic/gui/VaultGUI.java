@@ -187,6 +187,11 @@ public class VaultGUI {
                                 public void onConfirm(ItemStack confirmed) {
                                     // Clone before removeItem, which mutates the input stack's amount to the leftover
                                     ItemStack snapshot = confirmed.clone();
+                                    // removeItem can consume a partial stack even when it reports leftovers.
+                                    if (!player.getInventory().containsAtLeast(snapshot, snapshot.getAmount())) {
+                                        openVault(player, onClose);
+                                        return;
+                                    }
                                     Map<Integer, ItemStack> notRemoved = player.getInventory().removeItem(confirmed);
                                     if (!notRemoved.isEmpty()) {
                                         // Item was dropped before confirming — abort to prevent free deposit
@@ -215,6 +220,11 @@ public class VaultGUI {
                                 public void onConfirm(ItemStack confirmed) {
                                     // Clone before removeItem, which may modify the input stack's amount to 0
                                     ItemStack snapshot = confirmed.clone();
+                                    // removeItem can consume a partial stack even when it reports leftovers.
+                                    if (!player.getInventory().containsAtLeast(snapshot, snapshot.getAmount())) {
+                                        openVault(player, onClose);
+                                        return;
+                                    }
                                     Map<Integer, ItemStack> notRemoved = player.getInventory().removeItem(confirmed);
                                     if (!notRemoved.isEmpty()) {
                                         // Item was dropped before confirming — abort to prevent free sell
