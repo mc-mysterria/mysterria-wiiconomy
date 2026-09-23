@@ -44,7 +44,10 @@ listings:
       - "regex:.*SHULKER_BOX"
       - BUNDLE
       - BEDROCK
-    pdc-keys: [ ]               # e.g. "circleofimagination:soulbound"
+    pdc-keys:
+      - circleofimagination:historical_pact_item_owner
+      - circleofimagination:historical_pact_item_slot
+      - circleofimagination:historical_pact_control_item
     allow-containers: false
 
 sweeper:

@@ -32,6 +32,9 @@ public class ItemInspector {
     public static final String CATEGORY_MISC = "misc";
 
     private static final String COI_NAMESPACE = "circleofimagination";
+    private static final String HISTORICAL_PACT_ITEM_OWNER = "historical_pact_item_owner";
+    private static final String HISTORICAL_PACT_ITEM_SLOT = "historical_pact_item_slot";
+    private static final String HISTORICAL_PACT_CONTROL_ITEM = "historical_pact_control_item";
 
     private final MarketConfig config;
 
@@ -50,6 +53,14 @@ public class ItemInspector {
         if (!config.allowContainers() && isContainer(item)) return "listing-denied-container";
         if (item.hasItemMeta()) {
             PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
+            // Historical Pact snapshots and control copies are temporary state,
+            // not market goods. Keep this intrinsic so a deployment cannot reopen
+            // the persistence bypass by omitting a config key.
+            if (pdc.has(key(HISTORICAL_PACT_ITEM_OWNER))
+                    || pdc.has(key(HISTORICAL_PACT_ITEM_SLOT))
+                    || pdc.has(key(HISTORICAL_PACT_CONTROL_ITEM))) {
+                return "listing-denied-tagged";
+            }
             for (String rule : config.denyPdcKeys()) {
                 NamespacedKey key = NamespacedKey.fromString(rule);
                 // has(key) is type-agnostic; getKeys() would materialise the whole key set.
