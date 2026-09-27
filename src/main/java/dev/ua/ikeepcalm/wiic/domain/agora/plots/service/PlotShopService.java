@@ -451,6 +451,8 @@ public class PlotShopService {
 
         long price = shop.price();
         String itemName = shop.displayName() != null ? shop.displayName() : String.valueOf(shop.material());
+        // Entity position may only be read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(buyer);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(buyerId);
             if (!VaultUtil.withdraw(buyerId, price)) {
@@ -458,8 +460,8 @@ public class PlotShopService {
                         + " coppets failed at " + shop.plotId());
                 MysterriaAuditBridge.emit("plot_shop.purchase_failed", false, buyerId, shop.ownerUuid(), shop.id(), identity,
                         "insufficient funds", MysterriaAuditBridge.moneyMetadata(0, balanceBefore, balance(buyerId),
-                                MysterriaAuditBridge.metadata(Map.of("plot_id", shop.plotId(),
-                                                "quantity", wanted),
+                                MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
+                                                Map.of("plot_id", shop.plotId(), "quantity", wanted), location),
                                         MysterriaAuditBridge.itemMetadata(template))));
                 finish(buyerId, shop.id(), callback, Purchase.of(BuyResult.INSUFFICIENT_FUNDS));
                 return;
@@ -476,7 +478,8 @@ public class PlotShopService {
                                     balanceBefore, balanceAfterCharge, Map.of("plot_id", shop.plotId(),
                                             "quantity", wanted)));
                     refund(buyer, buyerId, shop.id(), shop.plotId(), price,
-                            "stock gone before the counter could hand it over", identity);
+                            "stock gone before the counter could hand it over", identity,
+                            MysterriaAuditBridge.playerLocation(buyer));
                     finish(buyerId, shop.id(), callback, Purchase.of(BuyResult.OUT_OF_STOCK));
                     return;
                 }
@@ -626,8 +629,9 @@ public class PlotShopService {
     // Plumbing
     // -------------------------------------------------------------------------
 
+    /** {@code location} is captured on the main thread; the refund row is emitted async. */
     private void refund(Player buyer, UUID buyerId, UUID shopId, String plotId, long amount, String reason,
-                        MysterriaAuditBridge.AuditIdentity identity) {
+                        MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(buyerId);
             boolean refunded = VaultUtil.deposit(buyerId, amount);
@@ -638,8 +642,8 @@ public class PlotShopService {
             }
             MysterriaAuditBridge.emit("plot_shop.refunded", refunded, buyerId, buyerId, shopId, identity,
                     reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
-                            balanceBefore, balance(buyerId), Map.of("plot_id", plotId,
-                                    "shop_id", shopId.toString())));
+                            balanceBefore, balance(buyerId), MysterriaAuditBridge.metadata(Map.of("plot_id", plotId,
+                                    "shop_id", shopId.toString()), location)));
         });
     }
 
