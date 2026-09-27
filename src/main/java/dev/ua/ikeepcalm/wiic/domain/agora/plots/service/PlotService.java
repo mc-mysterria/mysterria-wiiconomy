@@ -566,7 +566,7 @@ public class PlotService {
         }, snapshot -> {
             rentals.remove(plotId);
             overdueNotified.remove(plotId);
-            MysterriaAuditBridge.emit("plots.eviction.committed", true, rental.renterUuid(), rental.renterUuid(), null, identity,
+            MysterriaAuditBridge.emit("plots.eviction.committed", true, null, rental.renterUuid(), null, identity,
                     reason, evictionMetadata(plotId, harvested));
             // After the commit, before the blocks are replayed: the counters must stop
             // trading the moment the rental is gone, not when the restore finishes.
@@ -596,7 +596,7 @@ public class PlotService {
         }, error -> {
             evicting.remove(plotId);
             plugin.getLogger().severe("Plot eviction commit failed for " + plotId + ": " + error);
-            MysterriaAuditBridge.emit("plots.eviction.failed", false, rental.renterUuid(), rental.renterUuid(), null, identity,
+            MysterriaAuditBridge.emit("plots.eviction.failed", false, null, rental.renterUuid(), null, identity,
                     "eviction commit failed", evictionMetadata(plotId, harvested));
             if (harvested != null && !harvested.isEmpty()) {
                 // Clear-then-commit's loss window: name what went missing so staff can restore it.
