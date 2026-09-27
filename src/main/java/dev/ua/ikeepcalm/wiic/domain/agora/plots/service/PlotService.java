@@ -255,13 +255,16 @@ public class PlotService {
         long now = System.currentTimeMillis();
         long paidUntil = now + config.plotPeriodMs();
 
+        // Entity position may only be read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
             if (price > 0 && !VaultUtil.withdraw(uuid, price)) {
                 TransactionLogger.logNote(player, "MARKET PLOT rent withdraw of " + price + " coppets failed");
                 MysterriaAuditBridge.emit("plots.rent.failed", false, uuid, uuid, null, identity,
                         "rent withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
-                                balanceBefore, balance(uuid), Map.of("plot_id", plotId)));
+                                balanceBefore, balance(uuid),
+                                MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location)));
                 finish(uuid, callback, RentResult.INSUFFICIENT_FUNDS);
                 return;
             }
@@ -270,7 +273,8 @@ public class PlotService {
                 MysterriaAuditBridge.emit("plots.rent.charge_pending", AuditOutcome.ATTEMPTED,
                         uuid, uuid, null, identity, "rent charged; plot claim pending",
                         MysterriaAuditBridge.moneyMetadata(-price, balanceBefore, balanceAfterCharge,
-                                Map.of("plot_id", plotId, "operation", "rent")));
+                                MysterriaAuditBridge.metadata(
+                                        Map.of("plot_id", plotId, "operation", "rent"), location)));
             }
             db.transactionThenMain(conn -> {
                 if (PlotDao.countByRenter(conn, uuid) >= config.plotMaxPerPlayer()) {
@@ -299,7 +303,8 @@ public class PlotService {
                 MysterriaAuditBridge.emit("plots.rent.failed", false, uuid, uuid, null, identity,
                         result.name().toLowerCase(), MysterriaAuditBridge.moneyMetadata(-price,
                                 balanceBefore, balanceAfterCharge, Map.of("plot_id", plotId)));
-                refund(player, uuid, plotId, "rent", price, "plot claim rejected: " + result, identity);
+                refund(player, uuid, plotId, "rent", price, "plot claim rejected: " + result, identity,
+                        location);
                 finish(uuid, callback, result);
             });
         });
@@ -323,13 +328,16 @@ public class PlotService {
         long now = System.currentTimeMillis();
         long period = config.plotPeriodMs();
 
+        // Entity position may only be read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
             if (price > 0 && !VaultUtil.withdraw(uuid, price)) {
                 TransactionLogger.logNote(player, "MARKET PLOT upkeep withdraw of " + price + " coppets failed");
                 MysterriaAuditBridge.emit("plots.rent.upkeep_failed", false, uuid, uuid, null, identity,
                         "upkeep withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
-                                balanceBefore, balance(uuid), Map.of("plot_id", plotId)));
+                                balanceBefore, balance(uuid),
+                                MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location)));
                 finish(uuid, callback, RentResult.INSUFFICIENT_FUNDS);
                 return;
             }
@@ -338,7 +346,8 @@ public class PlotService {
                 MysterriaAuditBridge.emit("plots.rent.charge_pending", AuditOutcome.ATTEMPTED,
                         uuid, uuid, null, identity, "upkeep charged; plot update pending",
                         MysterriaAuditBridge.moneyMetadata(-price, balanceBefore, balanceAfterCharge,
-                                Map.of("plot_id", plotId, "operation", "upkeep")));
+                                MysterriaAuditBridge.metadata(
+                                        Map.of("plot_id", plotId, "operation", "upkeep"), location)));
             }
             db.transactionThenMain(conn -> {
                 if (!PlotDao.extend(conn, plotId, uuid, now, period)) {
@@ -364,7 +373,8 @@ public class PlotService {
                 MysterriaAuditBridge.emit("plots.rent.upkeep_failed", false, uuid, uuid, null, identity,
                         result.name().toLowerCase(), MysterriaAuditBridge.moneyMetadata(-price,
                                 balanceBefore, balanceAfterCharge, Map.of("plot_id", plotId)));
-                refund(player, uuid, plotId, "upkeep", price, "plot extend rejected: " + result, identity);
+                refund(player, uuid, plotId, "upkeep", price, "plot extend rejected: " + result, identity,
+                        location);
                 finish(uuid, callback, result);
             });
         });
@@ -702,8 +712,9 @@ public class PlotService {
         return region != null ? region.displayName() : plotId;
     }
 
+    /** {@code location} is captured on the main thread; the refund row is emitted async. */
     private void refund(Player player, UUID uuid, String plotId, String operation, long amount, String reason,
-                        MysterriaAuditBridge.AuditIdentity identity) {
+                        MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
         if (amount <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
@@ -715,8 +726,8 @@ public class PlotService {
             }
             MysterriaAuditBridge.emit("plots.rent.refunded", refunded, uuid, uuid, null, identity,
                     reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
-                            balanceBefore, balance(uuid), Map.of("plot_id", plotId,
-                                    "operation", operation)));
+                            balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(
+                                    Map.of("plot_id", plotId, "operation", operation), location)));
         });
     }
 
