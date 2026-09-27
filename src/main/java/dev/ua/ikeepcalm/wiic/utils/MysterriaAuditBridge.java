@@ -4,6 +4,8 @@ import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditProducer;
 import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
 import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditPrivacy;
 import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditRisk;
+import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
@@ -22,7 +24,7 @@ public final class MysterriaAuditBridge {
     private static final NamespacedKey ITEM_UUID_PDC =
             new NamespacedKey("circleofimagination", "item_uuid");
     private static final NamespacedKey PARENT_ITEM_UUID_PDC =
-            new NamespacedKey("circleofimagination", "item_parent_uuid");
+            new NamespacedKey("circleofimagination", "item_parent");
     private static volatile AuditProducer producer;
 
     private MysterriaAuditBridge() {
@@ -94,12 +96,22 @@ public final class MysterriaAuditBridge {
     public static void emit(String operation, AuditOutcome outcome, UUID actorId,
                             UUID subjectId, UUID targetId, AuditIdentity identity,
                             String reason, Map<String, ?> metadata) {
+        emit(operation, outcome, AuditRisk.NORMAL, actorId, subjectId, targetId, identity, reason, metadata);
+    }
+
+    /**
+     * Risk-aware variant. When the actor is an online player and the caller did not supply
+     * a position, the actor's current {@code world}/{@code x}/{@code y}/{@code z} is added.
+     */
+    public static void emit(String operation, AuditOutcome outcome, AuditRisk risk, UUID actorId,
+                            UUID subjectId, UUID targetId, AuditIdentity identity,
+                            String reason, Map<String, ?> metadata) {
         try {
             AuditProducer current = producer;
             if (current == null) return;
-            current.emit("mysterria-wiiconomy." + operation, outcome, AuditRisk.NORMAL,
+            current.emit("mysterria-wiiconomy." + operation, outcome, risk == null ? AuditRisk.NORMAL : risk,
                     AuditPrivacy.STAFF_RESTRICTED, identity.correlationId(), identity.businessId(),
-                    actorId, subjectId, targetId, reason, metadata);
+                    actorId, subjectId, targetId, reason, withActorLocation(actorId, metadata));
         } catch (RuntimeException | LinkageError ignored) {
             // Audit is best effort and must never alter WIIC behavior.
             AuditProducer current = producer;
@@ -112,6 +124,36 @@ public final class MysterriaAuditBridge {
                             String reason, Map<String, ?> metadata) {
         emit(operation, success ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
                 actorId, subjectId, targetId, identity, reason, metadata);
+    }
+
+    /**
+     * Copies {@code metadata} and appends the online actor's position under the shared
+     * {@code world}/{@code x}/{@code y}/{@code z} keys. Rows that already carry a position,
+     * system rows (null actor) and offline actors are returned unchanged.
+     */
+    static Map<String, ?> withActorLocation(UUID actorId, Map<String, ?> metadata) {
+        if (actorId == null || (metadata != null && metadata.containsKey("world"))) return metadata;
+        try {
+            Player player = Bukkit.getPlayer(actorId);
+            if (player == null || !player.isOnline()) return metadata;
+            Map<String, Object> located = new LinkedHashMap<>();
+            if (metadata != null) metadata.forEach(located::put);
+            located.putAll(locationMetadata(player.getLocation()));
+            return located;
+        } catch (RuntimeException | LinkageError ignored) {
+            return metadata;
+        }
+    }
+
+    /** Block position projection using the shared location keys; empty when unavailable. */
+    public static Map<String, Object> locationMetadata(Location location) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        if (location == null || location.getWorld() == null) return metadata;
+        metadata.put("world", location.getWorld().getName());
+        metadata.put("x", location.getBlockX());
+        metadata.put("y", location.getBlockY());
+        metadata.put("z", location.getBlockZ());
+        return metadata;
     }
 
     /** Standard indexed monetary projection. Delta is signed from the subject's perspective. */
