@@ -356,18 +356,20 @@ public class CourierService {
     private void chargeFee(Player player, UUID uuid, long fee,
                            MysterriaAuditBridge.AuditIdentity identity) {
         if (fee <= 0) return;
+        // Entity position may only be read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
             if (!VaultUtil.withdraw(uuid, fee)) {
                 TransactionLogger.logNote(player, "MARKET COURIER fee of " + fee + " coppets went uncollected");
                 MysterriaAuditBridge.emit("courier.fee.failed", false, uuid, uuid, null, identity,
                         "courier fee uncollected", MysterriaAuditBridge.moneyMetadata(0,
-                                balanceBefore, balance(uuid), Map.of("fee", fee)));
+                                balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(Map.of("fee", fee), location)));
                 plugin.getLogger().warning("Courier fee of " + fee + " coppets could not be collected from " + uuid);
             } else {
                 MysterriaAuditBridge.emit("courier.fee.collected", true, uuid, uuid, null, identity,
                         "courier fee collected", MysterriaAuditBridge.moneyMetadata(-fee,
-                                balanceBefore, balance(uuid), Map.of("fee", fee)));
+                                balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(Map.of("fee", fee), location)));
             }
         });
     }
