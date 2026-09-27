@@ -42,6 +42,8 @@ public class TransactionLogger {
                 return thread;
             }, (task, executor) -> DROPPED.incrementAndGet());
     private static long lastWarning;
+    static final long ROTATE_BYTES = 8L * 1024 * 1024;
+    static final int BACKUPS = 5;
 
     private TransactionLogger() {}
 
@@ -102,10 +104,7 @@ public class TransactionLogger {
     private static void append(Path dir, Path file, String line, java.util.logging.Logger logger) {
         try {
             Files.createDirectories(dir);
-            if (Files.exists(file) && Files.size(file) >= 8L * 1024 * 1024) {
-                Files.move(file, file.resolveSibling(file.getFileName() + ".1"),
-                        StandardCopyOption.REPLACE_EXISTING);
-            }
+            if (Files.exists(file) && Files.size(file) >= ROTATE_BYTES) rotate(file);
             Files.writeString(file, line, StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
@@ -117,6 +116,24 @@ public class TransactionLogger {
             lastWarning = now;
             logger.warning("WIIC transaction logger has dropped " + dropped + " records");
         }
+    }
+
+    /**
+     * Retention policy: the live file rotates at {@link #ROTATE_BYTES} into numbered
+     * backups {@code .1} (newest) through {@code .}{@link #BACKUPS} (oldest). Each rotation
+     * shifts every backup up by one; only the file beyond the oldest slot is discarded, so
+     * at least {@value #BACKUPS} full generations of history always remain on disk.
+     */
+    private static void rotate(Path file) throws IOException {
+        String base = file.getFileName().toString();
+        Files.deleteIfExists(file.resolveSibling(base + "." + BACKUPS));
+        for (int i = BACKUPS - 1; i >= 1; i--) {
+            Path from = file.resolveSibling(base + "." + i);
+            if (Files.exists(from)) {
+                Files.move(from, file.resolveSibling(base + "." + (i + 1)), StandardCopyOption.REPLACE_EXISTING);
+            }
+        }
+        Files.move(file, file.resolveSibling(base + ".1"), StandardCopyOption.REPLACE_EXISTING);
     }
 
     public static void shutdown() {
