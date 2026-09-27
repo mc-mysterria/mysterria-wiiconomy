@@ -1,6 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.ledger.service;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.MarketDatabase;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.StashDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.TransactionDao;
@@ -113,6 +114,12 @@ public class StashService {
                     item = ItemStack.deserializeBytes(row.itemBytes());
                 } catch (Exception e) {
                     plugin.getLogger().severe("Corrupt stash item " + row.id() + " for " + owner.getName() + ": " + e);
+                    undeliverable.add(row.id());
+                    continue;
+                }
+                if (ItemInspector.containsTemporaryItem(item)) {
+                    plugin.getLogger().warning("Withheld temporary stash item " + row.id() + " for " + owner.getUniqueId());
+                    // Retain the original row for review; do not silently burn paid goods.
                     undeliverable.add(row.id());
                     continue;
                 }

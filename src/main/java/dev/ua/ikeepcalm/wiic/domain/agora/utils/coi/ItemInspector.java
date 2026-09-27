@@ -10,6 +10,8 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
+import org.bukkit.inventory.meta.BundleMeta;
+import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.persistence.PersistentDataContainer;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.Nullable;
@@ -49,18 +51,11 @@ public class ItemInspector {
     /** Returns a denial reason message key, or null when the item may be listed. */
     public @Nullable String checkDenied(ItemStack item) {
         if (item == null || item.getType().isAir() || item.getAmount() <= 0) return "listing-denied-invalid";
+        if (containsTemporaryItem(item)) return "listing-denied-tagged";
         if (config.isMaterialDenied(item.getType().name())) return "listing-denied-material";
         if (!config.allowContainers() && isContainer(item)) return "listing-denied-container";
         if (item.hasItemMeta()) {
             PersistentDataContainer pdc = item.getItemMeta().getPersistentDataContainer();
-            // Historical Pact snapshots and control copies are temporary state,
-            // not market goods. Keep this intrinsic so a deployment cannot reopen
-            // the persistence bypass by omitting a config key.
-            if (pdc.has(key(HISTORICAL_PACT_ITEM_OWNER))
-                    || pdc.has(key(HISTORICAL_PACT_ITEM_SLOT))
-                    || pdc.has(key(HISTORICAL_PACT_CONTROL_ITEM))) {
-                return "listing-denied-tagged";
-            }
             for (String rule : config.denyPdcKeys()) {
                 NamespacedKey key = NamespacedKey.fromString(rule);
                 // has(key) is type-agnostic; getKeys() would materialise the whole key set.
@@ -68,6 +63,25 @@ public class ItemInspector {
             }
         }
         return null;
+    }
+
+    /** Includes nested legacy escrow: a clean shulker must not launder a temporary item. */
+    public static boolean containsTemporaryItem(ItemStack item) {
+        if (item == null || !item.hasItemMeta()) return false;
+        var meta = item.getItemMeta();
+        var pdc = meta.getPersistentDataContainer();
+        if (pdc.has(key(HISTORICAL_PACT_ITEM_OWNER)) || pdc.has(key(HISTORICAL_PACT_ITEM_SLOT))
+                || pdc.has(key(HISTORICAL_PACT_CONTROL_ITEM))) return true;
+        if (meta instanceof BundleMeta bundle) {
+            return bundle.getItems().stream().anyMatch(ItemInspector::containsTemporaryItem);
+        }
+        if (meta instanceof BlockStateMeta block && block.hasBlockState()
+                && block.getBlockState() instanceof InventoryHolder holder) {
+            for (ItemStack nested : holder.getInventory().getContents()) {
+                if (containsTemporaryItem(nested)) return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isContainer(ItemStack item) {

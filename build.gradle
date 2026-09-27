@@ -80,7 +80,15 @@ tasks {
     }
 }
 
+test { useJUnitPlatform() }
+
 dependencies {
+    testImplementation platform('org.junit:junit-bom:5.12.2')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    testImplementation 'org.mockito:mockito-core:5.20.0'
+    testImplementation 'io.papermc.paper:paper-api:26.2.build.+'
+
     compileOnly "net.kyori:adventure-api:4.4.1"
     compileOnly "net.kyori:adventure-text-minimessage:4.4.1"
     compileOnly 'net.kyori:adventure-platform-bukkit:4.4.1'

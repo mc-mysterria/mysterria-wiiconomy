@@ -18,6 +18,8 @@ import dev.ua.ikeepcalm.wiic.domain.agora.utils.SaleNotifier;
 import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import org.bukkit.Bukkit;
+import org.bukkit.inventory.ItemStack;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 
@@ -118,6 +120,18 @@ public class MarketPurchaseService {
     }
 
     private void withdrawAndCommit(Player buyer, UUID uuid, Listing listing, String attemptId, Consumer<Outcome> callback) {
+        // Validate old escrow before any money moves. Keep its bytes for staff review.
+        try {
+            if (ItemInspector.containsTemporaryItem(ItemStack.deserializeBytes(listing.itemBytes()))) {
+                plugin.getLogger().warning("Blocked temporary-item purchase: listing " + listing.id());
+                releaseThen(listing, uuid, () -> finish(uuid, callback, Outcome.of(Result.NO_LONGER_AVAILABLE)));
+                return;
+            }
+        } catch (RuntimeException invalidItem) {
+            plugin.getLogger().warning("Unreadable listing " + listing.id() + ": " + invalidItem.getMessage());
+            releaseThen(listing, uuid, () -> finish(uuid, callback, Outcome.of(Result.ERROR)));
+            return;
+        }
         long price = listing.price();
 
         // Intent goes to disk before the money moves. If the server dies in the window
