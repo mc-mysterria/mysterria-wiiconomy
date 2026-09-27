@@ -63,6 +63,9 @@ public class MarketPurchaseService {
     }
 
     private static final Set<UUID> IN_FLIGHT = ConcurrentHashMap.newKeySet();
+    private static final long IN_PROGRESS_AUDIT_INTERVAL_MS = 5_000L;
+    private static final int MAX_IN_PROGRESS_AUDIT_ENTRIES = 4_096;
+    private static final Map<UUID, Long> LAST_IN_PROGRESS_AUDIT_AT = new java.util.HashMap<>();
 
     private final WIIC plugin;
     private final MarketConfig config;
@@ -91,9 +94,11 @@ public class MarketPurchaseService {
         String attemptId = UUID.randomUUID().toString();
         MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("agora-purchase", attemptId);
         if (!IN_FLIGHT.add(uuid)) {
-            MysterriaAuditBridge.emit("agora.purchase.failed", false, uuid, null, listingId, identity,
-                    "already in progress", MysterriaAuditBridge.moneyMetadata(0,
-                            Map.of("listing_id", listingId.toString(), "quoted_price", quotedPrice)));
+            if (shouldAuditInProgress(uuid)) {
+                MysterriaAuditBridge.emit("agora.purchase.failed", false, uuid, null, listingId, identity,
+                        "already in progress", MysterriaAuditBridge.moneyMetadata(0,
+                                Map.of("listing_id", listingId.toString(), "quoted_price", quotedPrice)));
+            }
             callback.accept(Outcome.of(Result.ALREADY_IN_PROGRESS));
             return;
         }
@@ -157,7 +162,8 @@ public class MarketPurchaseService {
             if (!withdrawn) {
                 TransactionLogger.logNote(buyer, "MARKET BUY withdraw of " + price + " coppets failed for listing " + listing.id());
                 MysterriaAuditBridge.emit("agora.purchase.failed", false, uuid, listing.sellerUuid(), listing.id(), identity,
-                        "insufficient funds", MysterriaAuditBridge.moneyMetadata(0, balanceBefore, balance(uuid),
+                        withdrawFailureReason(balanceBefore, price),
+                        MysterriaAuditBridge.moneyMetadata(0, balanceBefore, balance(uuid),
                                 MysterriaAuditBridge.metadata(Map.of("listing_id", listing.id().toString()),
                                         MysterriaAuditBridge.itemMetadata(listing.itemBytes()))));
                 journal.remove(attemptId);
@@ -291,6 +297,27 @@ public class MarketPurchaseService {
         return VaultUtil.balance(uuid);
     }
 
+    /** Only an observed balance below the price proves the refusal was about funds. */
+    static String withdrawFailureReason(@Nullable BigDecimal balanceBefore, long price) {
+        return balanceBefore != null && balanceBefore.compareTo(BigDecimal.valueOf(price)) < 0
+                ? "insufficient_funds" : "withdraw_failed";
+    }
+
+    /** Samples double-click rejections to one row per player per window. */
+    private static boolean shouldAuditInProgress(UUID uuid) {
+        long now = System.currentTimeMillis();
+        synchronized (LAST_IN_PROGRESS_AUDIT_AT) {
+            Long previous = LAST_IN_PROGRESS_AUDIT_AT.get(uuid);
+            if (previous != null && now - previous < IN_PROGRESS_AUDIT_INTERVAL_MS) return false;
+            if (previous == null && LAST_IN_PROGRESS_AUDIT_AT.size() >= MAX_IN_PROGRESS_AUDIT_ENTRIES) {
+                LAST_IN_PROGRESS_AUDIT_AT.entrySet().removeIf(e -> now - e.getValue() >= IN_PROGRESS_AUDIT_INTERVAL_MS);
+                if (LAST_IN_PROGRESS_AUDIT_AT.size() >= MAX_IN_PROGRESS_AUDIT_ENTRIES) return false;
+            }
+            LAST_IN_PROGRESS_AUDIT_AT.put(uuid, now);
+            return true;
+        }
+    }
+
     private void finish(UUID uuid, Consumer<Outcome> callback, Outcome outcome) {
         IN_FLIGHT.remove(uuid);
         callback.accept(outcome);
@@ -309,6 +336,9 @@ public class MarketPurchaseService {
      *  static and would otherwise carry a stale lock across a plugin reload. */
     public static void releaseAll() {
         IN_FLIGHT.clear();
+        synchronized (LAST_IN_PROGRESS_AUDIT_AT) {
+            LAST_IN_PROGRESS_AUDIT_AT.clear();
+        }
     }
 
 }
