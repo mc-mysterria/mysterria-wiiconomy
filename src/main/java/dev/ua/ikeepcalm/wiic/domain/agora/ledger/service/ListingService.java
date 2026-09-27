@@ -161,6 +161,9 @@ public class ListingService {
                                  ItemSnapshot snapshot, Map<String, Object> itemAuditMetadata,
                                  long price, long fee,
                                  Consumer<Outcome> callback) {
+        // Called from the preflight's main-thread continuation. Entity position may only be
+        // read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(seller);
         // Fee is a sink (never deposited anywhere), see market.yml.
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
@@ -168,8 +171,8 @@ public class ListingService {
                 TransactionLogger.logNote(seller, "MARKET LIST fee withdraw of " + fee + " coppets failed");
                 MysterriaAuditBridge.emit("agora.listing.failed", false, uuid, uuid, listingId, identity,
                         "listing fee withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
-                                balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(
-                                        Map.of("price", price, "fee", fee), itemAuditMetadata)));
+                                balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
+                                        Map.of("price", price, "fee", fee), location), itemAuditMetadata)));
                 boolean pruned = journal.remove(listingId.toString());
                 Bukkit.getScheduler().runTask(plugin, () ->
                         finish(uuid, callback, Outcome.failed(Result.INSUFFICIENT_FEE, fee, pruned)));
@@ -201,7 +204,7 @@ public class ListingService {
                 finish(uuid, callback, new Outcome(Result.SUCCESS, null, fee, false));
             }, error -> {
                 boolean pruned = journal.remove(listingId.toString());
-                refundFee(seller, uuid, listingId, fee, "listing insert failed", identity);
+                refundFee(seller, uuid, listingId, fee, "listing insert failed", identity, location);
                 Result result = error instanceof ListingLimitException limit ? limit.result : Result.ERROR;
                 if (result == Result.ERROR) {
                     plugin.getLogger().severe("Market listing insert failed for " + seller.getName() + ": " + error);
@@ -245,8 +248,9 @@ public class ListingService {
         });
     }
 
+    /** {@code location} is captured on the main thread; the refund row is emitted async. */
     private void refundFee(Player seller, UUID uuid, UUID listingId, long fee, String reason,
-                           MysterriaAuditBridge.AuditIdentity identity) {
+                           MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
         if (fee <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
@@ -258,8 +262,8 @@ public class ListingService {
             }
             MysterriaAuditBridge.emit("agora.listing.fee_refunded", refunded, uuid, uuid, listingId, identity,
                     reason, MysterriaAuditBridge.moneyMetadata(refunded ? fee : 0,
-                            balanceBefore, balance(uuid), Map.of("fee", fee,
-                                    "listing_id", listingId.toString())));
+                            balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(Map.of("fee", fee,
+                                    "listing_id", listingId.toString()), location)));
         });
     }
 
