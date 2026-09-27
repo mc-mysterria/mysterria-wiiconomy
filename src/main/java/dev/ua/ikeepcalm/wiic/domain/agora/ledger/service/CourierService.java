@@ -1,5 +1,6 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.ledger.service;
 
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.CourierDao;
@@ -233,6 +234,9 @@ public class CourierService {
         VaultUtil.getBalance(uuid).thenAccept(balance -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (balance < fee) {
                 TransactionLogger.logNote(buyer, "MARKET COURIER fee of " + fee + " coppets unaffordable");
+                MysterriaAuditBridge.emit("courier.fee.denied", AuditOutcome.DENIED, uuid, uuid, stashId, identity,
+                        "courier fee unaffordable", Map.of("fee", fee, "balance", BigDecimal.valueOf(balance),
+                                "stash_id", stashId.toString(), "currency", "coppets"));
                 callback.accept(false);
                 return;
             }

@@ -175,19 +175,22 @@ public class StashService {
             }
             int finalDelivered = delivered;
             List<String> deliveredIdValues = deliveredIds.stream().map(UUID::toString).toList();
+            List<String> restashedIdValues = undeliverable.stream().map(UUID::toString).toList();
             db.submitThenMain(conn -> StashDao.countUnclaimed(conn, uuid),
                     remaining -> {
                         IN_FLIGHT.remove(uuid);
                         MysterriaAuditBridge.emit("stash.claimed", finalDelivered > 0, uuid, uuid, null, identity,
                                 "stash claim", Map.of("delivered", finalDelivered, "remaining", remaining,
-                                        "claimed_ids", deliveredIdValues));
+                                        "claimed_ids", deliveredIdValues,
+                                        "restashed_ids", restashedIdValues));
                         callback.accept(finalDelivered, remaining);
                     },
                     error -> {
                         IN_FLIGHT.remove(uuid);
                         MysterriaAuditBridge.emit("stash.claimed", finalDelivered > 0, uuid, uuid, null, identity,
                                 "stash claim count failed", Map.of("delivered", finalDelivered, "remaining", -1,
-                                        "claimed_ids", deliveredIdValues));
+                                        "claimed_ids", deliveredIdValues,
+                                        "restashed_ids", restashedIdValues));
                         callback.accept(finalDelivered, -1);
                     });
         }, error -> {

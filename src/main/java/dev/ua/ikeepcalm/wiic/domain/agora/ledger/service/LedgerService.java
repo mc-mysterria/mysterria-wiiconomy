@@ -1,5 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.ledger.service;
 
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditRisk;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.LedgerDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.MarketDatabase;
@@ -126,7 +128,14 @@ public class LedgerService {
                     // leaves recovery with nothing to act on: the rows stay CLAIMING, which
                     // is wrong-but-harmless, rather than reverting into a double payout.
                     plugin.getLogger().severe("Market journal marker write failed after ledger deposit: " + e.getMessage());
-                    if (!journal.remove(batchId)) {
+                    boolean intentRemoved = journal.remove(batchId);
+                    MysterriaAuditBridge.emit("ledger.claim_marker_failed", AuditOutcome.FAILED, AuditRisk.HIGH,
+                            uuid, uuid, null, identity,
+                            "claim deposit landed; deposit marker write failed",
+                            MysterriaAuditBridge.moneyMetadata(sum, balanceBefore, balanceAfterDeposit,
+                                    Map.of("deposit_landed", true, "batch_id", batchId,
+                                            "intent_removed", intentRemoved)));
+                    if (!intentRemoved) {
                         plugin.getLogger().severe("CRITICAL: ledger claim of " + sum + " coppets for " + uuid
                                 + " was deposited but is neither proven nor retractable in the journal."
                                 + " Delete the CLAIM entry for batch " + batchId + " from market-journal.dat"
