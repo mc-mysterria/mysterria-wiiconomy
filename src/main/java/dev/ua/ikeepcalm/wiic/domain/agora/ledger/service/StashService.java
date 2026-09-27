@@ -38,6 +38,10 @@ public class StashService {
     private final WIIC plugin;
     private final MarketDatabase db;
 
+    /** Click-level claim refusals: one row per player and reason per 5 s. */
+    private static final dev.ua.ikeepcalm.wiic.utils.AuditSampler PREFLIGHT_AUDIT =
+            new dev.ua.ikeepcalm.wiic.utils.AuditSampler();
+
     public StashService(WIIC plugin, MarketDatabase db) {
         this.plugin = plugin;
         this.db = db;
@@ -96,7 +100,7 @@ public class StashService {
                 .toList();
         MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.randomIdentity("stash-claim");
         if (!IN_FLIGHT.add(uuid)) {
-            MysterriaAuditBridge.emit("stash.claimed", false, uuid, uuid, null, identity,
+            if (PREFLIGHT_AUDIT.shouldEmit(List.of(uuid, "stash claim already in progress"))) MysterriaAuditBridge.emit("stash.claimed", false, uuid, uuid, null, identity,
                     "stash claim already in progress", Map.of("delivered", 0,
                             "remaining", -1, "requested_ids", requestedIdValues));
             callback.accept(0, -1);
@@ -106,7 +110,7 @@ public class StashService {
         int freeSlots = countFreeSlots(owner);
         if (freeSlots <= 0) {
             IN_FLIGHT.remove(uuid);
-            MysterriaAuditBridge.emit("stash.claimed", false, uuid, uuid, null, identity,
+            if (PREFLIGHT_AUDIT.shouldEmit(List.of(uuid, "stash claim rejected: no free slots"))) MysterriaAuditBridge.emit("stash.claimed", false, uuid, uuid, null, identity,
                     "stash claim rejected: no free slots", Map.of("delivered", 0,
                             "remaining", -1, "requested_ids", requestedIdValues));
             callback.accept(0, -1);
@@ -213,6 +217,7 @@ public class StashService {
     /** Drops every single-flight guard. Called on module shutdown — these sets are
      *  static and would otherwise carry a stale lock across a plugin reload. */
     public static void releaseAll() {
+        PREFLIGHT_AUDIT.clear();
         IN_FLIGHT.clear();
     }
 

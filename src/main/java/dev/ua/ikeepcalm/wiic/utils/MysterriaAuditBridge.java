@@ -71,33 +71,27 @@ public final class MysterriaAuditBridge {
         return new AuditIdentity(correlationId, "wiic:" + domain + ":" + safeId);
     }
 
-    public static void emitWallet(String operation, Player player, ItemStack item,
-                                  long amount, boolean success, BigDecimal before,
-                                  BigDecimal after, AuditIdentity identity) {
-        emitWallet(operation, player, item, amount, success, before, after, identity, null);
-    }
-
     /**
-     * Wallet row with a caller-captured position. Pass {@link #locationMetadata(Location)} taken
-     * on the main thread when this is emitted from an async task.
+     * Wallet row. Every argument is a plain value: {@code itemAudit} and {@code location}
+     * must be captured on the main thread (see {@link #itemMetadata(ItemStack)} and
+     * {@link #playerLocation(Player)}) so this is safe to call from async tasks.
      */
-    public static void emitWallet(String operation, Player player, ItemStack item,
-                                  long amount, boolean success, BigDecimal before,
+    public static void emitWallet(String operation, UUID playerId, Map<String, ?> itemAudit,
+                                  long amount, boolean success, String reason, BigDecimal before,
                                   BigDecimal after, AuditIdentity identity, Map<String, ?> location) {
         try {
-            if (player == null || operation == null || operation.isBlank()) return;
-            long delta = switch (operation) {
+            if (playerId == null || operation == null || operation.isBlank()) return;
+            long delta = !success ? 0 : switch (operation) {
                 case "withdrawn" -> -amount;
                 case "deposited", "sold" -> amount;
                 default -> 0;
             };
-            Map<String, Object> metadata = moneyMetadata(delta,
-                    before, after, itemMetadata(item));
+            Map<String, Object> metadata = moneyMetadata(delta, before, after, itemAudit);
+            metadata.put("attempted_amount", amount);
             metadata.put("success", success);
             if (location != null) location.forEach(metadata::put);
-            UUID playerId = player.getUniqueId();
             emit("wallet." + operation, success, playerId, playerId, null,
-                    identity, success ? null : operation + " failed", metadata);
+                    identity, success ? null : (reason == null ? operation + " failed" : reason), metadata);
         } catch (RuntimeException | LinkageError ignored) {
             // Audit metadata construction is best effort too; it must not gate item recovery.
         }
@@ -135,6 +129,21 @@ public final class MysterriaAuditBridge {
                             String reason, Map<String, ?> metadata) {
         emit(operation, success ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
                 actorId, subjectId, targetId, identity, reason, metadata);
+    }
+
+    /**
+     * High-risk row for a Vault call whose outcome could not be proven either way. The
+     * caller has neither compensated nor finalized; staff must reconcile the balance.
+     */
+    public static void emitPaymentIndeterminate(String operation, UUID actorId, UUID subjectId, UUID targetId,
+                                                AuditIdentity identity, long amount, BigDecimal before,
+                                                BigDecimal after, Map<String, ?> extra) {
+        Map<String, Object> metadata = moneyMetadata(0, before, after, extra);
+        metadata.put("attempted_amount", amount);
+        metadata.put("payment", "INDETERMINATE");
+        emit(operation + ".payment_indeterminate", AuditOutcome.FAILED, AuditRisk.HIGH, actorId, subjectId,
+                targetId, identity, "economy provider failed; outcome unproven, manual reconciliation required",
+                metadata);
     }
 
     /**
@@ -200,11 +209,20 @@ public final class MysterriaAuditBridge {
         return moneyMetadata(delta, null, null, extra);
     }
 
-    /** Bounded item projection, including canonical physical UUID keys when present. */
+    /**
+     * Bounded item projection, including canonical physical UUID keys when present. Main
+     * thread only: async emitters must take this (or the byte-array overload) before their
+     * thread hop. Off-main calls return an empty projection and count as an audit failure.
+     */
     public static Map<String, Object> itemMetadata(ItemStack item) {
         Map<String, Object> metadata = new LinkedHashMap<>();
         try {
             if (item == null) return metadata;
+            if (!Bukkit.isPrimaryThread()) {
+                AuditProducer current = producer;
+                if (current != null) current.recordFailure();
+                return metadata;
+            }
             metadata.put("material", item.getType().name().toLowerCase());
             metadata.put("item_amount", item.getAmount());
             if (!item.hasItemMeta()) return metadata;
@@ -218,13 +236,30 @@ public final class MysterriaAuditBridge {
         return metadata;
     }
 
+    /**
+     * Thread-safe projection of {@code ItemStack#serializeAsBytes()} output. Parses the NBT
+     * directly instead of deserializing an ItemStack, so async and DB-executor callbacks
+     * may use it freely.
+     */
     public static Map<String, Object> itemMetadata(byte[] itemBytes) {
         if (itemBytes == null) return Map.of();
         try {
-            return itemMetadata(ItemStack.deserializeBytes(itemBytes));
-        } catch (RuntimeException ignored) {
+            Map<String, Object> raw = SerializedItemProjection.read(itemBytes);
+            Map<String, Object> metadata = new LinkedHashMap<>();
+            if (raw.get("material") != null) metadata.put("material", raw.get("material"));
+            metadata.put("item_amount", raw.getOrDefault("item_amount", 1));
+            copyString(asString(raw.get(ITEM_UUID_PDC.toString())), ITEM_UUID_KEY, metadata);
+            copyString(asString(raw.get(PARENT_ITEM_UUID_PDC.toString())), PARENT_ITEM_UUID_KEY, metadata);
+            return metadata;
+        } catch (java.io.IOException | RuntimeException ignored) {
+            AuditProducer current = producer;
+            if (current != null) current.recordFailure();
             return Map.of();
         }
+    }
+
+    private static String asString(Object value) {
+        return value instanceof String string ? string : null;
     }
 
     public static Map<String, Object> metadata(Map<String, ?> first, Map<String, ?> second) {

@@ -13,24 +13,53 @@ import java.util.concurrent.CompletableFuture;
 
 public class VaultUtil {
 
-    public static boolean deposit(UUID player, double amount) {
-        if (WIIC.getEcon() == null) return false;
-        try {
-            EconomyResponse response = WIIC.getEcon().deposit("iConomyUnlocked", player, BigDecimal.valueOf(amount));
-            return response != null && response.transactionSuccess();
-        } catch (RuntimeException ignored) {
-            return false;
+    /**
+     * Outcome of a Vault money movement. {@code INDETERMINATE} means the provider threw and a
+     * balance re-read could not prove whether the movement was applied; callers must neither
+     * compensate (return items, refund) nor finalize (hand over goods) on it, and must flag
+     * the operation for manual reconciliation instead.
+     */
+    public enum Payment {
+        SUCCESS, FAILED, INDETERMINATE;
+
+        public boolean succeeded() {
+            return this == SUCCESS;
         }
     }
 
-    public static boolean withdraw(UUID player, double amount) {
-        if (WIIC.getEcon() == null) return false;
+    public static Payment deposit(UUID player, double amount) {
+        return move(player, amount, true);
+    }
+
+    public static Payment withdraw(UUID player, double amount) {
+        return move(player, amount, false);
+    }
+
+    private static Payment move(UUID player, double amount, boolean credit) {
+        if (WIIC.getEcon() == null) return Payment.FAILED;
+        BigDecimal value = BigDecimal.valueOf(amount);
+        BigDecimal before = balance(player);
         try {
-            EconomyResponse response = WIIC.getEcon().withdraw("iConomyUnlocked", player, BigDecimal.valueOf(amount));
-            return response != null && response.transactionSuccess();
-        } catch (RuntimeException ignored) {
-            return false;
+            EconomyResponse response = credit
+                    ? WIIC.getEcon().deposit("iConomyUnlocked", player, value)
+                    : WIIC.getEcon().withdraw("iConomyUnlocked", player, value);
+            return response != null && response.transactionSuccess() ? Payment.SUCCESS : Payment.FAILED;
+        } catch (RuntimeException providerFailure) {
+            return reconcile(before, balance(player), credit ? value : value.negate());
         }
+    }
+
+    /**
+     * Re-reads the balance after a provider exception. Only an exact match of the expected
+     * delta proves the movement landed, and only an unchanged balance proves it did not;
+     * anything else (unreadable balance, concurrent movement) stays indeterminate.
+     */
+    static Payment reconcile(@Nullable BigDecimal before, @Nullable BigDecimal after, BigDecimal expectedDelta) {
+        if (before == null || after == null) return Payment.INDETERMINATE;
+        BigDecimal delta = after.subtract(before);
+        if (delta.compareTo(expectedDelta) == 0) return Payment.SUCCESS;
+        if (delta.signum() == 0) return Payment.FAILED;
+        return Payment.INDETERMINATE;
     }
 
     /**

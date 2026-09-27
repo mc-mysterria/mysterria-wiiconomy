@@ -453,16 +453,23 @@ public class PlotShopService {
         String itemName = shop.displayName() != null ? shop.displayName() : String.valueOf(shop.material());
         // Entity position may only be read on the main thread; the async rows below reuse it.
         Map<String, Object> location = MysterriaAuditBridge.playerLocation(buyer);
+        // ItemStack/meta reads are main-thread only; the async rows use this immutable projection.
+        Map<String, Object> itemAudit = Map.copyOf(MysterriaAuditBridge.itemMetadata(template));
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(buyerId);
-            if (!VaultUtil.withdraw(buyerId, price)) {
+            VaultUtil.Payment payment = VaultUtil.withdraw(buyerId, price);
+            if (!payment.succeeded()) {
                 TransactionLogger.logNote(buyer, "MARKET STALL withdraw of " + price
                         + " coppets failed at " + shop.plotId());
-                MysterriaAuditBridge.emit("plot_shop.purchase_failed", false, buyerId, shop.ownerUuid(), shop.id(), identity,
+                if (payment == VaultUtil.Payment.INDETERMINATE) MysterriaAuditBridge.emitPaymentIndeterminate(
+                        "plot_shop.purchase", buyerId, shop.ownerUuid(), shop.id(), identity, price,
+                        balanceBefore, balance(buyerId), MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
+                                Map.of("plot_id", shop.plotId(), "quantity", wanted), location), itemAudit));
+                else MysterriaAuditBridge.emit("plot_shop.purchase_failed", false, buyerId, shop.ownerUuid(), shop.id(), identity,
                         "insufficient funds", MysterriaAuditBridge.moneyMetadata(0, balanceBefore, balance(buyerId),
                                 MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
                                                 Map.of("plot_id", shop.plotId(), "quantity", wanted), location),
-                                        MysterriaAuditBridge.itemMetadata(template))));
+                                        itemAudit)));
                 finish(buyerId, shop.id(), callback, Purchase.of(BuyResult.INSUFFICIENT_FUNDS));
                 return;
             }
@@ -634,7 +641,8 @@ public class PlotShopService {
                         MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(buyerId);
-            boolean refunded = VaultUtil.deposit(buyerId, amount);
+            VaultUtil.Payment payment = VaultUtil.deposit(buyerId, amount);
+            boolean refunded = payment.succeeded();
             TransactionLogger.logNote(buyer, "MARKET STALL refund of " + amount + " coppets ("
                     + reason + ") " + (refunded ? "OK" : "FAILED"));
             if (!refunded) {
@@ -643,7 +651,7 @@ public class PlotShopService {
             MysterriaAuditBridge.emit("plot_shop.refunded", refunded, buyerId, buyerId, shopId, identity,
                     reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
                             balanceBefore, balance(buyerId), MysterriaAuditBridge.metadata(Map.of("plot_id", plotId,
-                                    "shop_id", shopId.toString()), location)));
+                                    "shop_id", shopId.toString(), "payment", payment.name()), location)));
         });
     }
 

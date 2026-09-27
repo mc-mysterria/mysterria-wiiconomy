@@ -259,9 +259,13 @@ public class PlotService {
         Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            if (price > 0 && !VaultUtil.withdraw(uuid, price)) {
+            VaultUtil.Payment payment = price > 0 ? VaultUtil.withdraw(uuid, price) : VaultUtil.Payment.SUCCESS;
+            if (!payment.succeeded()) {
                 TransactionLogger.logNote(player, "MARKET PLOT rent withdraw of " + price + " coppets failed");
-                MysterriaAuditBridge.emit("plots.rent.failed", false, uuid, uuid, null, identity,
+                if (payment == VaultUtil.Payment.INDETERMINATE) MysterriaAuditBridge.emitPaymentIndeterminate(
+                        "plots.rent", uuid, uuid, null, identity, price, balanceBefore, balance(uuid),
+                        MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location));
+                else MysterriaAuditBridge.emit("plots.rent.failed", false, uuid, uuid, null, identity,
                         "rent withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
                                 balanceBefore, balance(uuid),
                                 MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location)));
@@ -332,9 +336,13 @@ public class PlotService {
         Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            if (price > 0 && !VaultUtil.withdraw(uuid, price)) {
+            VaultUtil.Payment payment = price > 0 ? VaultUtil.withdraw(uuid, price) : VaultUtil.Payment.SUCCESS;
+            if (!payment.succeeded()) {
                 TransactionLogger.logNote(player, "MARKET PLOT upkeep withdraw of " + price + " coppets failed");
-                MysterriaAuditBridge.emit("plots.rent.upkeep_failed", false, uuid, uuid, null, identity,
+                if (payment == VaultUtil.Payment.INDETERMINATE) MysterriaAuditBridge.emitPaymentIndeterminate(
+                        "plots.rent.upkeep", uuid, uuid, null, identity, price, balanceBefore, balance(uuid),
+                        MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location));
+                else MysterriaAuditBridge.emit("plots.rent.upkeep_failed", false, uuid, uuid, null, identity,
                         "upkeep withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
                                 balanceBefore, balance(uuid),
                                 MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location)));
@@ -576,8 +584,13 @@ public class PlotService {
         }, snapshot -> {
             rentals.remove(plotId);
             overdueNotified.remove(plotId);
-            MysterriaAuditBridge.emit("plots.eviction.committed", true, null, rental.renterUuid(), null, identity,
-                    reason, evictionMetadata(plotId, harvested));
+            // DB stage only: rental cleared and stash rows stored. World restoration is a
+            // separate, later outcome recorded by emitRestoration below.
+            Map<String, Object> dbMetadata = evictionMetadata(plotId, harvested);
+            dbMetadata.put("stage", "db_commit");
+            dbMetadata.put("restoration", snapshot != null && region != null ? "pending" : "not_applicable");
+            MysterriaAuditBridge.emit("plots.eviction.db_committed", true, null, rental.renterUuid(), null, identity,
+                    reason, dbMetadata);
             // After the commit, before the blocks are replayed: the counters must stop
             // trading the moment the rental is gone, not when the restore finishes.
             if (onEvicted != null) onEvicted.accept(plotId);
@@ -589,18 +602,23 @@ public class PlotService {
             World world = config.world();
             if (world == null) {
                 evicting.remove(plotId);
+                emitRestoration(rental, plotId, identity, reason, false, "market world unavailable");
                 callback.accept(true);
                 return;
             }
             try {
-                PlotSnapshot.restore(plugin, world, region, snapshot, () -> {
+                PlotSnapshot.restore(plugin, world, region, snapshot, completed -> {
                     evicting.remove(plotId);
-                    plugin.getLogger().info("Plot " + plotId + " restored to its snapshot");
+                    if (completed) plugin.getLogger().info("Plot " + plotId + " restored to its snapshot");
+                    emitRestoration(rental, plotId, identity, reason, completed,
+                            completed ? null : "restore interrupted by plugin disable");
                     callback.accept(true);
                 });
             } catch (Exception e) {
                 evicting.remove(plotId);
                 plugin.getLogger().severe("Plot " + plotId + " snapshot restore failed: " + e.getMessage());
+                emitRestoration(rental, plotId, identity, reason, false,
+                        "snapshot restore failed: " + e.getClass().getSimpleName());
                 callback.accept(true);
             }
         }, error -> {
@@ -718,7 +736,8 @@ public class PlotService {
         if (amount <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            boolean refunded = VaultUtil.deposit(uuid, amount);
+            VaultUtil.Payment payment = VaultUtil.deposit(uuid, amount);
+            boolean refunded = payment.succeeded();
             TransactionLogger.logNote(player, "MARKET PLOT refund of " + amount + " coppets ("
                     + reason + ") " + (refunded ? "OK" : "FAILED"));
             if (!refunded) {
@@ -727,12 +746,29 @@ public class PlotService {
             MysterriaAuditBridge.emit("plots.rent.refunded", refunded, uuid, uuid, null, identity,
                     reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
                             balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(
-                                    Map.of("plot_id", plotId, "operation", operation), location)));
+                                    Map.of("plot_id", plotId, "operation", operation,
+                                            "payment", payment.name()), location)));
         });
     }
 
     private static BigDecimal balance(UUID uuid) {
         return VaultUtil.balance(uuid);
+    }
+
+    /** World-restoration outcome of an eviction whose DB stage already committed. */
+    private static void emitRestoration(PlotRental rental, String plotId, MysterriaAuditBridge.AuditIdentity identity,
+                                        String reason, boolean restored, @Nullable String failure) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("plot_id", plotId);
+        metadata.put("stage", "world_restoration");
+        metadata.put("eviction_reason", reason);
+        if (restored) {
+            MysterriaAuditBridge.emit("plots.eviction.restored", true, null, rental.renterUuid(), null, identity,
+                    "plot restored to snapshot", metadata);
+        } else {
+            MysterriaAuditBridge.emit("plots.eviction.restore_failed", false, null, rental.renterUuid(), null,
+                    identity, failure, metadata);
+        }
     }
 
     private static Map<String, Object> evictionMetadata(String plotId, @Nullable List<StashItem> harvested) {

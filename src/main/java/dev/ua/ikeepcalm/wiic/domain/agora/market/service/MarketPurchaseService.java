@@ -63,9 +63,8 @@ public class MarketPurchaseService {
     }
 
     private static final Set<UUID> IN_FLIGHT = ConcurrentHashMap.newKeySet();
-    private static final long IN_PROGRESS_AUDIT_INTERVAL_MS = 5_000L;
-    private static final int MAX_IN_PROGRESS_AUDIT_ENTRIES = 4_096;
-    private static final Map<UUID, Long> LAST_IN_PROGRESS_AUDIT_AT = new java.util.HashMap<>();
+    private static final dev.ua.ikeepcalm.wiic.utils.AuditSampler IN_PROGRESS_AUDIT =
+            new dev.ua.ikeepcalm.wiic.utils.AuditSampler();
 
     private final WIIC plugin;
     private final MarketConfig config;
@@ -160,10 +159,15 @@ public class MarketPurchaseService {
         Map<String, Object> location = MysterriaAuditBridge.playerLocation(buyer);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            boolean withdrawn = VaultUtil.withdraw(uuid, price);
-            if (!withdrawn) {
+            VaultUtil.Payment payment = VaultUtil.withdraw(uuid, price);
+            if (!payment.succeeded()) {
                 TransactionLogger.logNote(buyer, "MARKET BUY withdraw of " + price + " coppets failed for listing " + listing.id());
-                MysterriaAuditBridge.emit("agora.purchase.failed", false, uuid, listing.sellerUuid(), listing.id(), identity,
+                // Indeterminate: goods are withheld and no refund is issued until reconciled.
+                if (payment == VaultUtil.Payment.INDETERMINATE) MysterriaAuditBridge.emitPaymentIndeterminate(
+                        "agora.purchase", uuid, listing.sellerUuid(), listing.id(), identity, price,
+                        balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(
+                                Map.of("listing_id", listing.id().toString()), location));
+                else MysterriaAuditBridge.emit("agora.purchase.failed", false, uuid, listing.sellerUuid(), listing.id(), identity,
                         withdrawFailureReason(balanceBefore, price),
                         MysterriaAuditBridge.moneyMetadata(0, balanceBefore, balance(uuid),
                                 MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
@@ -289,14 +293,15 @@ public class MarketPurchaseService {
                         MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            boolean refunded = VaultUtil.deposit(uuid, amount);
+            VaultUtil.Payment payment = VaultUtil.deposit(uuid, amount);
+            boolean refunded = payment.succeeded();
             TransactionLogger.logNote(buyer, "MARKET BUY refund of " + amount + " coppets (" + reason + ") "
                     + (refunded ? "OK" : "FAILED"));
             if (!refunded) plugin.getLogger().severe("Failed to refund " + amount + " coppets to " + uuid);
             MysterriaAuditBridge.emit("agora.purchase.refunded", refunded, uuid, uuid, listingId, identity,
                     reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
                             balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(
-                                    Map.of("listing_id", listingId.toString()), location)));
+                                    Map.of("listing_id", listingId.toString(), "payment", payment.name()), location)));
         });
     }
 
@@ -312,17 +317,7 @@ public class MarketPurchaseService {
 
     /** Samples double-click rejections to one row per player per window. */
     private static boolean shouldAuditInProgress(UUID uuid) {
-        long now = System.currentTimeMillis();
-        synchronized (LAST_IN_PROGRESS_AUDIT_AT) {
-            Long previous = LAST_IN_PROGRESS_AUDIT_AT.get(uuid);
-            if (previous != null && now - previous < IN_PROGRESS_AUDIT_INTERVAL_MS) return false;
-            if (previous == null && LAST_IN_PROGRESS_AUDIT_AT.size() >= MAX_IN_PROGRESS_AUDIT_ENTRIES) {
-                LAST_IN_PROGRESS_AUDIT_AT.entrySet().removeIf(e -> now - e.getValue() >= IN_PROGRESS_AUDIT_INTERVAL_MS);
-                if (LAST_IN_PROGRESS_AUDIT_AT.size() >= MAX_IN_PROGRESS_AUDIT_ENTRIES) return false;
-            }
-            LAST_IN_PROGRESS_AUDIT_AT.put(uuid, now);
-            return true;
-        }
+        return IN_PROGRESS_AUDIT.shouldEmit(uuid);
     }
 
     private void finish(UUID uuid, Consumer<Outcome> callback, Outcome outcome) {
@@ -343,9 +338,7 @@ public class MarketPurchaseService {
      *  static and would otherwise carry a stale lock across a plugin reload. */
     public static void releaseAll() {
         IN_FLIGHT.clear();
-        synchronized (LAST_IN_PROGRESS_AUDIT_AT) {
-            LAST_IN_PROGRESS_AUDIT_AT.clear();
-        }
+        IN_PROGRESS_AUDIT.clear();
     }
 
 }

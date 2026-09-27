@@ -137,7 +137,7 @@ public class JournalRecovery {
         return () -> MysterriaAuditBridge.emit("agora.listing.item_recovered", true,
                 entry.player(), entry.player(), listingId, identity, "unlisted item restored to stash",
                 MysterriaAuditBridge.metadata(Map.of("listing_id", listingId.toString()),
-                        MysterriaAuditBridge.itemMetadata(item)));
+                        MysterriaAuditBridge.itemMetadata(entry.payload())));
     }
 
     /** Crash between the buyer's withdraw and the sale commit: finish the sale or refund. */
@@ -201,7 +201,8 @@ public class JournalRecovery {
         long amount = entry.amount();
         return () -> {
             BigDecimal balanceBefore = balance(buyer);
-            boolean refunded = VaultUtil.deposit(buyer, amount);
+            VaultUtil.Payment payment = VaultUtil.deposit(buyer, amount);
+            boolean refunded = payment.succeeded();
             if (!refunded) {
                 plugin.getLogger().severe("Recovery refund of " + amount + " coppets to "
                         + buyer + " FAILED — manual repair needed");
@@ -213,7 +214,8 @@ public class JournalRecovery {
                     refunded ? "interrupted purchase refunded by recovery"
                             : "recovery refund failed; manual repair needed",
                     MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
-                            balanceBefore, balance(buyer), Map.of("listing_id", listingId.toString())));
+                            balanceBefore, balance(buyer), Map.of("listing_id", listingId.toString(),
+                            "payment", payment.name())));
         };
     }
 

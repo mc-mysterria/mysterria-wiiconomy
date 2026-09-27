@@ -89,29 +89,46 @@ public class LedgerService {
                 callback.accept(true, 0L);
                 return;
             }
+            // Entity position may only be read on the main thread; the async rows below reuse it.
+            Map<String, Object> location = MysterriaAuditBridge.playerLocation(owner);
             try {
                 journal.append(MarketJournal.Type.CLAIM, batchId, uuid, sum, null);
             } catch (IllegalStateException e) {
                 plugin.getLogger().severe("Market journal unavailable, aborting ledger claim: " + e.getMessage());
-                revert(uuid, () -> {
+                revert(uuid, reverted -> {
+                    MysterriaAuditBridge.emit("ledger.claim_failed", false, uuid, uuid, null, identity,
+                            "claim journal initialization failed", MysterriaAuditBridge.moneyMetadata(0,
+                                    MysterriaAuditBridge.metadata(Map.of("batch_id", batchId, "claim_sum", sum,
+                                            "reverted", reverted), location)));
                     IN_FLIGHT.remove(uuid);
                     callback.accept(false, 0L);
                 });
                 return;
             }
-
-            // Entity position may only be read on the main thread; the async rows below reuse it.
-            Map<String, Object> location = MysterriaAuditBridge.playerLocation(owner);
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 BigDecimal balanceBefore = balance(uuid);
-                boolean deposited = VaultUtil.deposit(uuid, sum);
-                if (!deposited) {
+                VaultUtil.Payment payment = VaultUtil.deposit(uuid, sum);
+                if (payment == VaultUtil.Payment.INDETERMINATE) {
+                    // Neither revert (could pay twice) nor finalize (payment unproven). Dropping
+                    // the intent leaves the rows CLAIMING — wrong but harmless — for staff to
+                    // reconcile against the balance.
+                    boolean intentRemoved = journal.remove(batchId);
+                    MysterriaAuditBridge.emitPaymentIndeterminate("ledger.claim", uuid, uuid, null, identity, sum,
+                            balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(Map.of("batch_id", batchId,
+                                    "intent_removed", intentRemoved), location));
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        IN_FLIGHT.remove(uuid);
+                        callback.accept(false, 0L);
+                    });
+                    return;
+                }
+                if (!payment.succeeded()) {
                     TransactionLogger.logNote(owner, "MARKET LEDGER claim deposit of " + sum + " coppets FAILED");
                     MysterriaAuditBridge.emit("ledger.claim_failed", false, uuid, uuid, null, identity,
                             "proceeds deposit failed", MysterriaAuditBridge.moneyMetadata(0,
                                     balanceBefore, balance(uuid), location));
                     journal.remove(batchId);
-                    revert(uuid, () -> {
+                    revert(uuid, ignored -> {
                         IN_FLIGHT.remove(uuid);
                         callback.accept(false, 0L);
                     });
@@ -180,13 +197,14 @@ public class LedgerService {
         return VaultUtil.balance(uuid);
     }
 
-    private void revert(UUID uuid, Runnable then) {
+    /** {@code then} runs on the main thread with whether the CLAIMING rows were reverted. */
+    private void revert(UUID uuid, Consumer<Boolean> then) {
         db.transactionThenMain(conn -> {
             LedgerDao.revertClaim(conn, uuid);
             return null;
-        }, ignored -> then.run(), error -> {
+        }, ignored -> then.accept(true), error -> {
             plugin.getLogger().severe("Ledger revertClaim failed for " + uuid + ": " + error);
-            then.run();
+            then.accept(false);
         });
     }
 
