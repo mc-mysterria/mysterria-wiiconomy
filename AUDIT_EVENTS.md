@@ -19,6 +19,16 @@ uses snake_case. Item projections use `material` and `item_amount`; when present
 identity is copied under the canonical indexed top-level keys `item_uuid` and
 `parent_item_uuid`. Raw serialized item bytes are never emitted.
 
+Rows whose actor is an online player carry the actor's block position under `world`, `x`,
+`y`, `z` (added centrally by the bridge unless the row already has a position). System rows
+(null actor, e.g. evictions from the upkeep task) carry no position.
+
+Sampled preflight rejections: `shop.purchased` rejections are limited to one per player,
+material and reason per second; `agora.purchase.failed` with reason `already in progress`
+is limited to one per player per 5 seconds. When a market withdraw is refused,
+the reason is `insufficient_funds` only if the balance read before the withdraw was below
+the price; otherwise it is `withdraw_failed`.
+
 Balance fields are best-effort observations around the external economy call, not an atomic
 transaction boundary. The signed `delta` records what WIIC attempted or completed and is the
 authoritative monetary projection when concurrent economy activity changes either snapshot.
@@ -43,13 +53,15 @@ reconciliation rather than counting the same debit twice.
 | `courier.contract.failed`, `courier.contract.withdraw_failed` | Courier contract errors | reason |
 | `courier.delivery.dispatched`, `courier.delivery.failed` | Stash claim and postman handoff | purchase identity, stash_id, seller, item projection, fee, courier_type |
 | `courier.fee.collected`, `courier.fee.failed` | Optional delivery fee result | purchase identity, monetary projection, fee |
+| `courier.fee.denied` (DENIED) | Balance below the delivery fee; goods stay in the stash | purchase identity, fee, balance, stash_id |
 | `stash.deposited`, `stash.deposit_failed` | Stash row insertion | stash id, source, reference, item projection |
-| `stash.claimed` | Stash claim batch result | delivered, remaining, claimed_ids |
+| `stash.claimed` | Stash claim batch result | delivered, remaining, claimed_ids, restashed_ids (claimed rows handed back to the stash) |
 | `ledger.claimed`, `ledger.claim_pending_recovery`, `ledger.claim_failed`, `ledger.claim_recovered`, `ledger.claim_reverted` | Proceeds deposit/claim/recovery result | original claim identity, monetary projection |
+| `ledger.claim_marker_failed` (FAILED, HIGH) | Deposit landed but the CLAIM_DEPOSITED journal marker could not be written | monetary projection, deposit_landed=true, batch_id, intent_removed |
 | `plots.rent.charge_pending`, `plots.rent.committed`, `plots.rent.failed` | Plot rent charge and DB claim | monetary projection, plot_id, paid_until, reason |
 | `plots.rent.charge_pending`, `plots.rent.upkeep`, `plots.rent.upkeep_failed` | Plot extension charge and DB update | monetary projection, plot_id, paid_until |
 | `plots.rent.refunded` | Failed rent/upkeep refund | original rent/upkeep identity, monetary projection, plot_id, operation, reason |
-| `plots.eviction.committed`, `plots.eviction.failed` | Eviction DB commit | plot_id, harvested_stacks, material totals, bounded item summaries, reason |
+| `plots.eviction.committed`, `plots.eviction.failed` | Eviction DB commit; actor null (system), subject = renter | plot_id, harvested_stacks, material totals, bounded item summaries, reason |
 | `plot_shop.created`, `plot_shop.create_failed` | Stall counter DB insert | plot_id, price, bundle |
 | `plot_shop.updated`, `plot_shop.update_failed` | Stall goods/price mutation | plot_id, price, stocked, item projection |
 | `plot_shop.purchase_completed`, `plot_shop.purchase_failed` | Stall charge, stock, and ledger result | purchase identity, monetary projection, plot_id, quantity, tax, net, item projection |
@@ -61,8 +73,16 @@ the stash row separately as `stash_id`, allowing downstream Delivery emitters to
 same business ID without conflating a purchase, listing, and stash record.
 # History ownership
 
-`logging.legacy-text-history` defaults to false: wallet/market text files are an optional
-compatibility export. Existing files are not deleted. The SQL transactions trail remains part
-of the atomic sale transaction; the shared audit feed cannot replace its durability guarantee.
-Listings, proceeds, stash and the fsynced market recovery journal remain authoritative state.
-Actionable failure diagnostics remain available independently of either history export.
+`logging.legacy-text-history` defaults to true: existing staff tooling still reads the
+per-player `logs/<player>.log` files, so the export stays on. Planned change: once staff
+tooling reads the shared audit, the default flips to false (files already on disk are kept).
+The SQL transactions trail remains part of the atomic sale transaction; the shared audit feed
+cannot replace its durability guarantee. Listings, proceeds, stash and the fsynced market
+recovery journal remain authoritative state. Actionable failure diagnostics remain available
+independently of either history export.
+
+# Balance mutation paths
+
+Every balance change goes through `VaultUtil.deposit`/`withdraw`, and each caller emits an
+audit row. `WalletListener`, `WalletGUI`, `GuiUtil` and `MarketIndex` call `WIIC.getEcon()`
+only to read balances for display and the market index, so they emit nothing.
