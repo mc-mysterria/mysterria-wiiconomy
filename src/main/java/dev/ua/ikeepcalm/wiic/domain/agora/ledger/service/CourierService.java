@@ -231,17 +231,42 @@ public class CourierService {
         // taken once a courier has actually accepted the goods (see claimAndDispatch): the
         // fee is small and unjournaled, so the one direction that must never happen is
         // charging for a delivery that a crash or a refusal then cancelled.
-        VaultUtil.getBalance(uuid).thenAccept(balance -> Bukkit.getScheduler().runTask(plugin, () -> {
-            if (balance < fee) {
-                TransactionLogger.logNote(buyer, "MARKET COURIER fee of " + fee + " coppets unaffordable");
-                MysterriaAuditBridge.emit("courier.fee.denied", AuditOutcome.DENIED, uuid, uuid, stashId, identity,
-                        "courier fee unaffordable", Map.of("fee", fee, "balance", BigDecimal.valueOf(balance),
-                                "stash_id", stashId.toString(), "currency", "coppets"));
-                callback.accept(false);
-                return;
-            }
-            claimAndDispatch(buyer, stashId, itemBytes, sellerUuid, sellerName, fee, identity, callback);
-        }));
+        // The nullable read keeps an economy failure from masquerading as an observed zero
+        // balance: only a balance actually seen below the fee is recorded as DENIED.
+        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            BigDecimal balance = VaultUtil.balance(uuid);
+            Bukkit.getScheduler().runTask(plugin, () -> {
+                if (balance == null) {
+                    emitFeeRow("courier.fee.failed", AuditOutcome.FAILED, buyer, stashId, itemBytes, identity,
+                            "balance_unavailable", fee, null);
+                    callback.accept(false);
+                    return;
+                }
+                if (balance.compareTo(BigDecimal.valueOf(fee)) < 0) {
+                    TransactionLogger.logNote(buyer, "MARKET COURIER fee of " + fee + " coppets unaffordable");
+                    emitFeeRow("courier.fee.denied", AuditOutcome.DENIED, buyer, stashId, itemBytes, identity,
+                            "courier fee unaffordable", fee, balance);
+                    callback.accept(false);
+                    return;
+                }
+                claimAndDispatch(buyer, stashId, itemBytes, sellerUuid, sellerName, fee, identity, callback);
+            });
+        });
+    }
+
+    /** Courier fee refusal row; {@code balance} is null when it could not be observed. */
+    private static void emitFeeRow(String operation, AuditOutcome outcome, Player buyer, UUID stashId,
+                                   byte[] itemBytes, MysterriaAuditBridge.AuditIdentity identity,
+                                   String reason, long fee, BigDecimal balance) {
+        UUID uuid = buyer.getUniqueId();
+        Map<String, Object> details = new java.util.LinkedHashMap<>();
+        details.put("fee", fee);
+        details.put("currency", "coppets");
+        details.put("stash_id", stashId.toString());
+        details.put("balance_observed", balance != null);
+        if (balance != null) details.put("balance", balance);
+        MysterriaAuditBridge.emit(operation, outcome, uuid, uuid, stashId, identity, reason,
+                MysterriaAuditBridge.metadata(details, MysterriaAuditBridge.itemMetadata(itemBytes)));
     }
 
     private void claimAndDispatch(Player buyer, UUID stashId, byte[] itemBytes,
