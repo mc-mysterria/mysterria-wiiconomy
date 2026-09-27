@@ -76,6 +76,10 @@ shadowJar {
     relocate 'dev.ua.ikeepcalm.mysterria.audit', 'dev.ua.ikeepcalm.wiic.libs.audit'
 }
 
+jar {
+    enabled = false
+}
+
 tasks {
     build {
         dependsOn shadowJar
@@ -139,6 +143,10 @@ processResources {
     filesMatching('plugin.yml') {
         expand props
     }
+}
+
+jar {
+    enabled = false
 }
 
 tasks {
