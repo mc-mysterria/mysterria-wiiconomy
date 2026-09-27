@@ -2,8 +2,8 @@ name: WIIC
 version: '${version}'
 main: dev.ua.ikeepcalm.wiic.WIIC
 api-version: '1.21'
-depend: [ iConomyUnlocked, Vault, CircleOfImagination ]
-softdepend: [ Citizens, Lands, Worlds, UndeadPostmans ]
+depend: [ iConomyUnlocked, Vault ]
+softdepend: [ Citizens, Lands, Worlds, UndeadPostmans, CircleOfImagination ]
 commands:
   wallet:
     description: Check your wallet debug information
