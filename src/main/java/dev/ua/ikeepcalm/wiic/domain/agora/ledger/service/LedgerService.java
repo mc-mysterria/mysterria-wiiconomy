@@ -100,6 +100,8 @@ public class LedgerService {
                 return;
             }
 
+            // Entity position may only be read on the main thread; the async rows below reuse it.
+            Map<String, Object> location = MysterriaAuditBridge.playerLocation(owner);
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 BigDecimal balanceBefore = balance(uuid);
                 boolean deposited = VaultUtil.deposit(uuid, sum);
@@ -107,7 +109,7 @@ public class LedgerService {
                     TransactionLogger.logNote(owner, "MARKET LEDGER claim deposit of " + sum + " coppets FAILED");
                     MysterriaAuditBridge.emit("ledger.claim_failed", false, uuid, uuid, null, identity,
                             "proceeds deposit failed", MysterriaAuditBridge.moneyMetadata(0,
-                                    balanceBefore, balance(uuid), Map.of()));
+                                    balanceBefore, balance(uuid), location));
                     journal.remove(batchId);
                     revert(uuid, () -> {
                         IN_FLIGHT.remove(uuid);
@@ -133,8 +135,8 @@ public class LedgerService {
                             uuid, uuid, null, identity,
                             "claim deposit landed; deposit marker write failed",
                             MysterriaAuditBridge.moneyMetadata(sum, balanceBefore, balanceAfterDeposit,
-                                    Map.of("deposit_landed", true, "batch_id", batchId,
-                                            "intent_removed", intentRemoved)));
+                                    MysterriaAuditBridge.metadata(Map.of("deposit_landed", true, "batch_id", batchId,
+                                            "intent_removed", intentRemoved), location)));
                     if (!intentRemoved) {
                         plugin.getLogger().severe("CRITICAL: ledger claim of " + sum + " coppets for " + uuid
                                 + " was deposited but is neither proven nor retractable in the journal."
@@ -151,7 +153,7 @@ public class LedgerService {
                     TransactionLogger.logNote(owner, "MARKET LEDGER claimed " + sum + " coppets");
                     MysterriaAuditBridge.emit("ledger.claimed", true, uuid, uuid, null, identity,
                             "proceeds claimed", MysterriaAuditBridge.moneyMetadata(sum,
-                                    balanceBefore, balanceAfterDeposit, Map.of()));
+                                    balanceBefore, balanceAfterDeposit, location));
                     IN_FLIGHT.remove(uuid);
                     callback.accept(true, sum);
                 }, error -> {
@@ -160,7 +162,7 @@ public class LedgerService {
                             + " (journal will complete on restart): " + error);
                     MysterriaAuditBridge.emit("ledger.claim_pending_recovery", false, uuid, uuid, null, identity,
                             "proceeds deposited; claim pending recovery", MysterriaAuditBridge.moneyMetadata(sum,
-                                    balanceBefore, balanceAfterDeposit, Map.of()));
+                                    balanceBefore, balanceAfterDeposit, location));
                     IN_FLIGHT.remove(uuid);
                     callback.accept(true, sum);
                 });

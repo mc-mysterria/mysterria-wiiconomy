@@ -149,8 +149,9 @@ public class VaultGUI {
                                 // before the coppets behind it are gone — a failed withdraw after
                                 // an unconditional addItem would mint currency out of nothing.
                                 ItemStack snapshot = confirmed.clone();
+                                Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
                                 Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                    boolean debited = withdraw(player, snapshot);
+                                    boolean debited = withdraw(player, snapshot, location);
                                     Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
                                         if (debited) ItemUtil.giveOrDrop(player, snapshot);
                                         openVault(player, onClose);
@@ -193,8 +194,9 @@ public class VaultGUI {
                                         openVault(player, onClose);
                                         return;
                                     }
+                                    Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                        deposit(player, snapshot);
+                                        deposit(player, snapshot, location);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
                                     });
                                 }
@@ -221,8 +223,9 @@ public class VaultGUI {
                                         openVault(player, onClose);
                                         return;
                                     }
+                                    Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                        sell(player, snapshot);
+                                        sell(player, snapshot, location);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
                                     });
                                 }
@@ -259,7 +262,7 @@ public class VaultGUI {
     // Economy operations
     // -------------------------------------------------------------------------
 
-    private void deposit(Player player, ItemStack item) {
+    private void deposit(Player player, ItemStack item, Map<String, Object> location) {
         String type = ItemUtil.getType(item);
         if (type == null) return;
         long amount = switch (type) {
@@ -275,7 +278,7 @@ public class VaultGUI {
         TransactionLogger.logDeposit(player, item, amount, success);
         BigDecimal after = currentBalance(player);
         MysterriaAuditBridge.emitWallet("deposited", player, item, amount, success, before, after,
-                MysterriaAuditBridge.randomIdentity("wallet-deposit"));
+                MysterriaAuditBridge.randomIdentity("wallet-deposit"), location);
         TransactionLogger.logBalance(player, after, "after deposit");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
@@ -294,7 +297,7 @@ public class VaultGUI {
     }
 
     /** @return true if the coppets were actually taken — only then may the coin be handed over. */
-    private boolean withdraw(Player player, ItemStack item) {
+    private boolean withdraw(Player player, ItemStack item, Map<String, Object> location) {
         String type = ItemUtil.getType(item);
         if (type == null) return false;
         long amount = switch (type) {
@@ -310,7 +313,7 @@ public class VaultGUI {
         TransactionLogger.logWithdraw(player, item, amount, success);
         BigDecimal after = currentBalance(player);
         MysterriaAuditBridge.emitWallet("withdrawn", player, item, amount, success, before, after,
-                MysterriaAuditBridge.randomIdentity("wallet-withdrawal"));
+                MysterriaAuditBridge.randomIdentity("wallet-withdrawal"), location);
         TransactionLogger.logBalance(player, after, "after withdraw");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () ->
@@ -320,7 +323,7 @@ public class VaultGUI {
         return success;
     }
 
-    private void sell(Player player, ItemStack item) {
+    private void sell(Player player, ItemStack item, Map<String, Object> location) {
         int value = priceAppraiser.appraise(item);
         BigDecimal before = currentBalance(player);
         TransactionLogger.logBalance(player, before, "before sell");
@@ -328,7 +331,7 @@ public class VaultGUI {
         TransactionLogger.logSell(player, item, value, success);
         BigDecimal after = currentBalance(player);
         MysterriaAuditBridge.emitWallet("sold", player, item, value, success, before, after,
-                MysterriaAuditBridge.randomIdentity("wallet-sale"));
+                MysterriaAuditBridge.randomIdentity("wallet-sale"), location);
         TransactionLogger.logBalance(player, after, "after sell");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {

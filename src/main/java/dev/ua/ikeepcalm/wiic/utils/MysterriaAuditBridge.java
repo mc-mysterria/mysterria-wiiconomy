@@ -74,6 +74,16 @@ public final class MysterriaAuditBridge {
     public static void emitWallet(String operation, Player player, ItemStack item,
                                   long amount, boolean success, BigDecimal before,
                                   BigDecimal after, AuditIdentity identity) {
+        emitWallet(operation, player, item, amount, success, before, after, identity, null);
+    }
+
+    /**
+     * Wallet row with a caller-captured position. Pass {@link #locationMetadata(Location)} taken
+     * on the main thread when this is emitted from an async task.
+     */
+    public static void emitWallet(String operation, Player player, ItemStack item,
+                                  long amount, boolean success, BigDecimal before,
+                                  BigDecimal after, AuditIdentity identity, Map<String, ?> location) {
         try {
             if (player == null || operation == null || operation.isBlank()) return;
             long delta = switch (operation) {
@@ -84,6 +94,7 @@ public final class MysterriaAuditBridge {
             Map<String, Object> metadata = moneyMetadata(delta,
                     before, after, itemMetadata(item));
             metadata.put("success", success);
+            if (location != null) location.forEach(metadata::put);
             UUID playerId = player.getUniqueId();
             emit("wallet." + operation, success, playerId, playerId, null,
                     identity, success ? null : operation + " failed", metadata);
@@ -129,19 +140,35 @@ public final class MysterriaAuditBridge {
     /**
      * Copies {@code metadata} and appends the online actor's position under the shared
      * {@code world}/{@code x}/{@code y}/{@code z} keys. Rows that already carry a position,
-     * system rows (null actor) and offline actors are returned unchanged.
+     * system rows (null actor) and offline actors are returned unchanged. Entity position is
+     * only read on the main thread; async emitters must capture it before their thread hop
+     * and pass it in via {@link #playerLocation(Player)}.
      */
     static Map<String, ?> withActorLocation(UUID actorId, Map<String, ?> metadata) {
         if (actorId == null || (metadata != null && metadata.containsKey("world"))) return metadata;
         try {
-            Player player = Bukkit.getPlayer(actorId);
-            if (player == null || !player.isOnline()) return metadata;
+            if (!Bukkit.isPrimaryThread()) return metadata;
+            Map<String, Object> location = playerLocation(Bukkit.getPlayer(actorId));
+            if (location.isEmpty()) return metadata;
             Map<String, Object> located = new LinkedHashMap<>();
             if (metadata != null) metadata.forEach(located::put);
-            located.putAll(locationMetadata(player.getLocation()));
+            located.putAll(location);
             return located;
         } catch (RuntimeException | LinkageError ignored) {
             return metadata;
+        }
+    }
+
+    /**
+     * Main-thread capture of an online player's position for rows that are emitted later from
+     * an async task. Empty for null/offline players and when called off the main thread.
+     */
+    public static Map<String, Object> playerLocation(Player player) {
+        try {
+            if (player == null || !player.isOnline() || !Bukkit.isPrimaryThread()) return new LinkedHashMap<>();
+            return locationMetadata(player.getLocation());
+        } catch (RuntimeException | LinkageError ignored) {
+            return new LinkedHashMap<>();
         }
     }
 

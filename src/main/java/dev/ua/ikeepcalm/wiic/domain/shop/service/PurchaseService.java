@@ -128,6 +128,8 @@ public class PurchaseService {
         long chargedUnitPrice = liveUnitPrice;
         long total = chargedUnitPrice * amount;
         double indexAtPurchase = marketIndex.currentIndex();
+        // Entity position may only be read here on the main thread; async rows reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal before = currentBalance(uuid);
@@ -135,7 +137,7 @@ public class PurchaseService {
 
             if (before.compareTo(BigDecimal.valueOf(total)) < 0) {
                 TransactionLogger.logPurchase(player, material, amount, total, indexAtPurchase, false);
-                emitInsufficientFunds(player, material, amount, identity, total, before);
+                emitInsufficientFunds(player, material, amount, identity, total, before, location);
                 Bukkit.getScheduler().runTask(plugin, () ->
                         finish(uuid, callback, new PurchaseOutcome(Result.INSUFFICIENT_FUNDS, chargedUnitPrice, total, 0, 0)));
                 return;
@@ -144,7 +146,8 @@ public class PurchaseService {
             boolean withdrawn = VaultUtil.withdraw(uuid, total);
             if (!withdrawn) {
                 TransactionLogger.logPurchase(player, material, amount, total, indexAtPurchase, false);
-                emit(player, material, amount, identity, false, "withdraw failed", 0, before, currentBalance(uuid));
+                emit(player, material, amount, identity, false, "withdraw failed", 0, before, currentBalance(uuid),
+                        location);
                 plugin.getLogger().warning("Shop withdraw of " + total + " coppets failed for " + player.getName() + " (" + uuid + ")");
                 Bukkit.getScheduler().runTask(plugin, () ->
                         finish(uuid, callback, new PurchaseOutcome(Result.WITHDRAW_FAILED, chargedUnitPrice, total, 0, 0)));
@@ -163,7 +166,7 @@ public class PurchaseService {
                         BigDecimal refundAfter = currentBalance(uuid);
                         MysterriaAuditBridge.emit("shop.refunded", refunded, uuid, uuid, null, identity,
                                 "delivery aborted: offline", MysterriaAuditBridge.moneyMetadata(
-                                        refunded ? total : 0, refundBefore, refundAfter, Map.of()));
+                                        refunded ? total : 0, refundBefore, refundAfter, location));
                         TransactionLogger.logNote(player, "PURCHASE delivery aborted (offline) — refund of " + total
                                 + " coppets " + (refunded ? "OK" : "FAILED"));
                         if (!refunded) {
@@ -198,7 +201,7 @@ public class PurchaseService {
                         BigDecimal refundAfter = currentBalance(uuid);
                         MysterriaAuditBridge.emit("shop.refunded", refunded, uuid, uuid, null, identity,
                                 "delivery failed", MysterriaAuditBridge.moneyMetadata(
-                                        refunded ? total : 0, refundBefore, refundAfter, Map.of()));
+                                        refunded ? total : 0, refundBefore, refundAfter, location));
                         TransactionLogger.logNote(player, "PURCHASE delivery failed — refund of " + total
                                 + " coppets " + (refunded ? "OK" : "FAILED"));
                         if (!refunded) {
@@ -218,13 +221,22 @@ public class PurchaseService {
                              MysterriaAuditBridge.AuditIdentity identity,
                              boolean success, String reason, long delta,
                              BigDecimal before, BigDecimal after) {
+        emit(player, material, itemAmount, identity, success, reason, delta, before, after, null);
+    }
+
+    /** {@code location} is a main-thread capture for rows emitted from async tasks; may be null. */
+    private static void emit(Player player, Material material, int itemAmount,
+                             MysterriaAuditBridge.AuditIdentity identity,
+                             boolean success, String reason, long delta,
+                             BigDecimal before, BigDecimal after, Map<String, ?> location) {
         try {
             if (player == null || material == null) return;
             UUID playerId = player.getUniqueId();
             MysterriaAuditBridge.emit("shop.purchased", success, playerId,
                     playerId, null, identity, reason,
-                    MysterriaAuditBridge.moneyMetadata(delta, before, after,
-                            Map.of("material", material.name().toLowerCase(), "item_amount", itemAmount)));
+                    MysterriaAuditBridge.moneyMetadata(delta, before, after, MysterriaAuditBridge.metadata(
+                            Map.of("material", material.name().toLowerCase(), "item_amount", itemAmount),
+                            location)));
         } catch (RuntimeException | LinkageError ignored) {
             // Audit is best effort and must never trigger a delivery refund or lock a buyer.
         }
@@ -232,14 +244,15 @@ public class PurchaseService {
 
     private static void emitInsufficientFunds(Player player, Material material, int itemAmount,
                                               MysterriaAuditBridge.AuditIdentity identity,
-                                              long attemptedTotal, BigDecimal balance) {
+                                              long attemptedTotal, BigDecimal balance,
+                                              Map<String, ?> location) {
         try {
             if (player == null || material == null) return;
             UUID playerId = player.getUniqueId();
             MysterriaAuditBridge.emit("shop.purchased", false, playerId, playerId, null, identity,
                     "insufficient funds", MysterriaAuditBridge.moneyMetadata(0, balance, balance,
-                            Map.of("material", material.name().toLowerCase(),
-                                    "item_amount", itemAmount, "attempted_total", attemptedTotal)));
+                            MysterriaAuditBridge.metadata(Map.of("material", material.name().toLowerCase(),
+                                    "item_amount", itemAmount, "attempted_total", attemptedTotal), location)));
         } catch (RuntimeException | LinkageError ignored) {
             // Audit is best effort and must never affect the purchase result.
         }
