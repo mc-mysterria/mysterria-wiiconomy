@@ -37,6 +37,9 @@ public class ItemInspector {
     private static final String HISTORICAL_PACT_ITEM_OWNER = "historical_pact_item_owner";
     private static final String HISTORICAL_PACT_ITEM_SLOT = "historical_pact_item_slot";
     private static final String HISTORICAL_PACT_CONTROL_ITEM = "historical_pact_control_item";
+    // Per inspected stack; a full shulker of full bundles is under 2k items.
+    private static final int MAX_NESTED_DEPTH = 16;
+    private static final int MAX_ITEMS_INSPECTED = 4_096;
 
     private final MarketConfig config;
 
@@ -65,21 +68,37 @@ public class ItemInspector {
         return null;
     }
 
-    /** Includes nested legacy escrow: a clean shulker must not launder a temporary item. */
+    /**
+     * Includes nested legacy escrow: a clean shulker must not launder a temporary item.
+     * Fails closed: nesting too deep or too large to inspect fully also counts as temporary,
+     * so callers withhold it for review exactly as they would a tagged item.
+     */
     public static boolean containsTemporaryItem(ItemStack item) {
-        if (item == null || !item.hasItemMeta()) return false;
+        return containsTemporaryItem(item, 0, new int[]{MAX_ITEMS_INSPECTED});
+    }
+
+    private static boolean containsTemporaryItem(@Nullable ItemStack item, int depth, int[] remaining) {
+        if (item == null || item.getType().isAir()) return false;
+        if (remaining[0]-- <= 0) return true;
+        if (!item.hasItemMeta()) return false;
         var meta = item.getItemMeta();
         var pdc = meta.getPersistentDataContainer();
         if (pdc.has(key(HISTORICAL_PACT_ITEM_OWNER)) || pdc.has(key(HISTORICAL_PACT_ITEM_SLOT))
                 || pdc.has(key(HISTORICAL_PACT_CONTROL_ITEM))) return true;
+        Iterable<ItemStack> nested;
         if (meta instanceof BundleMeta bundle) {
-            return bundle.getItems().stream().anyMatch(ItemInspector::containsTemporaryItem);
-        }
-        if (meta instanceof BlockStateMeta block && block.hasBlockState()
+            if (!bundle.hasItems()) return false;
+            nested = bundle.getItems();
+        } else if (meta instanceof BlockStateMeta block && block.hasBlockState()
                 && block.getBlockState() instanceof InventoryHolder holder) {
-            for (ItemStack nested : holder.getInventory().getContents()) {
-                if (containsTemporaryItem(nested)) return true;
-            }
+            if (holder.getInventory().isEmpty()) return false;
+            nested = holder.getInventory();
+        } else {
+            return false;
+        }
+        if (depth >= MAX_NESTED_DEPTH) return true;
+        for (ItemStack child : nested) {
+            if (containsTemporaryItem(child, depth + 1, remaining)) return true;
         }
         return false;
     }
