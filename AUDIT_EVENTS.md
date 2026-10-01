@@ -44,8 +44,9 @@ Item projections are built on the main thread (from the live `ItemStack`) before
 hop, or from serialized item bytes by a Bukkit-independent NBT reader that is safe on any
 thread. No audit path deserializes an `ItemStack` off the main thread.
 
-`*.payment_indeterminate` (FAILED, HIGH) is emitted when the economy provider threw and a
-balance re-read could not prove whether the money moved. WIIC then neither compensates
+`*.payment_indeterminate` (FAILED, HIGH) is emitted when the economy provider throws.
+Balance observations cannot prove whether that operation moved money because other payments
+can change the same account concurrently. WIIC then neither compensates
 (no item return, no refund) nor finalizes (no goods); metadata carries `attempted_amount`,
 both balance observations and `payment=INDETERMINATE` for manual reconciliation. Refund rows
 carry `payment` (`SUCCESS`/`FAILED`/`INDETERMINATE`).
@@ -73,7 +74,7 @@ thread; a debit whose handoff failed (player offline) is FAILED with reason
 | `courier.fee.denied` (DENIED) | Balance below the delivery fee; goods stay in the stash | purchase identity, fee, balance, stash_id |
 | `stash.deposited`, `stash.deposit_failed` | Stash row insertion | stash id, source, reference, item projection |
 | `stash.claimed` | Stash claim batch result | delivered, remaining, claimed_ids, restashed_ids (claimed rows handed back to the stash) |
-| `ledger.claimed`, `ledger.claim_pending_recovery`, `ledger.claim_failed`, `ledger.claim_recovered`, `ledger.claim_reverted` | Proceeds deposit/claim/recovery result; claim_failed also on journal initialization failure | original claim identity, monetary projection; batch_id, claim_sum, reverted on journal failure |
+| `ledger.claimed`, `ledger.claim_pending_recovery`, `ledger.claim_failed`, `ledger.claim_recovered`, `ledger.claim_recovery_unproven` | Proceeds deposit/claim/recovery result; claim_failed also on journal initialization failure | original claim identity, monetary projection; batch_id, claim_sum, reverted on journal failure |
 | `ledger.claim_marker_failed` (FAILED, HIGH) | Deposit landed but the CLAIM_DEPOSITED journal marker could not be written | monetary projection, deposit_landed=true, batch_id, intent_removed |
 | `plots.rent.charge_pending`, `plots.rent.committed`, `plots.rent.failed` | Plot rent charge and DB claim | monetary projection, plot_id, paid_until, reason |
 | `plots.rent.charge_pending`, `plots.rent.upkeep`, `plots.rent.upkeep_failed` | Plot extension charge and DB update | monetary projection, plot_id, paid_until |
@@ -84,6 +85,10 @@ thread; a debit whose handoff failed (player offline) is FAILED with reason
 | `plot_shop.updated`, `plot_shop.update_failed` | Stall goods/price mutation | plot_id, price, stocked, item projection |
 | `plot_shop.purchase_completed`, `plot_shop.purchase_failed` | Stall charge, stock, and ledger result | purchase identity, monetary projection, plot_id, quantity, tax, net, item projection |
 | `plot_shop.ledger_failed`, `plot_shop.refunded` | Stall ledger failure/refund | purchase identity, monetary projection, plot_id, shop_id, net, reason |
+
+A ledger CLAIM without a matching CLAIM_DEPOSITED proof stays CLAIMING during recovery.
+Further claims by that owner are blocked until staff reconcile the uncertain payout.
+This also applies if the interrupted deposit never reached the economy provider.
 
 An Agora purchase uses its journal attempt ID as the business identity, while `listing_id`
 remains the purchased resource. WIIC courier events retain that purchase identity and expose

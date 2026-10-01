@@ -223,7 +223,7 @@ public class JournalRecovery {
     private @Nullable Runnable recoverClaim(Connection conn, MarketJournal.Entry entry,
                                             Set<String> depositedBatches) throws Exception {
         UUID owner = entry.player();
-        if (!LedgerDao.hasClaiming(conn, owner)) return null; // claim finished or was reverted already
+        if (!LedgerDao.hasClaiming(conn, owner)) return null; // claim finished or was settled already
         MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("ledger-claim", entry.id());
         if (depositedBatches.contains(entry.id())) {
             LedgerDao.finishClaim(conn, owner, System.currentTimeMillis());
@@ -234,11 +234,20 @@ public class JournalRecovery {
                     MysterriaAuditBridge.moneyMetadata(entry.amount(),
                             Map.of("claim_id", entry.id())));
         } else {
-            LedgerDao.revertClaim(conn, owner);
-            plugin.getLogger().warning("Reverted unproven ledger claim of " + entry.amount() + " for " + owner);
-            return () -> MysterriaAuditBridge.emit("ledger.claim_reverted", false,
-                    owner, owner, null, identity, "unproven claim reverted by recovery",
-                    MysterriaAuditBridge.moneyMetadata(0, Map.of("claim_id", entry.id())));
+            // Intent with no proof: the crash or a provider failure landed around the deposit
+            // and nothing can say whether the money arrived. Reverting would let the owner
+            // claim a batch that may already be paid; finishing would invent a payout. Leave
+            // the rows CLAIMING, which withholds them, and make it loud enough for staff to
+            // reconcile the one owner it might affect.
+            TransactionDao.log(conn, "RECOVERY", owner, null, null, entry.amount(),
+                    "unproven claim withheld - verify owner balance");
+            plugin.getLogger().severe("Ledger claim " + entry.id() + " of " + entry.amount() + " coppets for "
+                    + owner + " was interrupted before the deposit could be proven. Rows left CLAIMING and"
+                    + " no payout repeated. Check whether the deposit landed.");
+            return () -> MysterriaAuditBridge.emit("ledger.claim_recovery_unproven", false,
+                    owner, owner, null, identity, "deposit unproven; claim withheld",
+                    MysterriaAuditBridge.moneyMetadata(0, Map.of("claim_id", entry.id(),
+                            "claim_sum", entry.amount())));
         }
     }
 
