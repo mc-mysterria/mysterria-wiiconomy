@@ -16,11 +16,15 @@ import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.JournalRecovery;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.MarketJournal;
 import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
+import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 
 import java.util.Set;
+import java.util.List;
+import java.util.Map;
+import java.math.BigDecimal;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
@@ -44,7 +48,9 @@ public class ListingService {
 
     public enum Result {
         SUCCESS, ALREADY_IN_PROGRESS, ITEM_DENIED, PRICE_OUT_OF_BOUNDS,
-        DAILY_LIMIT, MAX_ACTIVE, INSUFFICIENT_FEE, ERROR
+        DAILY_LIMIT, MAX_ACTIVE, INSUFFICIENT_FEE, ERROR,
+        /** The fee withdraw outcome is unknown; nothing was listed and no refund is issued. */
+        UNCERTAIN
     }
 
     /**
@@ -63,6 +69,8 @@ public class ListingService {
         }
     }
 
+    private static final dev.ua.ikeepcalm.wiic.utils.AuditSampler REJECTION_AUDIT =
+            new dev.ua.ikeepcalm.wiic.utils.AuditSampler();
     private static final Set<UUID> IN_FLIGHT = ConcurrentHashMap.newKeySet();
 
     private final WIIC plugin;
@@ -90,25 +98,30 @@ public class ListingService {
      */
     public void createListing(Player seller, ItemStack item, long price, String plotId, Consumer<Outcome> callback) {
         UUID uuid = seller.getUniqueId();
+        UUID listingId = UUID.randomUUID();
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("agora-listing", listingId);
         if (!IN_FLIGHT.add(uuid)) {
+            emitRejected(uuid, listingId, identity, item, price, "already in progress");
             callback.accept(Outcome.of(Result.ALREADY_IN_PROGRESS));
             return;
         }
 
         String denied = inspector.checkDenied(item);
         if (denied != null) {
+            emitRejected(uuid, listingId, identity, item, price, denied);
             finish(uuid, callback, new Outcome(Result.ITEM_DENIED, denied, 0, false));
             return;
         }
         if (price < config.minPrice() || price > config.maxPrice()) {
+            emitRejected(uuid, listingId, identity, item, price, "price out of bounds");
             finish(uuid, callback, Outcome.of(Result.PRICE_OUT_OF_BOUNDS));
             return;
         }
 
         long fee = config.listingFee(price);
         ItemSnapshot snapshot = inspector.snapshot(item);
+        Map<String, Object> itemAuditMetadata = Map.copyOf(MysterriaAuditBridge.itemMetadata(item));
         byte[] bytes = item.serializeAsBytes();
-        UUID listingId = UUID.randomUUID();
         long now = System.currentTimeMillis();
         Listing listing = new Listing(listingId, uuid, seller.getName(), bytes,
                 snapshot.material(), snapshot.amount(), snapshot.displayName(), snapshot.category(),
@@ -135,27 +148,53 @@ public class ListingService {
             return null;
         }, preflight -> {
             if (preflight != null) {
+                emitRejected(uuid, listingId, identity, item, price, preflight.name().toLowerCase());
                 finish(uuid, callback, Outcome.failed(preflight, 0, journal.remove(listingId.toString())));
                 return;
             }
-            chargeAndInsert(seller, uuid, listing, listingId, snapshot, price, fee, callback);
+            chargeAndInsert(seller, uuid, listing, listingId, identity, snapshot, itemAuditMetadata,
+                    price, fee, callback);
         }, error -> {
             plugin.getLogger().severe("Market listing preflight failed for " + seller.getName() + ": " + error);
+            emitFailed(uuid, listingId, identity, item, price, "listing preflight failed");
             finish(uuid, callback, Outcome.failed(Result.ERROR, 0, journal.remove(listingId.toString())));
         });
     }
 
     private void chargeAndInsert(Player seller, UUID uuid, Listing listing, UUID listingId,
-                                 ItemSnapshot snapshot, long price, long fee, Consumer<Outcome> callback) {
+                                 MysterriaAuditBridge.AuditIdentity identity,
+                                 ItemSnapshot snapshot, Map<String, Object> itemAuditMetadata,
+                                 long price, long fee,
+                                 Consumer<Outcome> callback) {
+        // Called from the preflight's main-thread continuation. Entity position may only be
+        // read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(seller);
         // Fee is a sink (never deposited anywhere), see market.yml.
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (fee > 0 && !VaultUtil.withdraw(uuid, fee)) {
-                TransactionLogger.logNote(seller, "MARKET LIST fee withdraw of " + fee + " coppets failed");
+            BigDecimal balanceBefore = balance(uuid);
+            VaultUtil.Payment payment = fee > 0
+                    ? VaultUtil.withdrawChecked(uuid, fee, "market listing fee for " + listingId)
+                    : VaultUtil.Payment.SUCCESS;
+            if (!payment.succeeded()) {
+                // Indeterminate: the fee may be gone, but no refund is safe until it is proven.
+                // Nothing is listed either way, so the seller's own goods still go back.
+                boolean uncertain = payment == VaultUtil.Payment.INDETERMINATE;
+                TransactionLogger.logNote(seller, "MARKET LIST fee withdraw of " + fee + " coppets "
+                        + (uncertain ? "UNCERTAIN for listing " + listingId + ", manual reconciliation needed" : "failed"));
+                if (uncertain) MysterriaAuditBridge.emitPaymentIndeterminate(
+                        "agora.listing.fee", uuid, uuid, listingId, identity, fee, balanceBefore, balance(uuid),
+                        MysterriaAuditBridge.metadata(Map.of("price", price, "fee", fee), location));
+                else MysterriaAuditBridge.emit("agora.listing.failed", false, uuid, uuid, listingId, identity,
+                        "listing fee withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
+                                balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
+                                        Map.of("price", price, "fee", fee), location), itemAuditMetadata)));
                 boolean pruned = journal.remove(listingId.toString());
+                Result result = uncertain ? Result.UNCERTAIN : Result.INSUFFICIENT_FEE;
                 Bukkit.getScheduler().runTask(plugin, () ->
-                        finish(uuid, callback, Outcome.failed(Result.INSUFFICIENT_FEE, fee, pruned)));
+                        finish(uuid, callback, Outcome.failed(result, fee, pruned)));
                 return;
             }
+            BigDecimal balanceAfterCharge = balance(uuid);
 
             db.transactionThenMain(conn -> {
                 if (!DailyCounterDao.incrementIfBelow(conn, uuid, config.dailyListingLimit())) {
@@ -172,14 +211,23 @@ public class ListingService {
                 journal.remove(listingId.toString());
                 TransactionLogger.logNote(seller, "MARKET LIST " + snapshot.material().name() + " x" + snapshot.amount()
                         + " for " + price + " coppets (fee " + fee + ") id=" + listingId);
+                MysterriaAuditBridge.emit("agora.listing.created", true, uuid, uuid, listingId, identity,
+                        "listing committed", MysterriaAuditBridge.moneyMetadata(-fee,
+                                balanceBefore, balanceAfterCharge, MysterriaAuditBridge.metadata(
+                                        Map.of("price", price, "fee", fee, "plot_id",
+                                                listing.plotId() == null ? "" : listing.plotId()),
+                                        itemAuditMetadata)));
                 finish(uuid, callback, new Outcome(Result.SUCCESS, null, fee, false));
             }, error -> {
                 boolean pruned = journal.remove(listingId.toString());
-                refundFee(seller, uuid, fee, "listing insert failed");
+                refundFee(seller, uuid, listingId, fee, "listing insert failed", identity, location);
                 Result result = error instanceof ListingLimitException limit ? limit.result : Result.ERROR;
                 if (result == Result.ERROR) {
                     plugin.getLogger().severe("Market listing insert failed for " + seller.getName() + ": " + error);
                 }
+                MysterriaAuditBridge.emit("agora.listing.failed", false, uuid, uuid, listingId, identity,
+                        result.name().toLowerCase(), MysterriaAuditBridge.moneyMetadata(-fee,
+                                balanceBefore, balanceAfterCharge, Map.of("price", price, "fee", fee)));
                 finish(uuid, callback, Outcome.failed(result, fee, pruned));
             });
         });
@@ -188,6 +236,7 @@ public class ListingService {
     /** Cancels the seller's own ACTIVE listing; the item moves to their stash in the same transaction. */
     public void cancelListing(Player seller, UUID listingId, Consumer<Boolean> callback) {
         UUID uuid = seller.getUniqueId();
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("agora-listing", listingId);
         if (!IN_FLIGHT.add(uuid)) {
             callback.accept(false);
             return;
@@ -202,25 +251,71 @@ public class ListingService {
             return true;
         }, success -> {
             IN_FLIGHT.remove(uuid);
-            if (success) TransactionLogger.logNote(seller, "MARKET CANCEL listing " + listingId + " -> stash");
+            if (success) {
+                TransactionLogger.logNote(seller, "MARKET CANCEL listing " + listingId + " -> stash");
+                MysterriaAuditBridge.emit("agora.listing.cancelled", true, uuid, uuid, listingId, identity,
+                        "listing cancelled", Map.of());
+            }
             callback.accept(success);
         }, error -> {
             IN_FLIGHT.remove(uuid);
             plugin.getLogger().severe("Market cancel failed for " + seller.getName() + ": " + error);
+            MysterriaAuditBridge.emit("agora.listing.failed", false, uuid, uuid, listingId, identity,
+                    "listing cancel failed: database error", Map.of("operation", "cancel",
+                            "listing_id", listingId.toString(), "error", String.valueOf(error.getClass().getSimpleName())));
             callback.accept(false);
         });
     }
 
-    private void refundFee(Player seller, UUID uuid, long fee, String reason) {
+    /** {@code location} is captured on the main thread; the refund row is emitted async. */
+    private void refundFee(Player seller, UUID uuid, UUID listingId, long fee, String reason,
+                           MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
         if (fee <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            boolean refunded = VaultUtil.deposit(uuid, fee);
-            TransactionLogger.logNote(seller, "MARKET LIST fee refund of " + fee + " coppets ("
-                    + reason + ") " + (refunded ? "OK" : "FAILED"));
-            if (!refunded) {
-                plugin.getLogger().severe("Failed to refund listing fee of " + fee + " coppets to " + uuid);
+            BigDecimal balanceBefore = balance(uuid);
+            VaultUtil.Payment payment = VaultUtil.depositChecked(uuid, fee,
+                    "market listing fee refund (" + reason + ")");
+            boolean refunded = payment.succeeded();
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
+                TransactionLogger.logNote(seller, "MARKET LIST fee refund of " + fee + " coppets ("
+                        + reason + ") UNCERTAIN, manual reconciliation needed");
+                plugin.getLogger().severe("UNCERTAIN: listing fee refund of " + fee + " coppets to " + uuid
+                        + " may or may not have landed; check the balance before compensating by hand.");
+            } else {
+                TransactionLogger.logNote(seller, "MARKET LIST fee refund of " + fee + " coppets ("
+                        + reason + ") " + (refunded ? "OK" : "FAILED"));
+                if (!refunded) {
+                    plugin.getLogger().severe("Failed to refund listing fee of " + fee + " coppets to " + uuid);
+                }
             }
+            MysterriaAuditBridge.emit("agora.listing.fee_refunded", refunded, uuid, uuid, listingId, identity,
+                    reason, MysterriaAuditBridge.moneyMetadata(refunded ? fee : 0,
+                            balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(Map.of("fee", fee,
+                                    "listing_id", listingId.toString(), "payment", payment.name()), location)));
         });
+    }
+
+    private static BigDecimal balance(UUID uuid) {
+        return VaultUtil.balance(uuid);
+    }
+
+    private static void emitRejected(UUID sellerId, UUID listingId,
+                                     MysterriaAuditBridge.AuditIdentity identity,
+                                     ItemStack item, long price, String reason) {
+        // Preflight refusals are click-level: one row per seller and reason per 5 s.
+        if (!REJECTION_AUDIT.shouldEmit(List.of(sellerId, reason))) return;
+        emitFailed(sellerId, listingId, identity, item, price, reason);
+    }
+
+    /** Unsampled listing failure row (real errors, not click-level refusals). */
+    private static void emitFailed(UUID sellerId, UUID listingId,
+                                   MysterriaAuditBridge.AuditIdentity identity,
+                                   ItemStack item, long price, String reason) {
+        MysterriaAuditBridge.emit("agora.listing.failed", false, sellerId, sellerId, null, identity,
+                reason, MysterriaAuditBridge.moneyMetadata(0,
+                        MysterriaAuditBridge.metadata(Map.of("price", price,
+                                        "listing_request_id", listingId.toString()),
+                                MysterriaAuditBridge.itemMetadata(item))));
     }
 
     private void finish(UUID uuid, Consumer<Outcome> callback, Outcome outcome) {
@@ -240,6 +335,7 @@ public class ListingService {
     /** Drops every single-flight guard. Called on module shutdown — these sets are
      *  static and would otherwise carry a stale lock across a plugin reload. */
     public static void releaseAll() {
+        REJECTION_AUDIT.clear();
         IN_FLIGHT.clear();
     }
 

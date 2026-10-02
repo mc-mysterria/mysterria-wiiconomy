@@ -75,13 +75,14 @@ public class PlotSnapshot {
 
     /**
      * Replays {@code blob} over {@code region}, {@value #BLOCKS_PER_TICK} blocks per
-     * tick, then runs {@code onDone} on the main thread. Blocks are written without
-     * physics so restored stalls don't collapse mid-replay.
+     * tick, then runs {@code onDone} on the main thread with {@code true} when every block
+     * was replayed, or {@code false} when a plugin disable cut the replay short. Blocks are
+     * written without physics so restored stalls don't collapse mid-replay.
      *
      * @throws IOException if the blob is corrupt or was captured for a different cuboid.
      */
     public static void restore(WIIC plugin, World world, PlotRegion region, byte[] blob,
-                               Runnable onDone) throws IOException {
+                               java.util.function.Consumer<Boolean> onDone) throws IOException {
         List<String> palette = new ArrayList<>();
         int[] indices;
         try (DataInputStream in = new DataInputStream(new GZIPInputStream(new ByteArrayInputStream(blob)))) {
@@ -114,7 +115,7 @@ public class PlotSnapshot {
             // PlotService's `evicting` set until the next restart.
             if (!plugin.isEnabled()) {
                 task.cancel();
-                onDone.run();
+                onDone.accept(false);
                 return;
             }
             int budget = 0;
@@ -133,7 +134,7 @@ public class PlotSnapshot {
             }
             if (cursor[0] >= indices.length) {
                 task.cancel();
-                onDone.run();
+                onDone.accept(true);
             }
         }, 1L, 1L);
     }
