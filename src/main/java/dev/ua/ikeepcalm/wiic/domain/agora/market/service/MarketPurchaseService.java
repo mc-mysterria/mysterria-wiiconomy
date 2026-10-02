@@ -19,6 +19,8 @@ import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import org.bukkit.Bukkit;
+import org.bukkit.inventory.ItemStack;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
 import org.bukkit.entity.Player;
 import org.jetbrains.annotations.Nullable;
 
@@ -47,12 +49,22 @@ import java.util.function.Consumer;
  * debited buyer leaves a record; requiring the proof before goods change hands
  * guarantees the ambiguous middle is unwound rather than guessed at. The failure
  * direction is always "no sale", never "free goods".
+ *
+ * <p>When the economy provider throws, the money outcome is unknown. The listing then
+ * moves to {@code PAYMENT_HELD} and the journal entry stays on disk: no goods are
+ * delivered, no refund is attempted, and nothing can resell the item until staff settle the
+ * attempt. Refunds write a {@code BUY_REFUND} marker before the deposit, so recovery can
+ * never refund an attempt twice or complete it as a sale after a possible refund. A refund
+ * the provider refuses is a known debt, not a settled refund: it gains a
+ * {@code BUY_REFUND_REFUSED} marker and is held the same way until staff repay the buyer.
  */
 public class MarketPurchaseService {
 
     public enum Result {
         SUCCESS, ALREADY_IN_PROGRESS, NO_LONGER_AVAILABLE, PRICE_CHANGED,
-        SELF_PURCHASE, INSUFFICIENT_FUNDS, ERROR
+        SELF_PURCHASE, INSUFFICIENT_FUNDS, ERROR,
+        /** The payment or refund outcome is unknown; the goods are held for staff. */
+        UNCERTAIN
     }
 
     /** {@code couriered} is true when a postman took the goods instead of the stash. */
@@ -137,6 +149,25 @@ public class MarketPurchaseService {
     private void withdrawAndCommit(Player buyer, UUID uuid, Listing listing, String attemptId,
                                    MysterriaAuditBridge.AuditIdentity identity,
                                    Consumer<Outcome> callback) {
+        // Validate old escrow before any money moves. Keep its bytes for staff review.
+        try {
+            if (ItemInspector.containsTemporaryItem(ItemStack.deserializeBytes(listing.itemBytes()))) {
+                plugin.getLogger().warning("Blocked temporary-item purchase: listing " + listing.id());
+                MysterriaAuditBridge.emit("agora.purchase.failed", false, uuid, listing.sellerUuid(), listing.id(),
+                        identity, "temporary item blocked", MysterriaAuditBridge.moneyMetadata(0,
+                                MysterriaAuditBridge.metadata(Map.of("listing_id", listing.id().toString()),
+                                        MysterriaAuditBridge.itemMetadata(listing.itemBytes()))));
+                releaseThen(listing, uuid, () -> finish(uuid, callback, Outcome.of(Result.NO_LONGER_AVAILABLE)));
+                return;
+            }
+        } catch (RuntimeException invalidItem) {
+            plugin.getLogger().warning("Unreadable listing " + listing.id() + ": " + invalidItem.getMessage());
+            MysterriaAuditBridge.emit("agora.purchase.failed", false, uuid, listing.sellerUuid(), listing.id(),
+                    identity, "listing item unreadable", MysterriaAuditBridge.moneyMetadata(0,
+                            Map.of("listing_id", listing.id().toString())));
+            releaseThen(listing, uuid, () -> finish(uuid, callback, Outcome.of(Result.ERROR)));
+            return;
+        }
         long price = listing.price();
 
         // Intent goes to disk before the money moves. If the server dies in the window
@@ -159,15 +190,25 @@ public class MarketPurchaseService {
         Map<String, Object> location = MysterriaAuditBridge.playerLocation(buyer);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            VaultUtil.Payment payment = VaultUtil.withdraw(uuid, price);
-            if (!payment.succeeded()) {
-                TransactionLogger.logNote(buyer, "MARKET BUY withdraw of " + price + " coppets failed for listing " + listing.id());
-                // Indeterminate: goods are withheld and no refund is issued until reconciled.
-                if (payment == VaultUtil.Payment.INDETERMINATE) MysterriaAuditBridge.emitPaymentIndeterminate(
+            VaultUtil.Payment payment = VaultUtil.withdrawChecked(uuid, price,
+                    "market purchase of listing " + listing.id());
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
+                // The buyer may or may not have paid. Releasing would let someone else buy
+                // goods this buyer may own; refunding or delivering would invent value. The
+                // BUY intent stays on disk and the listing is held for staff.
+                TransactionLogger.logNote(buyer, "MARKET BUY withdraw of " + price + " coppets UNCERTAIN for listing "
+                        + listing.id() + " (attempt " + attemptId + "), goods held for manual reconciliation");
+                MysterriaAuditBridge.emitPaymentIndeterminate(
                         "agora.purchase", uuid, listing.sellerUuid(), listing.id(), identity, price,
                         balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(
                                 Map.of("listing_id", listing.id().toString()), location));
-                else MysterriaAuditBridge.emit("agora.purchase.failed", false, uuid, listing.sellerUuid(), listing.id(), identity,
+                holdThen(listing, uuid, attemptId, false, "withdraw outcome unknown",
+                        () -> finish(uuid, callback, Outcome.of(Result.UNCERTAIN)));
+                return;
+            }
+            if (!payment.succeeded()) {
+                TransactionLogger.logNote(buyer, "MARKET BUY withdraw of " + price + " coppets failed for listing " + listing.id());
+                MysterriaAuditBridge.emit("agora.purchase.failed", false, uuid, listing.sellerUuid(), listing.id(), identity,
                         withdrawFailureReason(balanceBefore, price),
                         MysterriaAuditBridge.moneyMetadata(0, balanceBefore, balance(uuid),
                                 MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
@@ -182,7 +223,7 @@ public class MarketPurchaseService {
             // Proof the money moved. Recovery refuses to hand over goods without it, so a
             // marker that cannot be written has to unwind the purchase here and now —
             // continuing would leave a paid-for sale that recovery would later treat as
-            // unpaid and release back onto the market.
+            // unproven and hold for staff instead of completing.
             try {
                 journal.append(MarketJournal.Type.BUY_PAID, attemptId, uuid, price, null, listing.id().toString());
             } catch (IllegalStateException e) {
@@ -193,16 +234,9 @@ public class MarketPurchaseService {
                                         MysterriaAuditBridge.metadata(
                                                 Map.of("listing_id", listing.id().toString()), location),
                                         MysterriaAuditBridge.itemMetadata(listing.itemBytes()))));
-                refund(buyer, uuid, listing.id(), price, "journal marker failed", identity, location);
-                // The intent entry has to go with it. Left behind, startup recovery would
-                // read it as an unproven purchase and tell staff to check whether the buyer
-                // was ever refunded — which they just were, right here.
-                if (!journal.remove(attemptId)) {
-                    plugin.getLogger().severe("Purchase " + listing.id() + " by " + uuid
-                            + " was refunded in full, but its journal entry could not be removed."
-                            + " Startup recovery will report it as unproven — it needs no further action.");
-                }
-                releaseThen(listing, uuid, () -> finish(uuid, callback, Outcome.of(Result.ERROR)));
+                // No paid proof reached disk, so recovery already treats this attempt as
+                // unproven and will neither sell nor refund it.
+                refundThenSettle(buyer, uuid, listing, attemptId, "journal marker failed", identity, location, callback);
                 return;
             }
 
@@ -218,6 +252,42 @@ public class MarketPurchaseService {
         }, ignored -> then.run(), error -> {
             plugin.getLogger().severe("Failed to release reservation " + listing.id() + ": " + error
                     + " (sweeper will release it)");
+            then.run();
+        });
+    }
+
+    /**
+     * Moves the reservation to {@code PAYMENT_HELD} for an attempt whose money outcome is
+     * unknown, or whose refund was refused ({@code refundOwed}), then runs {@code then} on the
+     * main thread. The journal entry is deliberately kept: with the held row it is the
+     * reconciliation record, and while it survives neither the sweeper nor startup recovery
+     * will release the listing.
+     */
+    private void holdThen(Listing listing, UUID uuid, String attemptId, boolean refundOwed, String reason,
+                          Runnable then) {
+        String diagnosis = refundOwed
+                ? "REFUND OWED: market purchase " + listing.id() + " by " + uuid + " for " + listing.price()
+                        + " coppets (attempt " + attemptId + "): " + reason + ". The buyer paid, no goods were"
+                        + " delivered and the refund was refused, so the buyer is owed " + listing.price()
+                        + " coppets. The refund will not be retried automatically; repay the buyer by hand."
+                : "UNCERTAIN: market purchase " + listing.id() + " by " + uuid + " for " + listing.price()
+                        + " coppets (attempt " + attemptId + "): " + reason + ". No goods delivered, no refund"
+                        + " confirmed and no further refund attempted; check the buyer's balance and settle by hand.";
+        String note = refundOwed
+                ? "REFUND OWED " + reason + ", attempt " + attemptId + " - repay buyer by hand"
+                : "UNCERTAIN " + reason + ", attempt " + attemptId + " - verify buyer balance";
+        db.transactionThenMain(conn -> {
+            boolean held = ListingDao.hold(conn, listing.id(), uuid);
+            TransactionDao.log(conn, "HOLD", uuid, listing.sellerUuid(), listing.id(), listing.price(), note);
+            return held;
+        }, held -> {
+            plugin.getLogger().severe(diagnosis + (held
+                    ? " Listing held as PAYMENT_HELD and journal entry kept."
+                    : " Listing was no longer reserved by this buyer and could not be held; journal entry kept."));
+            then.run();
+        }, error -> {
+            plugin.getLogger().severe(diagnosis + " Hold could not be written (" + error + "); the journal entry"
+                    + " is kept, so the sweeper will not release the listing and startup recovery will hold it.");
             then.run();
         });
     }
@@ -279,30 +349,88 @@ public class MarketPurchaseService {
                             balanceBefore, balanceAfterCharge, MysterriaAuditBridge.metadata(
                                     Map.of("listing_id", listing.id().toString()),
                                     MysterriaAuditBridge.itemMetadata(listing.itemBytes()))));
-            refund(buyer, uuid, listing.id(), price, "sale commit failed", identity,
-                    MysterriaAuditBridge.playerLocation(buyer));
-            releaseThen(listing, uuid, () -> {
-                journal.remove(attemptId);
-                finish(uuid, callback, Outcome.of(Result.ERROR));
-            });
+            Map<String, Object> location = MysterriaAuditBridge.playerLocation(buyer);
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () ->
+                    refundThenSettle(buyer, uuid, listing, attemptId, "sale commit failed", identity, location,
+                            callback));
         });
     }
 
-    /** {@code location} is captured on the main thread; the refund row is emitted async. */
-    private void refund(Player buyer, UUID uuid, UUID listingId, long amount, String reason,
-                        MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            BigDecimal balanceBefore = balance(uuid);
-            VaultUtil.Payment payment = VaultUtil.deposit(uuid, amount);
-            boolean refunded = payment.succeeded();
-            TransactionLogger.logNote(buyer, "MARKET BUY refund of " + amount + " coppets (" + reason + ") "
-                    + (refunded ? "OK" : "FAILED"));
-            if (!refunded) plugin.getLogger().severe("Failed to refund " + amount + " coppets to " + uuid);
-            MysterriaAuditBridge.emit("agora.purchase.refunded", refunded, uuid, uuid, listingId, identity,
-                    reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
-                            balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(
-                                    Map.of("listing_id", listingId.toString(), "payment", payment.name()), location)));
-        });
+    /**
+     * Refunds an abandoned purchase and settles the listing by what the refund proved.
+     * Runs off the main thread, before the reservation is released. {@code location} is
+     * captured on the main thread for the refund audit row.
+     *
+     * <p>The {@code BUY_REFUND} marker goes to disk before the deposit. From then on recovery
+     * can neither refund the attempt again nor complete it as a sale, so a crash or provider
+     * throw around the deposit leaves at most one refund and no goods.
+     */
+    private void refundThenSettle(Player buyer, UUID uuid, Listing listing, String attemptId, String reason,
+                                  MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location,
+                                  Consumer<Outcome> callback) {
+        long price = listing.price();
+        try {
+            journal.append(MarketJournal.Type.BUY_REFUND, attemptId, uuid, price, null, listing.id().toString());
+        } catch (IllegalStateException e) {
+            if (journal.contains(MarketJournal.Type.BUY_PAID, attemptId)) {
+                // Paid proof is on disk with nothing to say a refund was tried. Refunding now
+                // could let recovery also complete the sale. Leave the reservation and the
+                // journal entry as they are: the sweeper keeps the hold and startup recovery
+                // completes the paid sale exactly once.
+                plugin.getLogger().severe("Refund marker write failed for paid purchase " + listing.id() + " by " + uuid
+                        + " (attempt " + attemptId + "): " + e.getMessage() + ". No refund issued; the sale is"
+                        + " left reserved for startup recovery to complete.");
+                Bukkit.getScheduler().runTask(plugin, () -> finish(uuid, callback, Outcome.of(Result.ERROR)));
+                return;
+            }
+            // No paid proof on disk: recovery already treats this attempt as unproven and will
+            // neither sell nor refund it, so the refund below cannot be repeated.
+        }
+
+        BigDecimal balanceBefore = balance(uuid);
+        VaultUtil.Payment refund = VaultUtil.depositChecked(uuid, price, "market purchase refund (" + reason + ")");
+        boolean refunded = refund.succeeded();
+        MysterriaAuditBridge.emit("agora.purchase.refunded", refunded, uuid, uuid, listing.id(), identity,
+                reason, MysterriaAuditBridge.moneyMetadata(refunded ? price : 0,
+                        balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(
+                                Map.of("listing_id", listing.id().toString(), "payment", refund.name()), location)));
+        if (refund == VaultUtil.Payment.INDETERMINATE) {
+            // The buyer paid and may or may not have the money back. Neither a second refund
+            // nor the sale is safe; hold the goods with the journal entry for staff.
+            TransactionLogger.logNote(buyer, "MARKET BUY refund of " + price + " coppets (" + reason + ") UNCERTAIN"
+                    + " for listing " + listing.id() + " (attempt " + attemptId + "), manual reconciliation needed");
+            holdThen(listing, uuid, attemptId, false, "refund outcome unknown (" + reason + ")",
+                    () -> finish(uuid, callback, Outcome.of(Result.UNCERTAIN)));
+            return;
+        }
+        TransactionLogger.logNote(buyer, "MARKET BUY refund of " + price + " coppets (" + reason + ") "
+                + (refunded ? "OK" : "FAILED"));
+        if (!refunded) {
+            // The buyer paid and got neither goods nor money back. That is a known debt, not a
+            // settled refund: mark it on disk, keep the entry and hold the goods for staff. The
+            // deposit is never repeated automatically; staff repay the buyer by hand.
+            plugin.getLogger().severe("Failed to refund " + price + " coppets to " + uuid);
+            try {
+                journal.append(MarketJournal.Type.BUY_REFUND_REFUSED, attemptId, uuid, price, null,
+                        listing.id().toString());
+            } catch (IllegalStateException e) {
+                plugin.getLogger().severe("Purchase " + listing.id() + " by " + uuid + " (attempt " + attemptId
+                        + ") had its refund refused, but the refused marker could not be written: " + e.getMessage()
+                        + ". The journal entry is kept, so startup recovery will report the refund as uncertain;"
+                        + " this log line is the outcome: " + price + " coppets are owed.");
+            }
+            holdThen(listing, uuid, attemptId, true, "refund refused (" + reason + ")",
+                    () -> finish(uuid, callback, Outcome.of(Result.ERROR)));
+            return;
+        }
+        // The refund landed, so the attempt is done. Left behind, the entry would make startup
+        // recovery report a settled refund as uncertain.
+        if (!journal.remove(attemptId)) {
+            plugin.getLogger().severe("Purchase " + listing.id() + " by " + uuid + " (attempt " + attemptId
+                    + ") had its refund completed, but its journal entry could not be removed. Startup recovery"
+                    + " will report it as uncertain; this log line is the outcome.");
+        }
+        releaseThen(listing, uuid, () -> finish(uuid, callback, Outcome.of(Result.ERROR)));
     }
 
     private static BigDecimal balance(UUID uuid) {

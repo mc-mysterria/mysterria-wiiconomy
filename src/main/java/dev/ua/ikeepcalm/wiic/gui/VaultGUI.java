@@ -189,6 +189,11 @@ public class VaultGUI {
                                 public void onConfirm(ItemStack confirmed) {
                                     // Clone before removeItem, which mutates the input stack's amount to the leftover
                                     ItemStack snapshot = confirmed.clone();
+                                    // removeItem can consume a partial stack even when it reports leftovers.
+                                    if (!player.getInventory().containsAtLeast(snapshot, snapshot.getAmount())) {
+                                        openVault(player, onClose);
+                                        return;
+                                    }
                                     Map<Integer, ItemStack> notRemoved = player.getInventory().removeItem(confirmed);
                                     if (!notRemoved.isEmpty()) {
                                         // Item was dropped before confirming — abort to prevent free deposit
@@ -218,6 +223,11 @@ public class VaultGUI {
                                 public void onConfirm(ItemStack confirmed) {
                                     // Clone before removeItem, which may modify the input stack's amount to 0
                                     ItemStack snapshot = confirmed.clone();
+                                    // removeItem can consume a partial stack even when it reports leftovers.
+                                    if (!player.getInventory().containsAtLeast(snapshot, snapshot.getAmount())) {
+                                        openVault(player, onClose);
+                                        return;
+                                    }
                                     Map<Integer, ItemStack> notRemoved = player.getInventory().removeItem(confirmed);
                                     if (!notRemoved.isEmpty()) {
                                         // Item was dropped before confirming — abort to prevent free sell
@@ -309,16 +319,22 @@ public class VaultGUI {
         if (amount == 0) return;
         BigDecimal before = currentBalance(audit.playerId());
         TransactionLogger.logBalance(player, before, "before deposit");
-        VaultUtil.Payment payment = VaultUtil.deposit(audit.playerId(), amount);
+        VaultUtil.Payment payment = VaultUtil.depositChecked(audit.playerId(), amount, "wallet deposit");
+        if (payment == VaultUtil.Payment.INDETERMINATE) {
+            // The credit may have landed; handing the coins back too could duplicate them.
+            TransactionLogger.logNote(player, "DEPOSIT " + item.getType() + " x" + item.getAmount() + " for " + amount
+                    + " coppets UNCERTAIN, coins withheld, manual reconciliation needed");
+            BigDecimal after = currentBalance(audit.playerId());
+            TransactionLogger.logBalance(player, after, "after uncertain deposit");
+            audit.emitIndeterminate("deposited", amount, before, after);
+            uncertain(player, "<yellow>We could not confirm your deposit. Your coins were kept back so they"
+                    + " cannot be counted twice; please contact staff to check your balance.");
+            return;
+        }
         boolean success = payment.succeeded();
         TransactionLogger.logDeposit(player, item, amount, success);
         BigDecimal after = currentBalance(audit.playerId());
         TransactionLogger.logBalance(player, after, "after deposit");
-        if (payment == VaultUtil.Payment.INDETERMINATE) {
-            // The credit may have landed; handing the coins back too could duplicate them.
-            audit.emitIndeterminate("deposited", amount, before, after);
-            return;
-        }
         audit.emit("deposited", amount, success, null, before, after);
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
@@ -339,20 +355,30 @@ public class VaultGUI {
     /**
      * Debits the coin's value. Only {@code SUCCESS} lets the coin be handed over; the
      * committed wallet.withdrawn row is emitted by {@link #handOverCoin} once it has been.
+     * An uncertain debit is not a success either, since the coin must not exist unpaid.
      */
     private Debit withdraw(Player player, ItemStack item, WalletAudit audit) {
         long amount = audit.coinValue();
         if (amount == 0) return new Debit(VaultUtil.Payment.FAILED, null, null);
         BigDecimal before = currentBalance(audit.playerId());
         TransactionLogger.logBalance(player, before, "before withdraw");
-        VaultUtil.Payment payment = VaultUtil.withdraw(audit.playerId(), amount);
+        VaultUtil.Payment payment = VaultUtil.withdrawChecked(audit.playerId(), amount, "wallet withdrawal");
+        if (payment == VaultUtil.Payment.INDETERMINATE) {
+            TransactionLogger.logNote(player, "WITHDRAW " + item.getType() + " x" + item.getAmount() + " for " + amount
+                    + " coppets UNCERTAIN, no coins handed out, manual reconciliation needed");
+            BigDecimal after = currentBalance(audit.playerId());
+            TransactionLogger.logBalance(player, after, "after uncertain withdraw");
+            audit.emitIndeterminate("withdrawn", amount, before, after);
+            uncertain(player, "<yellow>We could not confirm your withdrawal, so no coins were handed out."
+                    + " Please contact staff to check your balance.");
+            return new Debit(payment, before, after);
+        }
         boolean success = payment.succeeded();
         TransactionLogger.logWithdraw(player, item, amount, success);
         BigDecimal after = currentBalance(audit.playerId());
         TransactionLogger.logBalance(player, after, "after withdraw");
-        if (payment == VaultUtil.Payment.INDETERMINATE) audit.emitIndeterminate("withdrawn", amount, before, after);
-        else if (!success) audit.emit("withdrawn", amount, false, null, before, after);
         if (!success) {
+            audit.emit("withdrawn", amount, false, null, before, after);
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () ->
                     player.sendMessage(MM.deserialize("<red>Withdrawal failed — please contact an administrator.")));
             WIIC.INSTANCE.getLogger().warning("Withdraw of " + amount + " coppets failed for " + player.getName() + " (" + audit.playerId() + ")");
@@ -370,16 +396,22 @@ public class VaultGUI {
     private void sell(Player player, ItemStack item, int value, WalletAudit audit) {
         BigDecimal before = currentBalance(audit.playerId());
         TransactionLogger.logBalance(player, before, "before sell");
-        VaultUtil.Payment payment = VaultUtil.deposit(audit.playerId(), value);
+        VaultUtil.Payment payment = VaultUtil.depositChecked(audit.playerId(), value, "wallet sale");
+        if (payment == VaultUtil.Payment.INDETERMINATE) {
+            // The payout may have landed; returning the goods too could duplicate them.
+            TransactionLogger.logNote(player, "SELL " + item.getType() + " x" + item.getAmount() + " for " + value
+                    + " coppets UNCERTAIN, items withheld, manual reconciliation needed");
+            BigDecimal after = currentBalance(audit.playerId());
+            TransactionLogger.logBalance(player, after, "after uncertain sell");
+            audit.emitIndeterminate("sold", value, before, after);
+            uncertain(player, "<yellow>We could not confirm your sale. Your items were kept back so they"
+                    + " cannot be paid for twice; please contact staff to check your balance.");
+            return;
+        }
         boolean success = payment.succeeded();
         TransactionLogger.logSell(player, item, value, success);
         BigDecimal after = currentBalance(audit.playerId());
         TransactionLogger.logBalance(player, after, "after sell");
-        if (payment == VaultUtil.Payment.INDETERMINATE) {
-            // The payout may have landed; returning the goods too could duplicate them.
-            audit.emitIndeterminate("sold", value, before, after);
-            return;
-        }
         audit.emit("sold", value, success, null, before, after);
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
@@ -395,6 +427,11 @@ public class VaultGUI {
             return;
         }
         soldItemsManager.addSoldValue(player, value);
+    }
+
+    /** Tells the player a money movement could not be confirmed. Safe to call off the main thread. */
+    private static void uncertain(Player player, String message) {
+        Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> player.sendMessage(MM.deserialize(message)));
     }
 
     private static BigDecimal currentBalance(UUID playerId) {

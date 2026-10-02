@@ -72,7 +72,8 @@ public class PlotService {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
 
-    public enum RentResult { SUCCESS, DISABLED, UNKNOWN_PLOT, ALREADY_RENTED, MAX_PLOTS, INSUFFICIENT_FUNDS, IN_PROGRESS, ERROR }
+    /** {@code UNCERTAIN}: the rent or upkeep withdraw outcome is unknown; nothing was granted or refunded. */
+    public enum RentResult { SUCCESS, DISABLED, UNKNOWN_PLOT, ALREADY_RENTED, MAX_PLOTS, INSUFFICIENT_FUNDS, IN_PROGRESS, ERROR, UNCERTAIN }
 
     private static final Set<UUID> IN_FLIGHT = ConcurrentHashMap.newKeySet();
 
@@ -259,17 +260,22 @@ public class PlotService {
         Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            VaultUtil.Payment payment = price > 0 ? VaultUtil.withdraw(uuid, price) : VaultUtil.Payment.SUCCESS;
+            // Indeterminate counts as not paid: no plot, no refund, lock released.
+            VaultUtil.Payment payment = price > 0
+                    ? VaultUtil.withdrawChecked(uuid, price, "plot rent of " + plotId)
+                    : VaultUtil.Payment.SUCCESS;
             if (!payment.succeeded()) {
-                TransactionLogger.logNote(player, "MARKET PLOT rent withdraw of " + price + " coppets failed");
-                if (payment == VaultUtil.Payment.INDETERMINATE) MysterriaAuditBridge.emitPaymentIndeterminate(
+                boolean uncertain = payment == VaultUtil.Payment.INDETERMINATE;
+                TransactionLogger.logNote(player, "MARKET PLOT rent withdraw of " + price + " coppets "
+                        + (uncertain ? "UNCERTAIN for " + plotId + ", manual reconciliation needed" : "failed"));
+                if (uncertain) MysterriaAuditBridge.emitPaymentIndeterminate(
                         "plots.rent", uuid, uuid, null, identity, price, balanceBefore, balance(uuid),
                         MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location));
                 else MysterriaAuditBridge.emit("plots.rent.failed", false, uuid, uuid, null, identity,
                         "rent withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
                                 balanceBefore, balance(uuid),
                                 MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location)));
-                finish(uuid, callback, RentResult.INSUFFICIENT_FUNDS);
+                finish(uuid, callback, uncertain ? RentResult.UNCERTAIN : RentResult.INSUFFICIENT_FUNDS);
                 return;
             }
             BigDecimal balanceAfterCharge = balance(uuid);
@@ -336,17 +342,22 @@ public class PlotService {
         Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            VaultUtil.Payment payment = price > 0 ? VaultUtil.withdraw(uuid, price) : VaultUtil.Payment.SUCCESS;
+            // Indeterminate counts as not paid: no extension, no refund, lock released.
+            VaultUtil.Payment payment = price > 0
+                    ? VaultUtil.withdrawChecked(uuid, price, "plot upkeep of " + plotId)
+                    : VaultUtil.Payment.SUCCESS;
             if (!payment.succeeded()) {
-                TransactionLogger.logNote(player, "MARKET PLOT upkeep withdraw of " + price + " coppets failed");
-                if (payment == VaultUtil.Payment.INDETERMINATE) MysterriaAuditBridge.emitPaymentIndeterminate(
+                boolean uncertain = payment == VaultUtil.Payment.INDETERMINATE;
+                TransactionLogger.logNote(player, "MARKET PLOT upkeep withdraw of " + price + " coppets "
+                        + (uncertain ? "UNCERTAIN for " + plotId + ", manual reconciliation needed" : "failed"));
+                if (uncertain) MysterriaAuditBridge.emitPaymentIndeterminate(
                         "plots.rent.upkeep", uuid, uuid, null, identity, price, balanceBefore, balance(uuid),
                         MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location));
                 else MysterriaAuditBridge.emit("plots.rent.upkeep_failed", false, uuid, uuid, null, identity,
                         "upkeep withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
                                 balanceBefore, balance(uuid),
                                 MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location)));
-                finish(uuid, callback, RentResult.INSUFFICIENT_FUNDS);
+                finish(uuid, callback, uncertain ? RentResult.UNCERTAIN : RentResult.INSUFFICIENT_FUNDS);
                 return;
             }
             BigDecimal balanceAfterCharge = balance(uuid);
@@ -736,12 +747,19 @@ public class PlotService {
         if (amount <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            VaultUtil.Payment payment = VaultUtil.deposit(uuid, amount);
+            VaultUtil.Payment payment = VaultUtil.depositChecked(uuid, amount, "plot refund (" + reason + ")");
             boolean refunded = payment.succeeded();
-            TransactionLogger.logNote(player, "MARKET PLOT refund of " + amount + " coppets ("
-                    + reason + ") " + (refunded ? "OK" : "FAILED"));
-            if (!refunded) {
-                plugin.getLogger().severe("Failed to refund plot rent of " + amount + " coppets to " + uuid);
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
+                TransactionLogger.logNote(player, "MARKET PLOT refund of " + amount + " coppets ("
+                        + reason + ") UNCERTAIN, manual reconciliation needed");
+                plugin.getLogger().severe("UNCERTAIN: plot rent refund of " + amount + " coppets to " + uuid
+                        + " may or may not have landed; check the balance before compensating by hand.");
+            } else {
+                TransactionLogger.logNote(player, "MARKET PLOT refund of " + amount + " coppets ("
+                        + reason + ") " + (refunded ? "OK" : "FAILED"));
+                if (!refunded) {
+                    plugin.getLogger().severe("Failed to refund plot rent of " + amount + " coppets to " + uuid);
+                }
             }
             MysterriaAuditBridge.emit("plots.rent.refunded", refunded, uuid, uuid, null, identity,
                     reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,

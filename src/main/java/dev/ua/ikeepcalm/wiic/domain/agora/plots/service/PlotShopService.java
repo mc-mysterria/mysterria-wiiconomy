@@ -74,7 +74,9 @@ public class PlotShopService {
 
     public enum BuyResult {
         SUCCESS, DISABLED, UNSTOCKED, SELF_PURCHASE, CLOSED, OUT_OF_STOCK,
-        INSUFFICIENT_FUNDS, BUSY, ERROR
+        INSUFFICIENT_FUNDS, BUSY, ERROR,
+        /** The withdraw outcome is unknown; no goods were taken and no refund is issued. */
+        UNCERTAIN
     }
 
     /**
@@ -457,11 +459,14 @@ public class PlotShopService {
         Map<String, Object> itemAudit = Map.copyOf(MysterriaAuditBridge.itemMetadata(template));
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(buyerId);
-            VaultUtil.Payment payment = VaultUtil.withdraw(buyerId, price);
+            // Indeterminate counts as not paid: no goods, no refund, locks released.
+            VaultUtil.Payment payment = VaultUtil.withdrawChecked(buyerId, price, "stall purchase at shop " + shop.id());
             if (!payment.succeeded()) {
-                TransactionLogger.logNote(buyer, "MARKET STALL withdraw of " + price
-                        + " coppets failed at " + shop.plotId());
-                if (payment == VaultUtil.Payment.INDETERMINATE) MysterriaAuditBridge.emitPaymentIndeterminate(
+                boolean uncertain = payment == VaultUtil.Payment.INDETERMINATE;
+                TransactionLogger.logNote(buyer, "MARKET STALL withdraw of " + price + " coppets "
+                        + (uncertain ? "UNCERTAIN" : "failed") + " at " + shop.plotId()
+                        + (uncertain ? ", manual reconciliation needed" : ""));
+                if (uncertain) MysterriaAuditBridge.emitPaymentIndeterminate(
                         "plot_shop.purchase", buyerId, shop.ownerUuid(), shop.id(), identity, price,
                         balanceBefore, balance(buyerId), MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
                                 Map.of("plot_id", shop.plotId(), "quantity", wanted), location), itemAudit));
@@ -470,7 +475,8 @@ public class PlotShopService {
                                 MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
                                                 Map.of("plot_id", shop.plotId(), "quantity", wanted), location),
                                         itemAudit)));
-                finish(buyerId, shop.id(), callback, Purchase.of(BuyResult.INSUFFICIENT_FUNDS));
+                finish(buyerId, shop.id(), callback,
+                        Purchase.of(uncertain ? BuyResult.UNCERTAIN : BuyResult.INSUFFICIENT_FUNDS));
                 return;
             }
             BigDecimal balanceAfterCharge = balance(buyerId);
@@ -641,12 +647,19 @@ public class PlotShopService {
                         MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(buyerId);
-            VaultUtil.Payment payment = VaultUtil.deposit(buyerId, amount);
+            VaultUtil.Payment payment = VaultUtil.depositChecked(buyerId, amount, "stall refund (" + reason + ")");
             boolean refunded = payment.succeeded();
-            TransactionLogger.logNote(buyer, "MARKET STALL refund of " + amount + " coppets ("
-                    + reason + ") " + (refunded ? "OK" : "FAILED"));
-            if (!refunded) {
-                plugin.getLogger().severe("Failed to refund " + amount + " coppets to " + buyerId);
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
+                TransactionLogger.logNote(buyer, "MARKET STALL refund of " + amount + " coppets ("
+                        + reason + ") UNCERTAIN, manual reconciliation needed");
+                plugin.getLogger().severe("UNCERTAIN: stall refund of " + amount + " coppets to " + buyerId
+                        + " may or may not have landed; check the balance before compensating by hand.");
+            } else {
+                TransactionLogger.logNote(buyer, "MARKET STALL refund of " + amount + " coppets ("
+                        + reason + ") " + (refunded ? "OK" : "FAILED"));
+                if (!refunded) {
+                    plugin.getLogger().severe("Failed to refund " + amount + " coppets to " + buyerId);
+                }
             }
             MysterriaAuditBridge.emit("plot_shop.refunded", refunded, buyerId, buyerId, shopId, identity,
                     reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,

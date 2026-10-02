@@ -10,6 +10,8 @@ import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -112,6 +114,20 @@ public class ListingDao {
         }
     }
 
+    /**
+     * CAS PENDING_PAYMENT (held by this buyer) → PAYMENT_HELD, for a purchase whose money
+     * outcome is unknown. Buyer and reservation time stay on the row for reconciliation.
+     */
+    public static boolean hold(Connection c, UUID id, UUID buyer) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("""
+                UPDATE listings SET state = 'PAYMENT_HELD'
+                WHERE id = ? AND state = 'PENDING_PAYMENT' AND buyer_uuid = ?""")) {
+            ps.setString(1, id.toString());
+            ps.setString(2, buyer.toString());
+            return ps.executeUpdate() == 1;
+        }
+    }
+
     /** CAS PENDING_PAYMENT (held by this buyer) → SOLD. */
     public static boolean markSold(Connection c, UUID id, UUID buyer, long now) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement("""
@@ -154,10 +170,24 @@ public class ListingDao {
 
     /** Releases reservations older than {@code cutoff} (buyer thread died mid-purchase). */
     public static int releaseStaleReservations(Connection c, long cutoff) throws SQLException {
-        try (PreparedStatement ps = c.prepareStatement("""
+        return releaseStaleReservations(c, cutoff, List.of());
+    }
+
+    /**
+     * As {@link #releaseStaleReservations(Connection, long)}, skipping {@code keep}: listings
+     * whose purchase still has a journal entry, so its money outcome is not settled yet.
+     */
+    public static int releaseStaleReservations(Connection c, long cutoff, Collection<UUID> keep) throws SQLException {
+        StringBuilder sql = new StringBuilder("""
                 UPDATE listings SET state = 'ACTIVE', buyer_uuid = NULL, reserved_at = NULL
-                WHERE state = 'PENDING_PAYMENT' AND reserved_at < ?""")) {
-            ps.setLong(1, cutoff);
+                WHERE state = 'PENDING_PAYMENT' AND reserved_at < ?""");
+        List<Object> params = new ArrayList<>();
+        params.add(cutoff);
+        if (!keep.isEmpty()) {
+            sql.append(" AND id NOT IN (").append(String.join(",", Collections.nCopies(keep.size(), "?"))).append(")");
+            for (UUID id : keep) params.add(id.toString());
+        }
+        try (PreparedStatement ps = prepare(c, sql.toString(), params)) {
             return ps.executeUpdate();
         }
     }
@@ -262,7 +292,7 @@ public class ListingDao {
 
     public static List<Listing> bySeller(Connection c, UUID seller) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement("""
-                SELECT * FROM listings WHERE seller_uuid = ? AND state IN ('ACTIVE', 'PENDING_PAYMENT')
+                SELECT * FROM listings WHERE seller_uuid = ? AND state IN ('ACTIVE', 'PENDING_PAYMENT', 'PAYMENT_HELD')
                 ORDER BY created_at DESC""")) {
             ps.setString(1, seller.toString());
             return mapAll(ps);
@@ -271,7 +301,7 @@ public class ListingDao {
 
     public static int countActiveBySeller(Connection c, UUID seller) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement(
-                "SELECT COUNT(*) FROM listings WHERE seller_uuid = ? AND state IN ('ACTIVE', 'PENDING_PAYMENT')")) {
+                "SELECT COUNT(*) FROM listings WHERE seller_uuid = ? AND state IN ('ACTIVE', 'PENDING_PAYMENT', 'PAYMENT_HELD')")) {
             ps.setString(1, seller.toString());
             try (ResultSet rs = ps.executeQuery()) {
                 return rs.next() ? rs.getInt(1) : 0;

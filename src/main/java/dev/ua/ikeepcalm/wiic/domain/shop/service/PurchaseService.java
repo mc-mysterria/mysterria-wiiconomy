@@ -41,7 +41,9 @@ public class PurchaseService {
 
     public enum Result {
         SUCCESS, ALREADY_IN_PROGRESS, COOLDOWN, NOT_PURCHASABLE, INVALID_AMOUNT,
-        PRICE_CHANGED, INSUFFICIENT_FUNDS, WITHDRAW_FAILED, PLAYER_OFFLINE
+        PRICE_CHANGED, INSUFFICIENT_FUNDS, WITHDRAW_FAILED, PLAYER_OFFLINE,
+        /** The charge outcome is unknown; no goods were delivered and no refund is issued. */
+        UNCERTAIN
     }
 
     public record PurchaseOutcome(Result result, long chargedUnitPrice, long chargedTotal, int delivered, int droppedStacks) {
@@ -143,17 +145,23 @@ public class PurchaseService {
                 return;
             }
 
-            VaultUtil.Payment payment = VaultUtil.withdraw(uuid, total);
+            // An uncertain charge is treated as not taken: no goods, no refund, lock released.
+            VaultUtil.Payment payment = VaultUtil.withdrawChecked(uuid, total,
+                    "shop purchase of " + amount + " " + material);
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
+                TransactionLogger.logNote(player, "PURCHASE " + amount + "x " + material + " for " + total
+                        + " coppets UNCERTAIN, charge may or may not have applied, nothing delivered, manual reconciliation needed");
+                MysterriaAuditBridge.emitPaymentIndeterminate("shop.purchase", uuid, uuid, null, identity, total,
+                        before, currentBalance(uuid), MysterriaAuditBridge.metadata(Map.of(
+                                "material", material.name().toLowerCase(), "item_amount", amount), location));
+                Bukkit.getScheduler().runTask(plugin, () ->
+                        finish(uuid, callback, new PurchaseOutcome(Result.UNCERTAIN, chargedUnitPrice, total, 0, 0)));
+                return;
+            }
             if (!payment.succeeded()) {
                 TransactionLogger.logPurchase(player, material, amount, total, indexAtPurchase, false);
-                if (payment == VaultUtil.Payment.INDETERMINATE) {
-                    MysterriaAuditBridge.emitPaymentIndeterminate("shop.purchase", uuid, uuid, null, identity, total,
-                            before, currentBalance(uuid), MysterriaAuditBridge.metadata(Map.of(
-                                    "material", material.name().toLowerCase(), "item_amount", amount), location));
-                } else {
-                    emit(uuid, material, amount, identity, false, "withdraw failed", 0, before, currentBalance(uuid),
-                            location);
-                }
+                emit(uuid, material, amount, identity, false, "withdraw failed", 0, before, currentBalance(uuid),
+                        location);
                 plugin.getLogger().warning("Shop withdraw of " + total + " coppets failed for " + player.getName() + " (" + uuid + ")");
                 Bukkit.getScheduler().runTask(plugin, () ->
                         finish(uuid, callback, new PurchaseOutcome(Result.WITHDRAW_FAILED, chargedUnitPrice, total, 0, 0)));
@@ -168,13 +176,19 @@ public class PurchaseService {
                     // delivery is the fallible step, so this is the safe failure direction.
                     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                         BigDecimal refundBefore = currentBalance(uuid);
-                        VaultUtil.Payment refund = VaultUtil.deposit(uuid, total);
+                        VaultUtil.Payment refund = VaultUtil.depositChecked(uuid, total,
+                                "shop refund after offline delivery abort");
                         boolean refunded = refund.succeeded();
                         BigDecimal refundAfter = currentBalance(uuid);
                         MysterriaAuditBridge.emit("shop.refunded", refunded, uuid, uuid, null, identity,
                                 "delivery aborted: offline", MysterriaAuditBridge.moneyMetadata(
                                         refunded ? total : 0, refundBefore, refundAfter,
                                         MysterriaAuditBridge.metadata(Map.of("payment", refund.name()), location)));
+                        if (refund == VaultUtil.Payment.INDETERMINATE) {
+                            TransactionLogger.logNote(player, "PURCHASE delivery aborted (offline), refund of " + total
+                                    + " coppets UNCERTAIN, manual reconciliation needed");
+                            return;
+                        }
                         TransactionLogger.logNote(player, "PURCHASE delivery aborted (offline) — refund of " + total
                                 + " coppets " + (refunded ? "OK" : "FAILED"));
                         if (!refunded) {
@@ -205,13 +219,19 @@ public class PurchaseService {
                             + " after charging " + total + " coppets, refunding: " + t);
                     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                         BigDecimal refundBefore = currentBalance(uuid);
-                        VaultUtil.Payment refund = VaultUtil.deposit(uuid, total);
+                        VaultUtil.Payment refund = VaultUtil.depositChecked(uuid, total,
+                                "shop refund after failed delivery");
                         boolean refunded = refund.succeeded();
                         BigDecimal refundAfter = currentBalance(uuid);
                         MysterriaAuditBridge.emit("shop.refunded", refunded, uuid, uuid, null, identity,
                                 "delivery failed", MysterriaAuditBridge.moneyMetadata(
                                         refunded ? total : 0, refundBefore, refundAfter,
                                         MysterriaAuditBridge.metadata(Map.of("payment", refund.name()), location)));
+                        if (refund == VaultUtil.Payment.INDETERMINATE) {
+                            TransactionLogger.logNote(player, "PURCHASE delivery failed, refund of " + total
+                                    + " coppets UNCERTAIN, manual reconciliation needed");
+                            return;
+                        }
                         TransactionLogger.logNote(player, "PURCHASE delivery failed — refund of " + total
                                 + " coppets " + (refunded ? "OK" : "FAILED"));
                         if (!refunded) {

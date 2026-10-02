@@ -48,7 +48,9 @@ public class ListingService {
 
     public enum Result {
         SUCCESS, ALREADY_IN_PROGRESS, ITEM_DENIED, PRICE_OUT_OF_BOUNDS,
-        DAILY_LIMIT, MAX_ACTIVE, INSUFFICIENT_FEE, ERROR
+        DAILY_LIMIT, MAX_ACTIVE, INSUFFICIENT_FEE, ERROR,
+        /** The fee withdraw outcome is unknown; nothing was listed and no refund is issued. */
+        UNCERTAIN
     }
 
     /**
@@ -170,11 +172,16 @@ public class ListingService {
         // Fee is a sink (never deposited anywhere), see market.yml.
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            VaultUtil.Payment payment = fee > 0 ? VaultUtil.withdraw(uuid, fee) : VaultUtil.Payment.SUCCESS;
+            VaultUtil.Payment payment = fee > 0
+                    ? VaultUtil.withdrawChecked(uuid, fee, "market listing fee for " + listingId)
+                    : VaultUtil.Payment.SUCCESS;
             if (!payment.succeeded()) {
-                TransactionLogger.logNote(seller, "MARKET LIST fee withdraw of " + fee + " coppets failed");
                 // Indeterminate: the fee may be gone, but no refund is safe until it is proven.
-                if (payment == VaultUtil.Payment.INDETERMINATE) MysterriaAuditBridge.emitPaymentIndeterminate(
+                // Nothing is listed either way, so the seller's own goods still go back.
+                boolean uncertain = payment == VaultUtil.Payment.INDETERMINATE;
+                TransactionLogger.logNote(seller, "MARKET LIST fee withdraw of " + fee + " coppets "
+                        + (uncertain ? "UNCERTAIN for listing " + listingId + ", manual reconciliation needed" : "failed"));
+                if (uncertain) MysterriaAuditBridge.emitPaymentIndeterminate(
                         "agora.listing.fee", uuid, uuid, listingId, identity, fee, balanceBefore, balance(uuid),
                         MysterriaAuditBridge.metadata(Map.of("price", price, "fee", fee), location));
                 else MysterriaAuditBridge.emit("agora.listing.failed", false, uuid, uuid, listingId, identity,
@@ -182,8 +189,9 @@ public class ListingService {
                                 balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
                                         Map.of("price", price, "fee", fee), location), itemAuditMetadata)));
                 boolean pruned = journal.remove(listingId.toString());
+                Result result = uncertain ? Result.UNCERTAIN : Result.INSUFFICIENT_FEE;
                 Bukkit.getScheduler().runTask(plugin, () ->
-                        finish(uuid, callback, Outcome.failed(Result.INSUFFICIENT_FEE, fee, pruned)));
+                        finish(uuid, callback, Outcome.failed(result, fee, pruned)));
                 return;
             }
             BigDecimal balanceAfterCharge = balance(uuid);
@@ -265,12 +273,20 @@ public class ListingService {
         if (fee <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            VaultUtil.Payment payment = VaultUtil.deposit(uuid, fee);
+            VaultUtil.Payment payment = VaultUtil.depositChecked(uuid, fee,
+                    "market listing fee refund (" + reason + ")");
             boolean refunded = payment.succeeded();
-            TransactionLogger.logNote(seller, "MARKET LIST fee refund of " + fee + " coppets ("
-                    + reason + ") " + (refunded ? "OK" : "FAILED"));
-            if (!refunded) {
-                plugin.getLogger().severe("Failed to refund listing fee of " + fee + " coppets to " + uuid);
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
+                TransactionLogger.logNote(seller, "MARKET LIST fee refund of " + fee + " coppets ("
+                        + reason + ") UNCERTAIN, manual reconciliation needed");
+                plugin.getLogger().severe("UNCERTAIN: listing fee refund of " + fee + " coppets to " + uuid
+                        + " may or may not have landed; check the balance before compensating by hand.");
+            } else {
+                TransactionLogger.logNote(seller, "MARKET LIST fee refund of " + fee + " coppets ("
+                        + reason + ") " + (refunded ? "OK" : "FAILED"));
+                if (!refunded) {
+                    plugin.getLogger().severe("Failed to refund listing fee of " + fee + " coppets to " + uuid);
+                }
             }
             MysterriaAuditBridge.emit("agora.listing.fee_refunded", refunded, uuid, uuid, listingId, identity,
                     reason, MysterriaAuditBridge.moneyMetadata(refunded ? fee : 0,

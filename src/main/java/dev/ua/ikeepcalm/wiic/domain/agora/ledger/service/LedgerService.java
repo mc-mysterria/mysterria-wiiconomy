@@ -89,6 +89,8 @@ public class LedgerService {
             if (sum < 0) {
                 // An earlier batch is still unresolved. Its rows may already be paid, and this
                 // batch's revert would hand them back as UNCLAIMED.
+                plugin.getLogger().warning("Ledger claim refused for " + owner.getName() + " (" + uuid
+                        + "): an earlier claim is still CLAIMING and needs staff reconciliation");
                 MysterriaAuditBridge.emit("ledger.claim_failed", false, uuid, uuid, null, identity,
                         "earlier claim unresolved", MysterriaAuditBridge.moneyMetadata(0,
                                 MysterriaAuditBridge.playerLocation(owner)));
@@ -119,11 +121,12 @@ public class LedgerService {
             }
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 BigDecimal balanceBefore = balance(uuid);
-                VaultUtil.Payment payment = VaultUtil.deposit(uuid, sum);
+                VaultUtil.Payment payment = VaultUtil.depositChecked(uuid, sum, "ledger claim batch " + batchId);
                 if (payment == VaultUtil.Payment.INDETERMINATE) {
                     // Neither revert (could pay twice) nor finalize (payment unproven). The rows
                     // stay CLAIMING for staff to reconcile against the balance. Dropping the
                     // intent is only tidiness: if it survives, recovery withholds it the same way.
+                    TransactionLogger.logNote(owner, "MARKET LEDGER claim deposit of " + sum + " coppets UNCERTAIN");
                     boolean intentRemoved = journal.remove(batchId);
                     MysterriaAuditBridge.emitPaymentIndeterminate("ledger.claim", uuid, uuid, null, identity, sum,
                             balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(Map.of("batch_id", batchId,

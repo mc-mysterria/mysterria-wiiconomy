@@ -15,6 +15,7 @@ import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import org.bukkit.Bukkit;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
@@ -83,7 +84,7 @@ public class CourierService {
 
     /** Whether {@code item} is a postmans summoning horn (the only depositable item). */
     public boolean isHornItem(ItemStack item) {
-        return hook.isHorn(item);
+        return !ItemInspector.containsTemporaryItem(item) && hook.isHorn(item);
     }
 
     // -------------------------------------------------------------------------
@@ -105,7 +106,7 @@ public class CourierService {
             callback.accept(DepositResult.UNAVAILABLE);
             return;
         }
-        if (!hook.isHorn(horn)) {
+        if (!isHornItem(horn)) {
             callback.accept(DepositResult.NOT_A_HORN);
             return;
         }
@@ -168,43 +169,67 @@ public class CourierService {
             callback.accept(false);
             return;
         }
-        db.transactionThenMain(conn -> {
-            CourierContract contract = CourierDao.find(conn, uuid);
-            if (contract == null || !CourierDao.delete(conn, uuid)) return null;
-            TransactionDao.log(conn, "COURIER_WITHDRAW", uuid, null, null, 0, contract.courierType());
-            return contract;
-        }, contract -> {
+        // Deserialize on the main thread before deleting the escrow row. Invalid or
+        // temporary horns stay available for staff review instead of entering circulation.
+        db.transactionThenMain(conn -> CourierDao.find(conn, uuid), contract -> {
             if (contract == null) {
-                // Nothing was deleted, so the cache must keep saying what the table says —
-                // clearing it here would strand the horn with auto-delivery already off.
                 MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
                         "no courier contract to withdraw", Map.of());
                 callback.accept(false);
                 return;
             }
-            contracted.remove(uuid);
             ItemStack horn;
             try {
                 horn = ItemStack.deserializeBytes(contract.hornItemBytes());
+                if (ItemInspector.containsTemporaryItem(horn)) {
+                    plugin.getLogger().warning("Withheld temporary courier horn for " + uuid);
+                    MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
+                            "escrowed horn temporary; contract kept for review", MysterriaAuditBridge.metadata(
+                                    Map.of("courier_type", contract.courierType(), "contract_deleted", false),
+                                    MysterriaAuditBridge.itemMetadata(contract.hornItemBytes())));
+                    callback.accept(false);
+                    return;
+                }
             } catch (Exception e) {
                 plugin.getLogger().severe("Corrupt escrowed horn for " + player.getName() + ": " + e);
                 MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
-                        "escrowed horn corrupt; contract row deleted", MysterriaAuditBridge.metadata(
-                                Map.of("courier_type", contract.courierType(), "contract_deleted", true),
+                        "escrowed horn corrupt; contract kept for review", MysterriaAuditBridge.metadata(
+                                Map.of("courier_type", contract.courierType(), "contract_deleted", false),
                                 MysterriaAuditBridge.itemMetadata(contract.hornItemBytes())));
                 callback.accept(false);
                 return;
             }
-            giveBack(player, horn);
-            TransactionLogger.logNote(player, "MARKET COURIER horn withdrawn (" + contract.courierType() + ")");
-            MysterriaAuditBridge.emit("courier.contract.withdrawn", true, uuid, uuid, null, identity,
-                    "courier contract withdrawn", MysterriaAuditBridge.metadata(
-                            Map.of("courier_type", contract.courierType()), MysterriaAuditBridge.itemMetadata(horn)));
-            callback.accept(true);
+            db.transactionThenMain(conn -> {
+                CourierContract current = CourierDao.find(conn, uuid);
+                if (current == null || current.depositedAt() != contract.depositedAt()
+                        || !java.util.Arrays.equals(current.hornItemBytes(), contract.hornItemBytes())
+                        || !CourierDao.delete(conn, uuid)) return false;
+                TransactionDao.log(conn, "COURIER_WITHDRAW", uuid, null, null, 0, contract.courierType());
+                return true;
+            }, removed -> {
+                if (!removed) {
+                    MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
+                            "courier contract changed before withdraw", Map.of("courier_type", contract.courierType()));
+                    callback.accept(false);
+                    return;
+                }
+                contracted.remove(uuid);
+                giveBack(player, horn);
+                TransactionLogger.logNote(player, "MARKET COURIER horn withdrawn (" + contract.courierType() + ")");
+                MysterriaAuditBridge.emit("courier.contract.withdrawn", true, uuid, uuid, null, identity,
+                        "courier contract withdrawn", MysterriaAuditBridge.metadata(
+                                Map.of("courier_type", contract.courierType()), MysterriaAuditBridge.itemMetadata(horn)));
+                callback.accept(true);
+            }, error -> {
+                plugin.getLogger().severe("Courier withdraw failed for " + player.getName() + ": " + error);
+                MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
+                        "courier contract withdraw failed", Map.of());
+                callback.accept(false);
+            });
         }, error -> {
-            plugin.getLogger().severe("Courier withdraw failed for " + player.getName() + ": " + error);
+            plugin.getLogger().severe("Courier read failed for " + player.getName() + ": " + error);
             MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
-                    "courier contract withdraw failed", Map.of());
+                    "courier contract read failed", Map.of());
             callback.accept(false);
         });
     }
@@ -301,6 +326,16 @@ public class CourierService {
             ItemStack item;
             try {
                 item = ItemStack.deserializeBytes(itemBytes);
+                if (ItemInspector.containsTemporaryItem(ItemStack.deserializeBytes(contract.hornItemBytes()))) {
+                    plugin.getLogger().warning("Withheld delivery using temporary courier horn for " + uuid);
+                    revertClaim(stashId);
+                    MysterriaAuditBridge.emit("courier.delivery.failed", false, uuid, sellerUuid, stashId, identity,
+                            "temporary courier horn; stash claim reverted", MysterriaAuditBridge.moneyMetadata(0,
+                                    MysterriaAuditBridge.metadata(Map.of("fee", fee, "courier_type", contract.courierType(),
+                                            "stash_id", stashId.toString()), MysterriaAuditBridge.itemMetadata(itemBytes))));
+                    callback.accept(false);
+                    return;
+                }
             } catch (Exception e) {
                 plugin.getLogger().severe("Corrupt purchase blob for courier delivery to "
                         + buyer.getName() + ": " + e);
@@ -313,6 +348,16 @@ public class CourierService {
                 return;
             }
 
+            if (ItemInspector.containsTemporaryItem(item)) {
+                plugin.getLogger().warning("Withheld temporary courier stash item " + stashId);
+                revertClaim(stashId);
+                MysterriaAuditBridge.emit("courier.delivery.failed", false, uuid, sellerUuid, stashId, identity,
+                        "temporary item; stash claim reverted", MysterriaAuditBridge.moneyMetadata(0,
+                                MysterriaAuditBridge.metadata(Map.of("fee", fee, "courier_type", contract.courierType(),
+                                        "stash_id", stashId.toString()), MysterriaAuditBridge.itemMetadata(itemBytes))));
+                callback.accept(false);
+                return;
+            }
             // Re-resolve the tier from the buyer standing here rather than trusting the one
             // frozen at deposit time: postmans keys tiers to permissions, so somebody who
             // bought a premium horn since depositing would otherwise stay on the old speed
@@ -377,7 +422,9 @@ public class CourierService {
         Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
             BigDecimal balanceBefore = balance(uuid);
-            VaultUtil.Payment payment = VaultUtil.withdraw(uuid, fee);
+            // An uncertain fee is reported by the checked helper and, like a refusal, is
+            // neither retried nor refunded: the delivery is already dispatched.
+            VaultUtil.Payment payment = VaultUtil.withdrawChecked(uuid, fee, "courier delivery fee");
             if (payment == VaultUtil.Payment.INDETERMINATE) {
                 MysterriaAuditBridge.emitPaymentIndeterminate("courier.fee", uuid, uuid, null, identity, fee,
                         balanceBefore, balance(uuid), MysterriaAuditBridge.metadata(Map.of("fee", fee), location));
