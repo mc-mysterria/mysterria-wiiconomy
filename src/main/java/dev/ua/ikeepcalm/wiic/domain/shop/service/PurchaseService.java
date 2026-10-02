@@ -40,7 +40,9 @@ public class PurchaseService {
 
     public enum Result {
         SUCCESS, ALREADY_IN_PROGRESS, COOLDOWN, NOT_PURCHASABLE, INVALID_AMOUNT,
-        PRICE_CHANGED, INSUFFICIENT_FUNDS, WITHDRAW_FAILED, PLAYER_OFFLINE
+        PRICE_CHANGED, INSUFFICIENT_FUNDS, WITHDRAW_FAILED, PLAYER_OFFLINE,
+        /** The charge outcome is unknown; no goods were delivered and no refund is issued. */
+        UNCERTAIN
     }
 
     public record PurchaseOutcome(Result result, long chargedUnitPrice, long chargedTotal, int delivered, int droppedStacks) {
@@ -126,8 +128,17 @@ public class PurchaseService {
                 return;
             }
 
-            boolean withdrawn = VaultUtil.withdraw(uuid, total);
-            if (!withdrawn) {
+            // An uncertain charge is treated as not taken: no goods, no refund, lock released.
+            VaultUtil.Payment payment = VaultUtil.withdrawChecked(uuid, total,
+                    "shop purchase of " + amount + " " + material);
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
+                TransactionLogger.logNote(player, "PURCHASE " + amount + "x " + material + " for " + total
+                        + " coppets UNCERTAIN, charge may or may not have applied, nothing delivered, manual reconciliation needed");
+                Bukkit.getScheduler().runTask(plugin, () ->
+                        finish(uuid, callback, new PurchaseOutcome(Result.UNCERTAIN, chargedUnitPrice, total, 0, 0)));
+                return;
+            }
+            if (!payment.succeeded()) {
                 TransactionLogger.logPurchase(player, material, amount, total, indexAtPurchase, false);
                 plugin.getLogger().warning("Shop withdraw of " + total + " coppets failed for " + player.getName() + " (" + uuid + ")");
                 Bukkit.getScheduler().runTask(plugin, () ->
@@ -141,7 +152,14 @@ public class PurchaseService {
                     // Left between charge and delivery — refund. Money is authoritative,
                     // delivery is the fallible step, so this is the safe failure direction.
                     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                        boolean refunded = VaultUtil.deposit(uuid, total);
+                        VaultUtil.Payment refund = VaultUtil.depositChecked(uuid, total,
+                                "shop refund after offline delivery abort");
+                        if (refund == VaultUtil.Payment.INDETERMINATE) {
+                            TransactionLogger.logNote(player, "PURCHASE delivery aborted (offline), refund of " + total
+                                    + " coppets UNCERTAIN, manual reconciliation needed");
+                            return;
+                        }
+                        boolean refunded = refund.succeeded();
                         TransactionLogger.logNote(player, "PURCHASE delivery aborted (offline) — refund of " + total
                                 + " coppets " + (refunded ? "OK" : "FAILED"));
                         if (!refunded) {
@@ -167,7 +185,14 @@ public class PurchaseService {
                     plugin.getLogger().severe("Shop delivery failed for " + online.getName()
                             + " after charging " + total + " coppets, refunding: " + t);
                     Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                        boolean refunded = VaultUtil.deposit(uuid, total);
+                        VaultUtil.Payment refund = VaultUtil.depositChecked(uuid, total,
+                                "shop refund after failed delivery");
+                        if (refund == VaultUtil.Payment.INDETERMINATE) {
+                            TransactionLogger.logNote(player, "PURCHASE delivery failed, refund of " + total
+                                    + " coppets UNCERTAIN, manual reconciliation needed");
+                            return;
+                        }
+                        boolean refunded = refund.succeeded();
                         TransactionLogger.logNote(player, "PURCHASE delivery failed — refund of " + total
                                 + " coppets " + (refunded ? "OK" : "FAILED"));
                         if (!refunded) {
@@ -212,8 +237,7 @@ public class PurchaseService {
     private record DeliveryResult(int delivered, int droppedStacks) {}
 
     private static BigDecimal currentBalance(UUID uuid) {
-        if (WIIC.getEcon() == null) return BigDecimal.ZERO;
-        BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", uuid);
+        BigDecimal balance = VaultUtil.balance(uuid);
         return balance != null ? balance : BigDecimal.ZERO;
     }
 

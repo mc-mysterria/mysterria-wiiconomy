@@ -173,6 +173,9 @@ public class ListingDetailGUI {
                     "<red>Your purse is too light for this.")));
             case ERROR -> player.sendMessage(MM.deserialize(config.message("market-error",
                     "<red>The market ledgers are in disarray. Try again later.")));
+            case UNCERTAIN -> player.sendMessage(MM.deserialize(config.message("purchase-uncertain",
+                    "<yellow>The market could not confirm whether your payment went through. The goods are"
+                            + " on hold; please contact staff to settle it before trying again.")));
         }
         onBack.run();
     }

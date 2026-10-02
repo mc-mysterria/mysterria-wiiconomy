@@ -44,7 +44,9 @@ public class ListingService {
 
     public enum Result {
         SUCCESS, ALREADY_IN_PROGRESS, ITEM_DENIED, PRICE_OUT_OF_BOUNDS,
-        DAILY_LIMIT, MAX_ACTIVE, INSUFFICIENT_FEE, ERROR
+        DAILY_LIMIT, MAX_ACTIVE, INSUFFICIENT_FEE, ERROR,
+        /** The fee withdraw outcome is unknown; nothing was listed and no refund is issued. */
+        UNCERTAIN
     }
 
     /**
@@ -149,11 +151,19 @@ public class ListingService {
                                  ItemSnapshot snapshot, long price, long fee, Consumer<Outcome> callback) {
         // Fee is a sink (never deposited anywhere), see market.yml.
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (fee > 0 && !VaultUtil.withdraw(uuid, fee)) {
-                TransactionLogger.logNote(seller, "MARKET LIST fee withdraw of " + fee + " coppets failed");
+            VaultUtil.Payment payment = fee > 0
+                    ? VaultUtil.withdrawChecked(uuid, fee, "market listing fee for " + listingId)
+                    : VaultUtil.Payment.SUCCESS;
+            if (!payment.succeeded()) {
+                // Indeterminate: the fee may be gone, but no refund is safe until it is proven.
+                // Nothing is listed either way, so the seller's own goods still go back.
+                boolean uncertain = payment == VaultUtil.Payment.INDETERMINATE;
+                TransactionLogger.logNote(seller, "MARKET LIST fee withdraw of " + fee + " coppets "
+                        + (uncertain ? "UNCERTAIN for listing " + listingId + ", manual reconciliation needed" : "failed"));
                 boolean pruned = journal.remove(listingId.toString());
+                Result result = uncertain ? Result.UNCERTAIN : Result.INSUFFICIENT_FEE;
                 Bukkit.getScheduler().runTask(plugin, () ->
-                        finish(uuid, callback, Outcome.failed(Result.INSUFFICIENT_FEE, fee, pruned)));
+                        finish(uuid, callback, Outcome.failed(result, fee, pruned)));
                 return;
             }
 
@@ -214,7 +224,16 @@ public class ListingService {
     private void refundFee(Player seller, UUID uuid, long fee, String reason) {
         if (fee <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            boolean refunded = VaultUtil.deposit(uuid, fee);
+            VaultUtil.Payment refund = VaultUtil.depositChecked(uuid, fee,
+                    "market listing fee refund (" + reason + ")");
+            if (refund == VaultUtil.Payment.INDETERMINATE) {
+                TransactionLogger.logNote(seller, "MARKET LIST fee refund of " + fee + " coppets ("
+                        + reason + ") UNCERTAIN, manual reconciliation needed");
+                plugin.getLogger().severe("UNCERTAIN: listing fee refund of " + fee + " coppets to " + uuid
+                        + " may or may not have landed; check the balance before compensating by hand.");
+                return;
+            }
+            boolean refunded = refund.succeeded();
             TransactionLogger.logNote(seller, "MARKET LIST fee refund of " + fee + " coppets ("
                     + reason + ") " + (refunded ? "OK" : "FAILED"));
             if (!refunded) {
