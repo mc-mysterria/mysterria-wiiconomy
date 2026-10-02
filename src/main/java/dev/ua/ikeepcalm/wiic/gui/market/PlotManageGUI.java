@@ -313,6 +313,9 @@ public class PlotManageGUI {
                     "<gray>The warden has no stalls to let.");
             case ERROR -> services.config().message("market-error",
                     "<red>The market ledgers are in disarray. Try again later.");
+            case UNCERTAIN -> services.config().message("plot-payment-uncertain",
+                    "<yellow>The warden could not confirm whether your rent was taken. Please contact staff"
+                            + " to check your balance before trying again.");
         };
     }
 
@@ -323,6 +326,9 @@ public class PlotManageGUI {
                     .replace("%plot%", region.displayName());
             case INSUFFICIENT_FUNDS -> services.config().message("plot-poor", "<red>Your purse is too light for the rent.");
             case IN_PROGRESS -> services.config().message("in-progress", "<red>Finish your current dealing first.");
+            case UNCERTAIN -> services.config().message("plot-payment-uncertain",
+                    "<yellow>The warden could not confirm whether your rent was taken. Please contact staff"
+                            + " to check your balance before trying again.");
             default -> services.config().message("market-error",
                     "<red>The market ledgers are in disarray. Try again later.");
         };

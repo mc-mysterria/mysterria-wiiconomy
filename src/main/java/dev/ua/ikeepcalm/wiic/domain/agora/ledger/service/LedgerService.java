@@ -26,8 +26,10 @@ import java.util.function.Consumer;
  * <p>Claim protocol (see {@code LedgerDao}): rows flip to CLAIMING and the sum is
  * journaled before the Vault deposit; a {@code CLAIM_DEPOSITED} marker is written
  * immediately after the deposit succeeds and before the rows flip to CLAIMED.
- * Startup recovery reverts CLAIMING rows without the marker (deposit can't be
- * proven — the player just re-claims) and completes those with it.
+ * Startup recovery completes CLAIMING rows with the marker and leaves those without it
+ * CLAIMING (deposit can't be proven either way, so the batch stays withheld for staff).
+ * Rows left CLAIMING block further claims by that owner: revert and finish act on every
+ * CLAIMING row the owner has, so a later batch would otherwise reopen or close them too.
  */
 public class LedgerService {
 
@@ -77,8 +79,18 @@ public class LedgerService {
         }
 
         String batchId = UUID.randomUUID().toString();
-        db.transactionThenMain(conn -> LedgerDao.beginClaim(conn, uuid), sum -> {
-            if (sum <= 0) {
+        db.transactionThenMain(conn -> LedgerDao.hasClaiming(conn, uuid)
+                ? -1L : LedgerDao.beginClaim(conn, uuid), sum -> {
+            if (sum < 0) {
+                // An earlier batch is still unresolved. Its rows may already be paid, and this
+                // batch's revert would hand them back as UNCLAIMED.
+                plugin.getLogger().warning("Ledger claim refused for " + owner.getName() + " (" + uuid
+                        + "): an earlier claim is still CLAIMING and needs staff reconciliation");
+                IN_FLIGHT.remove(uuid);
+                callback.accept(false, 0L);
+                return;
+            }
+            if (sum == 0) {
                 IN_FLIGHT.remove(uuid);
                 callback.accept(true, 0L);
                 return;
@@ -95,8 +107,20 @@ public class LedgerService {
             }
 
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-                boolean deposited = VaultUtil.deposit(uuid, sum);
-                if (!deposited) {
+                VaultUtil.Payment payment = VaultUtil.depositChecked(uuid, sum, "ledger claim batch " + batchId);
+                if (payment == VaultUtil.Payment.INDETERMINATE) {
+                    // Neither revert (could pay twice) nor finalize (payment unproven). The rows
+                    // stay CLAIMING for staff to reconcile against the balance. Dropping the
+                    // intent is only tidiness: if it survives, recovery withholds it the same way.
+                    TransactionLogger.logNote(owner, "MARKET LEDGER claim deposit of " + sum + " coppets UNCERTAIN");
+                    journal.remove(batchId);
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        IN_FLIGHT.remove(uuid);
+                        callback.accept(false, 0L);
+                    });
+                    return;
+                }
+                if (!payment.succeeded()) {
                     TransactionLogger.logNote(owner, "MARKET LEDGER claim deposit of " + sum + " coppets FAILED");
                     journal.remove(batchId);
                     revert(uuid, () -> {
@@ -110,18 +134,16 @@ public class LedgerService {
                     journal.append(MarketJournal.Type.CLAIM_DEPOSITED, batchId, uuid, sum, null);
                 } catch (IllegalStateException e) {
                     // The money is already in their hands and we cannot prove it. Recovery
-                    // treats an unproven CLAIM as "never paid" and hands the rows back as
-                    // UNCLAIMED, which would pay this batch out a second time — and the two
-                    // failures that lead here are correlated (a full disk fails the marker
-                    // write and the commit below alike). Dropping the intent entry instead
-                    // leaves recovery with nothing to act on: the rows stay CLAIMING, which
-                    // is wrong-but-harmless, rather than reverting into a double payout.
+                    // withholds an unproven CLAIM rather than reverting it, so the rows stay
+                    // CLAIMING whether or not the intent below can be dropped; staff then mark
+                    // them CLAIMED. The two failures that lead here are correlated (a full disk
+                    // fails the marker write and the commit below alike).
                     plugin.getLogger().severe("Market journal marker write failed after ledger deposit: " + e.getMessage());
                     if (!journal.remove(batchId)) {
                         plugin.getLogger().severe("CRITICAL: ledger claim of " + sum + " coppets for " + uuid
                                 + " was deposited but is neither proven nor retractable in the journal."
-                                + " Delete the CLAIM entry for batch " + batchId + " from market-journal.dat"
-                                + " before restarting, or the claim will be paid out twice.");
+                                + " Recovery will withhold batch " + batchId + " as unproven; mark its"
+                                + " CLAIMING rows CLAIMED, since the deposit landed.");
                     }
                 }
                 db.transactionThenMain(conn -> {

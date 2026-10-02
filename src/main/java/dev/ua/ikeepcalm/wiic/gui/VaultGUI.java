@@ -22,6 +22,7 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Vault GUI — shows the player's stored wallet balance and actionable inventory items.
@@ -149,8 +150,9 @@ public class VaultGUI {
                                 // before the coppets behind it are gone — a failed withdraw after
                                 // an unconditional addItem would mint currency out of nothing.
                                 ItemStack snapshot = confirmed.clone();
+                                long value = coinValue(snapshot);
                                 Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                    boolean debited = withdraw(player, snapshot);
+                                    boolean debited = withdraw(player, snapshot, value);
                                     Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
                                         if (debited) ItemUtil.giveOrDrop(player, snapshot);
                                         openVault(player, onClose);
@@ -198,8 +200,9 @@ public class VaultGUI {
                                         openVault(player, onClose);
                                         return;
                                     }
+                                    long value = coinValue(snapshot);
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                        deposit(player, snapshot);
+                                        deposit(player, snapshot, value);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
                                     });
                                 }
@@ -231,8 +234,9 @@ public class VaultGUI {
                                         openVault(player, onClose);
                                         return;
                                     }
+                                    int value = priceAppraiser.appraise(snapshot);
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                        sell(player, snapshot);
+                                        sell(player, snapshot, value);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
                                     });
                                 }
@@ -269,21 +273,36 @@ public class VaultGUI {
     // Economy operations
     // -------------------------------------------------------------------------
 
-    private void deposit(Player player, ItemStack item) {
+    /** Coppet value of a coin stack. Called on the main thread before any async hop. */
+    private static long coinValue(ItemStack item) {
         String type = ItemUtil.getType(item);
-        if (type == null) return;
-        long amount = switch (type) {
+        if (type == null) return 0L;
+        return switch (type) {
             case "goldcoin" -> (long) item.getAmount() * 64 * 64;
             case "silvercoin" -> (long) item.getAmount() * 64;
             case "coppercoin" -> item.getAmount();
             default -> 0L;
         };
+    }
+
+    private void deposit(Player player, ItemStack item, long amount) {
         if (amount == 0) return;
-        BigDecimal before = currentBalance(player);
+        UUID playerId = player.getUniqueId();
+        BigDecimal before = currentBalance(playerId);
         TransactionLogger.logBalance(player, before, "before deposit");
-        boolean success = VaultUtil.deposit(player.getUniqueId(), amount);
+        VaultUtil.Payment payment = VaultUtil.depositChecked(playerId, amount, "wallet deposit");
+        if (payment == VaultUtil.Payment.INDETERMINATE) {
+            // The credit may have landed; handing the coins back too could duplicate them.
+            TransactionLogger.logNote(player, "DEPOSIT " + item.getType() + " x" + item.getAmount() + " for " + amount
+                    + " coppets UNCERTAIN, coins withheld, manual reconciliation needed");
+            TransactionLogger.logBalance(player, currentBalance(playerId), "after uncertain deposit");
+            uncertain(player, "<yellow>We could not confirm your deposit. Your coins were kept back so they"
+                    + " cannot be counted twice; please contact staff to check your balance.");
+            return;
+        }
+        boolean success = payment.succeeded();
         TransactionLogger.logDeposit(player, item, amount, success);
-        TransactionLogger.logBalance(player, currentBalance(player), "after deposit");
+        TransactionLogger.logBalance(player, currentBalance(playerId), "after deposit");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
                 if (ItemUtil.giveOrDrop(player, item)) {
@@ -300,22 +319,27 @@ public class VaultGUI {
         }
     }
 
-    /** @return true if the coppets were actually taken — only then may the coin be handed over. */
-    private boolean withdraw(Player player, ItemStack item) {
-        String type = ItemUtil.getType(item);
-        if (type == null) return false;
-        long amount = switch (type) {
-            case "goldcoin" -> (long) item.getAmount() * 64 * 64;
-            case "silvercoin" -> (long) item.getAmount() * 64;
-            case "coppercoin" -> item.getAmount();
-            default -> 0L;
-        };
+    /**
+     * @return true only if the coppets were provably taken; only then may the coin be handed
+     * over. An uncertain debit also returns false, since the coin must not exist unpaid.
+     */
+    private boolean withdraw(Player player, ItemStack item, long amount) {
         if (amount == 0) return false;
-        BigDecimal before = currentBalance(player);
+        UUID playerId = player.getUniqueId();
+        BigDecimal before = currentBalance(playerId);
         TransactionLogger.logBalance(player, before, "before withdraw");
-        boolean success = VaultUtil.withdraw(player.getUniqueId(), amount);
+        VaultUtil.Payment payment = VaultUtil.withdrawChecked(playerId, amount, "wallet withdrawal");
+        if (payment == VaultUtil.Payment.INDETERMINATE) {
+            TransactionLogger.logNote(player, "WITHDRAW " + item.getType() + " x" + item.getAmount() + " for " + amount
+                    + " coppets UNCERTAIN, no coins handed out, manual reconciliation needed");
+            TransactionLogger.logBalance(player, currentBalance(playerId), "after uncertain withdraw");
+            uncertain(player, "<yellow>We could not confirm your withdrawal, so no coins were handed out."
+                    + " Please contact staff to check your balance.");
+            return false;
+        }
+        boolean success = payment.succeeded();
         TransactionLogger.logWithdraw(player, item, amount, success);
-        TransactionLogger.logBalance(player, currentBalance(player), "after withdraw");
+        TransactionLogger.logBalance(player, currentBalance(playerId), "after withdraw");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () ->
                     player.sendMessage(MM.deserialize("<red>Withdrawal failed — please contact an administrator.")));
@@ -324,13 +348,23 @@ public class VaultGUI {
         return success;
     }
 
-    private void sell(Player player, ItemStack item) {
-        int value = priceAppraiser.appraise(item);
-        BigDecimal before = currentBalance(player);
+    private void sell(Player player, ItemStack item, int value) {
+        UUID playerId = player.getUniqueId();
+        BigDecimal before = currentBalance(playerId);
         TransactionLogger.logBalance(player, before, "before sell");
-        boolean success = VaultUtil.deposit(player.getUniqueId(), value);
+        VaultUtil.Payment payment = VaultUtil.depositChecked(playerId, value, "wallet sale");
+        if (payment == VaultUtil.Payment.INDETERMINATE) {
+            // The payout may have landed; returning the goods too could duplicate them.
+            TransactionLogger.logNote(player, "SELL " + item.getType() + " x" + item.getAmount() + " for " + value
+                    + " coppets UNCERTAIN, items withheld, manual reconciliation needed");
+            TransactionLogger.logBalance(player, currentBalance(playerId), "after uncertain sell");
+            uncertain(player, "<yellow>We could not confirm your sale. Your items were kept back so they"
+                    + " cannot be paid for twice; please contact staff to check your balance.");
+            return;
+        }
+        boolean success = payment.succeeded();
         TransactionLogger.logSell(player, item, value, success);
-        TransactionLogger.logBalance(player, currentBalance(player), "after sell");
+        TransactionLogger.logBalance(player, currentBalance(playerId), "after sell");
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
                 if (ItemUtil.giveOrDrop(player, item)) {
@@ -347,9 +381,13 @@ public class VaultGUI {
         soldItemsManager.addSoldValue(player, value);
     }
 
-    private static BigDecimal currentBalance(Player player) {
-        if (WIIC.getEcon() == null) return BigDecimal.ZERO;
-        BigDecimal balance = WIIC.getEcon().balance("iConomyUnlocked", player.getUniqueId());
+    /** Tells the player a money movement could not be confirmed. Safe to call off the main thread. */
+    private static void uncertain(Player player, String message) {
+        Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> player.sendMessage(MM.deserialize(message)));
+    }
+
+    private static BigDecimal currentBalance(UUID playerId) {
+        BigDecimal balance = VaultUtil.balance(playerId);
         return balance != null ? balance : BigDecimal.ZERO;
     }
 }

@@ -436,6 +436,9 @@ public class ListingPriceGUI {
                         "<red>You can't afford the listing fee.");
                 case ERROR -> returnItem(player, snapshot, held, "market-error",
                         "<red>The market ledgers are in disarray. Try again later.");
+                case UNCERTAIN -> returnItem(player, snapshot, held, "listing-fee-uncertain",
+                        "<yellow>The fence could not confirm whether your listing fee was taken. Nothing was"
+                                + " listed; please contact staff to check your balance.");
             }
             onBack.run();
         });

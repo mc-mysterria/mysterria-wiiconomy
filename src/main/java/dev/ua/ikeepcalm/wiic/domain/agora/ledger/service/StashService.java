@@ -1,6 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.ledger.service;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.MarketDatabase;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.StashDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.TransactionDao;
@@ -11,6 +12,7 @@ import org.bukkit.inventory.ItemStack;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -47,8 +49,9 @@ public class StashService {
      * failure to reach them never becomes a failure to keep them.
      */
     public void deposit(UUID owner, ItemStack item, String source, String ref, Consumer<Boolean> callback) {
+        String safeSource = source == null ? "unknown" : source;
         StashItem row = new StashItem(UUID.randomUUID(), owner, item.serializeAsBytes(),
-                item.getType(), item.getAmount(), null, source, ref, System.currentTimeMillis());
+                item.getType(), item.getAmount(), null, safeSource, ref, System.currentTimeMillis());
         db.transactionThenMain(conn -> {
             StashDao.insert(conn, row);
             return true;
@@ -73,6 +76,12 @@ public class StashService {
      */
     public void claim(Player owner, List<UUID> ids, BiConsumer<Integer, Integer> callback) {
         UUID uuid = owner.getUniqueId();
+        // Immutable snapshot taken before the lock: the caller's list may be mutable or hold
+        // nulls, and the async membership check below must see exactly this selection.
+        List<UUID> requestedIds = ids == null ? List.of() : ids.stream()
+                .filter(Objects::nonNull)
+                .limit(BATCH_LIMIT)
+                .toList();
         if (!IN_FLIGHT.add(uuid)) {
             callback.accept(0, -1);
             return;
@@ -84,7 +93,7 @@ public class StashService {
             callback.accept(0, -1);
             return;
         }
-        int budget = Math.min(freeSlots, ids.size());
+        int budget = Math.min(freeSlots, requestedIds.size());
 
         db.transactionThenMain(conn -> {
             List<StashItem> claimed = new ArrayList<>();
@@ -92,7 +101,7 @@ public class StashService {
             List<StashItem> rows = StashDao.unclaimedByOwner(conn, uuid, BATCH_LIMIT);
             for (StashItem row : rows) {
                 if (claimed.size() >= budget) break;
-                if (!ids.contains(row.id())) continue;
+                if (!requestedIds.contains(row.id())) continue;
                 if (StashDao.markClaimed(conn, row.id(), now)) {
                     claimed.add(row);
                     TransactionDao.log(conn, "CLAIM_STASH", uuid, null, null, 0,
@@ -113,6 +122,12 @@ public class StashService {
                     item = ItemStack.deserializeBytes(row.itemBytes());
                 } catch (Exception e) {
                     plugin.getLogger().severe("Corrupt stash item " + row.id() + " for " + owner.getName() + ": " + e);
+                    undeliverable.add(row.id());
+                    continue;
+                }
+                if (ItemInspector.containsTemporaryItem(item)) {
+                    plugin.getLogger().warning("Withheld temporary stash item " + row.id() + " for " + owner.getUniqueId());
+                    // Retain the original row for review; do not silently burn paid goods.
                     undeliverable.add(row.id());
                     continue;
                 }

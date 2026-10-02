@@ -150,6 +150,9 @@ public class PurchaseConfirmGUI {
             case PLAYER_OFFLINE -> { /* player already left — refund is logged, nothing to show them */ }
             case NOT_PURCHASABLE, INVALID_AMOUNT, WITHDRAW_FAILED ->
                     player.sendMessage(MM.deserialize(services.config().message("purchase-failed", "<red>Purchase failed — please contact an administrator.")));
+            case UNCERTAIN -> player.sendMessage(MM.deserialize(services.config().message("purchase-uncertain",
+                    "<yellow>The shop could not confirm whether you were charged, so nothing was delivered."
+                            + " Please contact staff to check your balance before trying again.")));
         }
         onBack.run();
     }

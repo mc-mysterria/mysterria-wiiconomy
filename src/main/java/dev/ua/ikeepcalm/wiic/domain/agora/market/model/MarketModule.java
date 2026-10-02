@@ -147,7 +147,7 @@ public class MarketModule {
                     new MarketNpcListener(config, npcService, this::openGui), plugin);
         }
 
-        this.sweeper = new ExpirySweeper(plugin, config, db);
+        this.sweeper = new ExpirySweeper(plugin, config, db, journal);
         sweeper.start();
         plugin.getLogger().info("Underground Market enabled (world: " + config.worldName() + ")");
     }
