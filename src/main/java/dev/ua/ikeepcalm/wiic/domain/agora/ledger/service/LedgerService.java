@@ -117,6 +117,7 @@ public class LedgerService {
                 });
                 return;
             }
+
             Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
                 BigDecimal balanceBefore = balance(uuid);
                 VaultUtil.Payment payment = VaultUtil.deposit(uuid, sum);

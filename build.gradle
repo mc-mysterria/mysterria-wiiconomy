@@ -100,20 +100,9 @@ dependencies {
         exclude group: '*', module: '*'
     }
     compileOnly 'com.incredibleplugins:lands-api:8.0.0'
-    def undeadPostmansApiJar = project.findProperty('undeadPostmansApiJar') ?: System.getenv('UNDEAD_POSTMANS_API_JAR')
-    if (undeadPostmansApiJar) {
-        compileOnly files(undeadPostmansApiJar)
-    } else {
-        compileOnly 'dev.djecka2k19:undeadpostmans-api:1.0.0-SNAPSHOT'
-    }
+    compileOnly 'dev.djecka2k19:undeadpostmans-api:1.0.0-SNAPSHOT'
     compileOnly 'net.thenextlvl:worlds:4.2.2'
-    // A local API jar is useful for clean-room CI and mirrors the optional Undead API override.
-    def coiApiJar = project.findProperty('coiApiJar') ?: System.getenv('COI_API_JAR')
-    if (coiApiJar) {
-        compileOnly files(coiApiJar)
-    } else {
-        compileOnly 'dev.ua.ikeepcalm:circle-of-imagination-api:1.4.8-SNAPSHOT'
-    }
+    compileOnly 'dev.ua.ikeepcalm:circle-of-imagination-api:1.4.3-SNAPSHOT'
     implementation 'dev.ua.ikeepcalm.mysterria:audit-client:1.0.0'
 }
 

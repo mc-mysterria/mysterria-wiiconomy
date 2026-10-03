@@ -255,7 +255,6 @@ debug:
   villager-listener: false
 # Per-player text history in logs/<player>.log. Existing staff tooling reads these files,
 # so the export stays on by default. The market transactions table, recovery journal and
-# shared audit are active either way. Planned: flip to false once staff tooling reads the
-# shared audit instead.
+# shared audit are active either way.
 logging:
   legacy-text-history: true

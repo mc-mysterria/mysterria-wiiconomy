@@ -332,7 +332,7 @@ public class VaultGUI {
                             + " (" + player.getUniqueId() + ") — deposit failed and they had already left");
                 }
             });
-            WIIC.INSTANCE.getLogger().warning("Deposit of " + amount + " coppets failed for " + player.getName() + " (" + audit.playerId() + ")");
+            WIIC.INSTANCE.getLogger().warning("Deposit of " + amount + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
         }
     }
 
@@ -355,7 +355,7 @@ public class VaultGUI {
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () ->
                     player.sendMessage(MM.deserialize("<red>Withdrawal failed — please contact an administrator.")));
-            WIIC.INSTANCE.getLogger().warning("Withdraw of " + amount + " coppets failed for " + player.getName() + " (" + audit.playerId() + ")");
+            WIIC.INSTANCE.getLogger().warning("Withdraw of " + amount + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
         }
         return new Debit(payment, before, after);
     }
@@ -391,7 +391,7 @@ public class VaultGUI {
                             + ") — sale failed and they had already left");
                 }
             });
-            WIIC.INSTANCE.getLogger().warning("Deposit of " + value + " coppets failed for " + player.getName() + " (" + audit.playerId() + ")");
+            WIIC.INSTANCE.getLogger().warning("Deposit of " + value + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
             return;
         }
         soldItemsManager.addSoldValue(player, value);
