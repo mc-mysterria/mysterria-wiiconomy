@@ -14,6 +14,7 @@ repositories {
     mavenLocal {
         content {
             includeGroup 'dev.djecka2k19'
+            includeGroup 'dev.ua.ikeepcalm.mysterria'
         }
     }
 
@@ -72,6 +73,11 @@ shadowJar {
     archiveBaseName.set(project.name)
     archiveClassifier.set('')
     archiveVersion.set(project.version)
+    relocate 'dev.ua.ikeepcalm.mysterria.audit', 'dev.ua.ikeepcalm.wiic.libs.audit'
+}
+
+jar {
+    enabled = false
 }
 
 tasks {
@@ -97,6 +103,7 @@ dependencies {
     compileOnly 'dev.djecka2k19:undeadpostmans-api:1.0.0-SNAPSHOT'
     compileOnly 'net.thenextlvl:worlds:4.2.2'
     compileOnly 'dev.ua.ikeepcalm:circle-of-imagination-api:1.4.3-SNAPSHOT'
+    implementation 'dev.ua.ikeepcalm.mysterria:audit-client:1.0.0'
 }
 
 
@@ -125,6 +132,10 @@ processResources {
     filesMatching('plugin.yml') {
         expand props
     }
+}
+
+jar {
+    enabled = false
 }
 
 tasks {

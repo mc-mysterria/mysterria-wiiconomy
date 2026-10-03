@@ -37,8 +37,8 @@ public class MarketJournal {
     /**
      * {@code BUY}/{@code CLAIM} are <i>intents</i>, written before money moves;
      * {@code BUY_PAID}/{@code CLAIM_DEPOSITED} are the matching proofs, written after.
-     * Recovery only ever completes a flow it can prove was paid for — an intent with no
-     * proof is unwound, never guessed at.
+     * Recovery only ever completes a flow it can prove was paid for. An intent with no
+     * proof is neither completed nor refunded: its goods or proceeds stay withheld for staff.
      */
     public enum Type { LIST, BUY, BUY_PAID, CLAIM, CLAIM_DEPOSITED, STASH_CLAIM }
 
