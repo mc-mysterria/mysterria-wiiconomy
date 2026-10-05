@@ -1,5 +1,6 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.ledger.service;
 
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.CourierDao;
@@ -12,6 +13,7 @@ import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.StashItem;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
+import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import org.bukkit.Bukkit;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
 import org.bukkit.entity.Player;
@@ -20,6 +22,8 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.Set;
 import java.util.UUID;
+import java.util.Map;
+import java.math.BigDecimal;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -97,6 +101,7 @@ public class CourierService {
      */
     public void deposit(Player player, ItemStack horn, Consumer<DepositResult> callback) {
         UUID uuid = player.getUniqueId();
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("courier-contract", uuid);
         if (!hook.available()) {
             callback.accept(DepositResult.UNAVAILABLE);
             return;
@@ -130,15 +135,24 @@ public class CourierService {
         }, stored -> {
             if (!stored) {
                 giveBack(player, snapshot);
+                MysterriaAuditBridge.emit("courier.contract.failed", false, uuid, uuid, null, identity,
+                        "courier contract already exists", MysterriaAuditBridge.metadata(
+                                Map.of("courier_type", courierType), MysterriaAuditBridge.itemMetadata(snapshot)));
                 callback.accept(DepositResult.ALREADY_CONTRACTED);
                 return;
             }
             contracted.add(uuid);
             TransactionLogger.logNote(player, "MARKET COURIER horn deposited (" + courierType + ")");
+            MysterriaAuditBridge.emit("courier.contract.created", true, uuid, uuid, null, identity,
+                    "courier contract committed", MysterriaAuditBridge.metadata(
+                            Map.of("courier_type", courierType), MysterriaAuditBridge.itemMetadata(snapshot)));
             callback.accept(DepositResult.SUCCESS);
         }, error -> {
             giveBack(player, snapshot);
             plugin.getLogger().severe("Courier deposit failed for " + player.getName() + ": " + error);
+            MysterriaAuditBridge.emit("courier.contract.failed", false, uuid, uuid, null, identity,
+                    "courier contract write failed", MysterriaAuditBridge.metadata(
+                            Map.of("courier_type", courierType), MysterriaAuditBridge.itemMetadata(snapshot)));
             callback.accept(DepositResult.ERROR);
         });
     }
@@ -150,6 +164,7 @@ public class CourierService {
      */
     public void withdraw(Player player, Consumer<Boolean> callback) {
         UUID uuid = player.getUniqueId();
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("courier-contract", uuid);
         if (player.getInventory().firstEmpty() == -1) {
             callback.accept(false);
             return;
@@ -158,6 +173,8 @@ public class CourierService {
         // temporary horns stay available for staff review instead of entering circulation.
         db.transactionThenMain(conn -> CourierDao.find(conn, uuid), contract -> {
             if (contract == null) {
+                MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
+                        "no courier contract to withdraw", Map.of());
                 callback.accept(false);
                 return;
             }
@@ -166,11 +183,18 @@ public class CourierService {
                 horn = ItemStack.deserializeBytes(contract.hornItemBytes());
                 if (ItemInspector.containsTemporaryItem(horn)) {
                     plugin.getLogger().warning("Withheld temporary courier horn for " + uuid);
+                    MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
+                            "escrowed horn temporary; contract kept for review", MysterriaAuditBridge.metadata(
+                                    Map.of("courier_type", contract.courierType(), "contract_deleted", false),
+                                    MysterriaAuditBridge.itemMetadata(horn)));
                     callback.accept(false);
                     return;
                 }
             } catch (Exception e) {
                 plugin.getLogger().severe("Corrupt escrowed horn for " + player.getName() + ": " + e);
+                MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
+                        "escrowed horn corrupt; contract kept for review",
+                        Map.of("courier_type", contract.courierType(), "contract_deleted", false));
                 callback.accept(false);
                 return;
             }
@@ -183,19 +207,28 @@ public class CourierService {
                 return true;
             }, removed -> {
                 if (!removed) {
+                    MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
+                            "courier contract changed before withdraw", Map.of("courier_type", contract.courierType()));
                     callback.accept(false);
                     return;
                 }
                 contracted.remove(uuid);
                 giveBack(player, horn);
                 TransactionLogger.logNote(player, "MARKET COURIER horn withdrawn (" + contract.courierType() + ")");
+                MysterriaAuditBridge.emit("courier.contract.withdrawn", true, uuid, uuid, null, identity,
+                        "courier contract withdrawn", MysterriaAuditBridge.metadata(
+                                Map.of("courier_type", contract.courierType()), MysterriaAuditBridge.itemMetadata(horn)));
                 callback.accept(true);
             }, error -> {
                 plugin.getLogger().severe("Courier withdraw failed for " + player.getName() + ": " + error);
+                MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
+                        "courier contract withdraw failed", Map.of());
                 callback.accept(false);
             });
         }, error -> {
             plugin.getLogger().severe("Courier read failed for " + player.getName() + ": " + error);
+            MysterriaAuditBridge.emit("courier.contract.withdraw_failed", false, uuid, uuid, null, identity,
+                    "courier contract read failed", Map.of());
             callback.accept(false);
         });
     }
@@ -213,7 +246,9 @@ public class CourierService {
      * @param itemBytes  the same item blob, so no re-read is needed.
      */
     public void tryDeliver(Player buyer, UUID stashId, byte[] itemBytes,
-                           UUID sellerUuid, String sellerName, Consumer<Boolean> callback) {
+                           UUID sellerUuid, String sellerName,
+                           MysterriaAuditBridge.AuditIdentity identity,
+                           Consumer<Boolean> callback) {
         UUID uuid = buyer.getUniqueId();
         if (!contracted.contains(uuid) || !hook.available()) {
             callback.accept(false);
@@ -222,7 +257,7 @@ public class CourierService {
 
         long fee = config.courierFee();
         if (fee <= 0) {
-            claimAndDispatch(buyer, stashId, itemBytes, sellerUuid, sellerName, 0, callback);
+            claimAndDispatch(buyer, stashId, itemBytes, sellerUuid, sellerName, 0, identity, callback);
             return;
         }
         // Optional per-delivery sink. Affordability is checked here but the money is only
@@ -232,15 +267,26 @@ public class CourierService {
         VaultUtil.getBalance(uuid).thenAccept(balance -> Bukkit.getScheduler().runTask(plugin, () -> {
             if (balance < fee) {
                 TransactionLogger.logNote(buyer, "MARKET COURIER fee of " + fee + " coppets unaffordable");
+                emitFeeDenied(buyer, stashId, identity, fee, balance);
                 callback.accept(false);
                 return;
             }
-            claimAndDispatch(buyer, stashId, itemBytes, sellerUuid, sellerName, fee, callback);
+            claimAndDispatch(buyer, stashId, itemBytes, sellerUuid, sellerName, fee, identity, callback);
         }));
     }
 
+    private static void emitFeeDenied(Player buyer, UUID stashId,
+                                      MysterriaAuditBridge.AuditIdentity identity, long fee, double balance) {
+        UUID uuid = buyer.getUniqueId();
+        MysterriaAuditBridge.emit("courier.fee.denied", AuditOutcome.DENIED, uuid, uuid, stashId, identity,
+                "courier fee unaffordable",
+                Map.of("fee", fee, "currency", "coppets", "stash_id", stashId.toString(), "balance", balance));
+    }
+
     private void claimAndDispatch(Player buyer, UUID stashId, byte[] itemBytes,
-                                  UUID sellerUuid, String sellerName, long fee, Consumer<Boolean> callback) {
+                                  UUID sellerUuid, String sellerName, long fee,
+                                  MysterriaAuditBridge.AuditIdentity identity,
+                                  Consumer<Boolean> callback) {
         UUID uuid = buyer.getUniqueId();
         db.transactionThenMain(conn -> {
             CourierContract contract = CourierDao.find(conn, uuid);
@@ -250,6 +296,10 @@ public class CourierService {
             return contract;
         }, contract -> {
             if (contract == null) {
+                MysterriaAuditBridge.emit("courier.delivery.failed", false, uuid, sellerUuid, stashId, identity,
+                        "no courier contract or stash row already claimed", MysterriaAuditBridge.moneyMetadata(0,
+                                Map.of("fee", fee, "courier_type", "unknown",
+                                        "stash_id", stashId.toString())));
                 callback.accept(false);
                 return;
             }
@@ -259,6 +309,10 @@ public class CourierService {
                 if (ItemInspector.containsTemporaryItem(ItemStack.deserializeBytes(contract.hornItemBytes()))) {
                     plugin.getLogger().warning("Withheld delivery using temporary courier horn for " + uuid);
                     revertClaim(stashId);
+                    MysterriaAuditBridge.emit("courier.delivery.failed", false, uuid, sellerUuid, stashId, identity,
+                            "temporary courier horn; stash claim reverted", MysterriaAuditBridge.moneyMetadata(0,
+                                    MysterriaAuditBridge.metadata(Map.of("fee", fee, "courier_type", contract.courierType(),
+                                            "stash_id", stashId.toString()), MysterriaAuditBridge.itemMetadata(item))));
                     callback.accept(false);
                     return;
                 }
@@ -266,6 +320,10 @@ public class CourierService {
                 plugin.getLogger().severe("Corrupt purchase blob for courier delivery to "
                         + buyer.getName() + ": " + e);
                 revertClaim(stashId);
+                MysterriaAuditBridge.emit("courier.delivery.failed", false, uuid, sellerUuid, stashId, identity,
+                        "purchase item blob corrupt; stash claim reverted", MysterriaAuditBridge.moneyMetadata(0,
+                                Map.of("fee", fee, "courier_type", contract.courierType(),
+                                        "stash_id", stashId.toString())));
                 callback.accept(false);
                 return;
             }
@@ -273,6 +331,10 @@ public class CourierService {
             if (ItemInspector.containsTemporaryItem(item)) {
                 plugin.getLogger().warning("Withheld temporary courier stash item " + stashId);
                 revertClaim(stashId);
+                MysterriaAuditBridge.emit("courier.delivery.failed", false, uuid, sellerUuid, stashId, identity,
+                        "temporary item; stash claim reverted", MysterriaAuditBridge.moneyMetadata(0,
+                                MysterriaAuditBridge.metadata(Map.of("fee", fee, "courier_type", contract.courierType(),
+                                        "stash_id", stashId.toString()), MysterriaAuditBridge.itemMetadata(item))));
                 callback.accept(false);
                 return;
             }
@@ -284,16 +346,30 @@ public class CourierService {
             boolean dispatched = hook.dispatch(sellerUuid, sellerName, uuid, buyer.getName(), item, tier);
             if (!dispatched) {
                 revertClaim(stashId);
+                MysterriaAuditBridge.emit("courier.delivery.failed", false, uuid, sellerUuid, stashId, identity,
+                        "courier rejected delivery", MysterriaAuditBridge.moneyMetadata(0,
+                                MysterriaAuditBridge.metadata(
+                                        Map.of("fee", fee, "courier_type", tier,
+                                                "stash_id", stashId.toString()),
+                                        MysterriaAuditBridge.itemMetadata(item))));
                 callback.accept(false);
                 return;
             }
-            chargeFee(buyer, uuid, fee);
+            chargeFee(buyer, uuid, fee, identity);
             TransactionLogger.logNote(buyer, "MARKET COURIER delivery of " + item.getType().name()
                     + " x" + item.getAmount() + " via " + tier
                     + (fee > 0 ? " (fee " + fee + ")" : ""));
+            MysterriaAuditBridge.emit("courier.delivery.dispatched", true, uuid, sellerUuid, stashId, identity,
+                    "courier accepted delivery", MysterriaAuditBridge.moneyMetadata(0,
+                            MysterriaAuditBridge.metadata(Map.of("fee", fee, "courier_type", tier,
+                                            "stash_id", stashId.toString()), MysterriaAuditBridge.itemMetadata(item))));
             callback.accept(true);
         }, error -> {
             plugin.getLogger().severe("Courier claim failed for " + buyer.getName() + ": " + error);
+            MysterriaAuditBridge.emit("courier.delivery.failed", false, uuid, sellerUuid, stashId, identity,
+                    "courier claim failed", MysterriaAuditBridge.moneyMetadata(0,
+                            Map.of("fee", fee, "courier_type", "unknown",
+                                    "stash_id", stashId.toString())));
             callback.accept(false);
         });
     }
@@ -317,15 +393,29 @@ public class CourierService {
      * succeeding — the delivery is already done and the sink is optional — so a failure is
      * logged and forgiven rather than unwound.
      */
-    private void chargeFee(Player player, UUID uuid, long fee) {
+    private void chargeFee(Player player, UUID uuid, long fee,
+                           MysterriaAuditBridge.AuditIdentity identity) {
         if (fee <= 0) return;
+        // Entity position may only be read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            BigDecimal balanceBefore = VaultUtil.balance(uuid);
             // An uncertain fee is reported by the checked helper and, like a refusal, is
             // neither retried nor refunded: the delivery is already dispatched.
             VaultUtil.Payment payment = VaultUtil.withdrawChecked(uuid, fee, "courier delivery fee");
-            if (payment == VaultUtil.Payment.FAILED) {
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
+                MysterriaAuditBridge.emitPaymentIndeterminate("courier.fee", uuid, uuid, null, identity, fee,
+                        balanceBefore, VaultUtil.balance(uuid), MysterriaAuditBridge.metadata(Map.of("fee", fee), location));
+            } else if (!payment.succeeded()) {
                 TransactionLogger.logNote(player, "MARKET COURIER fee of " + fee + " coppets went uncollected");
+                MysterriaAuditBridge.emit("courier.fee.failed", false, uuid, uuid, null, identity,
+                        "courier fee uncollected", MysterriaAuditBridge.moneyMetadata(0,
+                                balanceBefore, VaultUtil.balance(uuid), MysterriaAuditBridge.metadata(Map.of("fee", fee), location)));
                 plugin.getLogger().warning("Courier fee of " + fee + " coppets could not be collected from " + uuid);
+            } else {
+                MysterriaAuditBridge.emit("courier.fee.collected", true, uuid, uuid, null, identity,
+                        "courier fee collected", MysterriaAuditBridge.moneyMetadata(-fee,
+                                balanceBefore, VaultUtil.balance(uuid), MysterriaAuditBridge.metadata(Map.of("fee", fee), location)));
             }
         });
     }

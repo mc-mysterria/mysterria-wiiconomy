@@ -62,6 +62,7 @@ public class MarketConfig {
      */
     private volatile @Nullable MarketBounds boundsCache;
     private volatile boolean boundsParsed;
+    private volatile boolean lastSaveOk = true;
 
     /** Parsed {@code containment.allow-internal-causes}, consulted on every teleport. */
     private volatile @Nullable Set<String> internalCauseCache;
@@ -105,9 +106,16 @@ public class MarketConfig {
     public void save() {
         try {
             config.save(file);
+            lastSaveOk = true;
         } catch (IOException e) {
+            lastSaveOk = false;
             plugin.getLogger().severe("Failed to save market.yml: " + e.getMessage());
         }
+    }
+
+    /** Whether the most recent {@link #save()} reached the disk; read right after the call. */
+    public boolean lastSaveSucceeded() {
+        return lastSaveOk;
     }
 
     // -------------------------------------------------------------------------

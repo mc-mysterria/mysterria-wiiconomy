@@ -76,8 +76,17 @@ public class MarketNpcService implements PlotVendorSpawner {
         if (npc != null) npc.destroy();
     }
 
+    /** The NPC {@link #removeNearestNpc} took down, as plain values. */
+    public record RemovedNpc(int id) {
+    }
+
     /** Removes the nearest market NPC within {@code radius} blocks of {@code location}. */
     public boolean removeNearest(Location location, double radius) {
+        return removeNearestNpc(location, radius) != null;
+    }
+
+    /** As {@link #removeNearest}, but says which NPC was removed; null when none was in range. */
+    public @Nullable RemovedNpc removeNearestNpc(Location location, double radius) {
         NPC nearest = null;
         double best = radius * radius;
         for (NPC npc : CitizensAPI.getNPCRegistry()) {
@@ -89,8 +98,9 @@ public class MarketNpcService implements PlotVendorSpawner {
                 nearest = npc;
             }
         }
-        if (nearest == null) return false;
+        if (nearest == null) return null;
+        RemovedNpc removed = new RemovedNpc(nearest.getId());
         nearest.destroy();
-        return true;
+        return removed;
     }
 }

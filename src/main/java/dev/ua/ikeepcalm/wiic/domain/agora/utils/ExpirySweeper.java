@@ -10,12 +10,15 @@ import dev.ua.ikeepcalm.wiic.domain.agora.db.TransactionDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.Listing;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.StashItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.MarketJournal;
+import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDate;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -79,23 +82,36 @@ public class ExpirySweeper {
                 .collect(Collectors.toSet());
         db.submit(conn -> {
             int released = ListingDao.releaseStaleReservations(conn, now - config.reservationTimeoutMs(), journaled);
-            if (released > 0) plugin.getLogger().warning("Market sweeper released " + released + " stale reservations");
+            if (released > 0) {
+                plugin.getLogger().warning("Market sweeper released " + released + " stale reservations");
+                // The release is one UPDATE that reports only a count, so the row is a batch row.
+                Map<String, Object> batch = new LinkedHashMap<>();
+                batch.put("released", released);
+                batch.put("timeout_ms", config.reservationTimeoutMs());
+                batch.put("journal_protected", journaled.size());
+                MysterriaAuditBridge.emit("agora.reservations.released", true, null, null, null,
+                        MysterriaAuditBridge.randomIdentity("sweeper"), "stale reservations released", batch);
+            }
 
             List<Listing> expirable = ListingDao.findExpirable(conn, now, EXPIRE_BATCH);
             for (Listing listing : expirable) {
                 boolean auto = conn.getAutoCommit();
                 conn.setAutoCommit(false);
+                boolean expired = false;
                 try {
                     if (ListingDao.expire(conn, listing.id())) {
                         StashDao.insert(conn, new StashItem(UUID.randomUUID(), listing.sellerUuid(),
                                 listing.itemBytes(), listing.material(), listing.amount(), listing.displayName(),
                                 StashItem.SOURCE_EXPIRED, listing.id().toString(), now));
                         TransactionDao.log(conn, "EXPIRE", listing.sellerUuid(), null, listing.id(), listing.price(), null);
+                        expired = true;
                     }
                     conn.commit();
+                    if (expired) emitExpiry(listing, true, null);
                 } catch (Exception e) {
                     conn.rollback();
                     plugin.getLogger().severe("Failed to expire listing " + listing.id() + ": " + e);
+                    emitExpiry(listing, false, "expiry failed: " + e.getClass().getSimpleName());
                 } finally {
                     conn.setAutoCommit(auto);
                 }
@@ -105,5 +121,21 @@ public class ExpirySweeper {
             }
             return null;
         });
+    }
+
+    /**
+     * Row for a listing moved to the seller's stash (or that could not be). Runs on the DB
+     * thread after the commit; the item projection is read from the serialized bytes.
+     */
+    private static void emitExpiry(Listing listing, boolean success, @Nullable String failure) {
+        Map<String, Object> metadata = new LinkedHashMap<>(MysterriaAuditBridge.itemMetadata(listing.itemBytes()));
+        metadata.put("listing_id", listing.id().toString());
+        metadata.put("price", listing.price());
+        metadata.put("destination", "stash");
+        metadata.put("stash_source", StashItem.SOURCE_EXPIRED);
+        if (listing.plotId() != null) metadata.put("plot_id", listing.plotId());
+        MysterriaAuditBridge.emit(success ? "agora.listing.expired" : "agora.listing.expire_failed", success, null,
+                listing.sellerUuid(), null, MysterriaAuditBridge.identity("agora-listing", listing.id()),
+                success ? "listing expired to stash" : failure, metadata);
     }
 }

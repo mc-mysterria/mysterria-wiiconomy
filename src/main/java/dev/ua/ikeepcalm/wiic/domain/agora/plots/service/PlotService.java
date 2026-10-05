@@ -1,5 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.plots.service;
 
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditRisk;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.MarketDatabase;
@@ -11,9 +13,11 @@ import dev.ua.ikeepcalm.wiic.domain.agora.plots.model.PlotRental;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.StashItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.npc.model.PlotVendorSpawner;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
+import dev.ua.ikeepcalm.wiic.utils.AuditActor;
 import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import dev.ua.ikeepcalm.wiic.utils.WorldUtil;
+import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -48,6 +52,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.math.BigDecimal;
 
 /**
  * Owns prestige plots: the config-defined regions, who rents them, build rights
@@ -90,6 +95,7 @@ public class PlotService {
     private final Map<String, Long> overdueNotified = new ConcurrentHashMap<>();
 
     private static final long OVERDUE_NOTICE_MS = 60L * 60L * 1000L;
+    private static final int MAX_ITEM_SUMMARIES = 6;
 
     private BukkitTask upkeepTask;
 
@@ -226,6 +232,7 @@ public class PlotService {
      */
     public void rent(Player player, String plotId, Consumer<RentResult> callback) {
         UUID uuid = player.getUniqueId();
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.randomIdentity("plot-rent");
         if (!enabled()) {
             callback.accept(RentResult.DISABLED);
             return;
@@ -252,7 +259,10 @@ public class PlotService {
         long now = System.currentTimeMillis();
         long paidUntil = now + config.plotPeriodMs();
 
+        // Entity position may only be read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            BigDecimal balanceBefore = VaultUtil.balance(uuid);
             // Indeterminate counts as not paid: no plot, no refund, lock released.
             VaultUtil.Payment payment = price > 0
                     ? VaultUtil.withdrawChecked(uuid, price, "plot rent of " + plotId)
@@ -262,7 +272,22 @@ public class PlotService {
                 TransactionLogger.logNote(player, "MARKET PLOT rent withdraw of " + price + " coppets "
                         + (uncertain ? "UNCERTAIN for " + plotId + ", manual reconciliation needed" : "failed"));
                 finish(uuid, callback, uncertain ? RentResult.UNCERTAIN : RentResult.INSUFFICIENT_FUNDS);
+                if (uncertain) MysterriaAuditBridge.emitPaymentIndeterminate(
+                        "plots.rent", uuid, uuid, null, identity, price, balanceBefore, VaultUtil.balance(uuid),
+                        MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location));
+                else MysterriaAuditBridge.emit("plots.rent.failed", false, uuid, uuid, null, identity,
+                        "rent withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
+                                balanceBefore, VaultUtil.balance(uuid),
+                                MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location)));
                 return;
+            }
+            BigDecimal balanceAfterCharge = VaultUtil.balance(uuid);
+            if (price > 0) {
+                MysterriaAuditBridge.emit("plots.rent.charge_pending", AuditOutcome.ATTEMPTED,
+                        uuid, uuid, null, identity, "rent charged; plot claim pending",
+                        MysterriaAuditBridge.moneyMetadata(-price, balanceBefore, balanceAfterCharge,
+                                MysterriaAuditBridge.metadata(
+                                        Map.of("plot_id", plotId, "operation", "rent"), location)));
             }
             db.transactionThenMain(conn -> {
                 if (PlotDao.countByRenter(conn, uuid) >= config.plotMaxPerPlayer()) {
@@ -277,15 +302,22 @@ public class PlotService {
                 rentals.put(plotId, rental);
                 TransactionLogger.logNote(player, "MARKET PLOT rent " + plotId + " for " + price
                         + " coppets until " + paidUntil);
+                MysterriaAuditBridge.emit("plots.rent.committed", true, uuid, uuid, null, identity,
+                        "plot rent committed", MysterriaAuditBridge.moneyMetadata(-price,
+                                balanceBefore, balanceAfterCharge, Map.of("plot_id", plotId, "paid_until", paidUntil)));
                 spawnVendor(region, plotId);
                 IN_FLIGHT.remove(uuid);
                 callback.accept(RentResult.SUCCESS);
             }, error -> {
                 RentResult result = error instanceof PlotDenied denied ? denied.result : RentResult.ERROR;
-                refund(player, uuid, price, "plot claim rejected: " + result);
                 if (result == RentResult.ERROR) {
                     plugin.getLogger().severe("Plot rent failed for " + player.getName() + " on " + plotId + ": " + error);
                 }
+                MysterriaAuditBridge.emit("plots.rent.failed", false, uuid, uuid, null, identity,
+                        result.name().toLowerCase(), MysterriaAuditBridge.moneyMetadata(-price,
+                                balanceBefore, balanceAfterCharge, Map.of("plot_id", plotId)));
+                refund(player, uuid, plotId, "rent", price, "plot claim rejected: " + result, identity,
+                        location);
                 finish(uuid, callback, result);
             });
         });
@@ -294,6 +326,7 @@ public class PlotService {
     /** Pays for one more period on a plot the player already holds. */
     public void extend(Player player, String plotId, Consumer<RentResult> callback) {
         UUID uuid = player.getUniqueId();
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.randomIdentity("plot-upkeep");
         PlotRental current = rentals.get(plotId);
         if (current == null || !current.renterUuid().equals(uuid)) {
             callback.accept(RentResult.UNKNOWN_PLOT);
@@ -308,7 +341,10 @@ public class PlotService {
         long now = System.currentTimeMillis();
         long period = config.plotPeriodMs();
 
+        // Entity position may only be read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(player);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            BigDecimal balanceBefore = VaultUtil.balance(uuid);
             // Indeterminate counts as not paid: no extension, no refund, lock released.
             VaultUtil.Payment payment = price > 0
                     ? VaultUtil.withdrawChecked(uuid, price, "plot upkeep of " + plotId)
@@ -318,7 +354,22 @@ public class PlotService {
                 TransactionLogger.logNote(player, "MARKET PLOT upkeep withdraw of " + price + " coppets "
                         + (uncertain ? "UNCERTAIN for " + plotId + ", manual reconciliation needed" : "failed"));
                 finish(uuid, callback, uncertain ? RentResult.UNCERTAIN : RentResult.INSUFFICIENT_FUNDS);
+                if (uncertain) MysterriaAuditBridge.emitPaymentIndeterminate(
+                        "plots.rent.upkeep", uuid, uuid, null, identity, price, balanceBefore, VaultUtil.balance(uuid),
+                        MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location));
+                else MysterriaAuditBridge.emit("plots.rent.upkeep_failed", false, uuid, uuid, null, identity,
+                        "upkeep withdrawal failed", MysterriaAuditBridge.moneyMetadata(0,
+                                balanceBefore, VaultUtil.balance(uuid),
+                                MysterriaAuditBridge.metadata(Map.of("plot_id", plotId), location)));
                 return;
+            }
+            BigDecimal balanceAfterCharge = VaultUtil.balance(uuid);
+            if (price > 0) {
+                MysterriaAuditBridge.emit("plots.rent.charge_pending", AuditOutcome.ATTEMPTED,
+                        uuid, uuid, null, identity, "upkeep charged; plot update pending",
+                        MysterriaAuditBridge.moneyMetadata(-price, balanceBefore, balanceAfterCharge,
+                                MysterriaAuditBridge.metadata(
+                                        Map.of("plot_id", plotId, "operation", "upkeep"), location)));
             }
             db.transactionThenMain(conn -> {
                 if (!PlotDao.extend(conn, plotId, uuid, now, period)) {
@@ -331,13 +382,21 @@ public class PlotService {
                 overdueNotified.remove(plotId);
                 TransactionLogger.logNote(player, "MARKET PLOT upkeep " + plotId + " paid to "
                         + (updated != null ? updated.paidUntil() : "?"));
+                MysterriaAuditBridge.emit("plots.rent.upkeep", true, uuid, uuid, null, identity,
+                        "plot upkeep committed", MysterriaAuditBridge.moneyMetadata(-price,
+                                balanceBefore, balanceAfterCharge, Map.of("plot_id", plotId,
+                                        "paid_until", updated != null ? updated.paidUntil() : 0L)));
                 finish(uuid, callback, RentResult.SUCCESS);
             }, error -> {
                 RentResult result = error instanceof PlotDenied denied ? denied.result : RentResult.ERROR;
-                refund(player, uuid, price, "plot extend rejected: " + result);
                 if (result == RentResult.ERROR) {
                     plugin.getLogger().severe("Plot extend failed for " + player.getName() + " on " + plotId + ": " + error);
                 }
+                MysterriaAuditBridge.emit("plots.rent.upkeep_failed", false, uuid, uuid, null, identity,
+                        result.name().toLowerCase(), MysterriaAuditBridge.moneyMetadata(-price,
+                                balanceBefore, balanceAfterCharge, Map.of("plot_id", plotId)));
+                refund(player, uuid, plotId, "upkeep", price, "plot extend rejected: " + result, identity,
+                        location);
                 finish(uuid, callback, result);
             });
         });
@@ -387,6 +446,15 @@ public class PlotService {
      * stash, vendor NPC destroyed, blocks restored from the snapshot, rental row gone.
      */
     public void evict(PlotRental rental, String reason, Consumer<Boolean> callback) {
+        evict(rental, reason, null, null, callback);
+    }
+
+    /**
+     * As {@link #evict(PlotRental, String, Consumer)}, run by staff: {@code actor} is who ran
+     * it and {@code adminReason} the optional reason they gave. Both go on every eviction row.
+     */
+    public void evict(PlotRental rental, String reason, @Nullable AuditActor actor, @Nullable String adminReason,
+                      Consumer<Boolean> callback) {
         String plotId = rental.plotId();
         PlotRegion region = regions.get(plotId);
         World world = config.world();
@@ -405,6 +473,14 @@ public class PlotService {
                     + (world == null ? "market world not loaded" : "region no longer defined in market.yml")
                     + "). The rental is left standing so its contents are not stranded —"
                     + " restore the region definition or load the world, then evict again.");
+            // Staff asked for this one, so a refusal is part of the trail; the upkeep task
+            // retries on every tick and would repeat the same row.
+            if (actor != null) {
+                MysterriaAuditBridge.AuditIdentity refused = MysterriaAuditBridge.randomIdentity("plot-eviction");
+                actor.emit("plots.eviction.failed", AuditOutcome.FAILED, AuditRisk.HIGH, rental.renterUuid(), refused,
+                        world == null ? "market world not loaded" : "region no longer defined in market.yml",
+                        evictionStaffMetadata(plotId, adminReason));
+            }
             callback.accept(false);
             return;
         }
@@ -413,7 +489,7 @@ public class PlotService {
         List<StashItem> harvested = harvestContainers(world, region, rental, reason);
         harvested.addAll(harvestEntities(world, region, rental, reason));
         despawnVendor(rental);
-        finishEviction(rental, region, harvested, reason, callback);
+        finishEviction(rental, region, harvested, reason, actor, adminReason, callback);
     }
 
     /**
@@ -525,8 +601,10 @@ public class PlotService {
 
     /** Commits the stash rows + rental deletion, then replays the block snapshot. */
     private void finishEviction(PlotRental rental, @Nullable PlotRegion region,
-                                @Nullable List<StashItem> harvested, String reason, Consumer<Boolean> callback) {
+                                @Nullable List<StashItem> harvested, String reason, @Nullable AuditActor actor,
+                                @Nullable String adminReason, Consumer<Boolean> callback) {
         String plotId = rental.plotId();
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.randomIdentity("plot-eviction");
         db.transactionThenMain(conn -> {
             if (harvested != null) {
                 for (StashItem item : harvested) StashDao.insert(conn, item);
@@ -541,6 +619,12 @@ public class PlotService {
             // After the commit, before the blocks are replayed: the counters must stop
             // trading the moment the rental is gone, not when the restore finishes.
             if (onEvicted != null) onEvicted.accept(plotId);
+            // DB stage only: rental cleared and stash rows stored. World restoration is a
+            // separate, later outcome recorded by emitRestoration below.
+            Map<String, Object> dbMetadata = evictionMetadata(plotId, harvested);
+            dbMetadata.put("stage", "db_commit");
+            dbMetadata.put("restoration", snapshot != null && region != null ? "pending" : "not_applicable");
+            emitEviction("plots.eviction.db_committed", true, actor, adminReason, rental, identity, reason, dbMetadata);
             if (snapshot == null || region == null) {
                 evicting.remove(plotId);
                 callback.accept(true);
@@ -549,6 +633,7 @@ public class PlotService {
             World world = config.world();
             if (world == null) {
                 evicting.remove(plotId);
+                emitRestoration(rental, plotId, identity, reason, actor, adminReason, false, "market world unavailable");
                 callback.accept(true);
                 return;
             }
@@ -556,11 +641,17 @@ public class PlotService {
                 PlotSnapshot.restore(plugin, world, region, snapshot, () -> {
                     evicting.remove(plotId);
                     plugin.getLogger().info("Plot " + plotId + " restored to its snapshot");
+                    // The replay loop only cuts itself short when the plugin has been disabled.
+                    boolean completed = plugin.isEnabled();
+                    emitRestoration(rental, plotId, identity, reason, actor, adminReason, completed,
+                            completed ? null : "restore interrupted by plugin disable");
                     callback.accept(true);
                 });
             } catch (Exception e) {
                 evicting.remove(plotId);
                 plugin.getLogger().severe("Plot " + plotId + " snapshot restore failed: " + e.getMessage());
+                emitRestoration(rental, plotId, identity, reason, actor, adminReason, false,
+                        "snapshot restore failed: " + e.getClass().getSimpleName());
                 callback.accept(true);
             }
         }, error -> {
@@ -573,6 +664,8 @@ public class PlotService {
                             + item.amount() + " owed to " + rental.renterName());
                 }
             }
+            emitEviction("plots.eviction.failed", false, actor, adminReason, rental, identity,
+                    "eviction commit failed", evictionMetadata(plotId, harvested));
             callback.accept(false);
         });
     }
@@ -633,6 +726,11 @@ public class PlotService {
      * survive the eviction that should have taken it away.
      */
     public void bindVendor(String plotId, int npcId) {
+        bindVendor(plotId, npcId, null);
+    }
+
+    /** As {@link #bindVendor(String, int)}; {@code persisted} gets whether the binding was saved. */
+    public void bindVendor(String plotId, int npcId, @Nullable Consumer<Boolean> persisted) {
         PlotRental rental = rentals.get(plotId);
         if (rental != null && rental.vendorNpcId() != null && rental.vendorNpcId() != npcId) {
             despawnVendor(rental);
@@ -640,10 +738,12 @@ public class PlotService {
         db.submit(conn -> {
             PlotDao.setVendorNpc(conn, plotId, npcId);
             return null;
-        }).exceptionally(error -> {
-            plugin.getLogger().severe("Failed to record vendor NPC " + npcId + " for plot " + plotId
-                    + ": " + error + " — it will not be removed on eviction");
-            return null;
+        }).whenComplete((ignored, error) -> {
+            if (error != null) {
+                plugin.getLogger().severe("Failed to record vendor NPC " + npcId + " for plot " + plotId
+                        + ": " + error + " — it will not be removed on eviction");
+            }
+            if (persisted != null) persisted.accept(error == null);
         });
         if (rental != null) {
             rentals.put(plotId, new PlotRental(rental.plotId(), rental.renterUuid(), rental.renterName(),
@@ -670,24 +770,100 @@ public class PlotService {
         return region != null ? region.displayName() : plotId;
     }
 
-    private void refund(Player player, UUID uuid, long amount, String reason) {
+    /** {@code location} is captured on the main thread; the refund row is emitted async. */
+    private void refund(Player player, UUID uuid, String plotId, String operation, long amount, String reason,
+                        MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
         if (amount <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            VaultUtil.Payment refund = VaultUtil.depositChecked(uuid, amount, "plot refund (" + reason + ")");
-            if (refund == VaultUtil.Payment.INDETERMINATE) {
+            BigDecimal balanceBefore = VaultUtil.balance(uuid);
+            VaultUtil.Payment payment = VaultUtil.depositChecked(uuid, amount, "plot refund (" + reason + ")");
+            boolean refunded = payment.succeeded();
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
                 TransactionLogger.logNote(player, "MARKET PLOT refund of " + amount + " coppets ("
                         + reason + ") UNCERTAIN, manual reconciliation needed");
                 plugin.getLogger().severe("UNCERTAIN: plot rent refund of " + amount + " coppets to " + uuid
                         + " may or may not have landed; check the balance before compensating by hand.");
-                return;
+            } else {
+                TransactionLogger.logNote(player, "MARKET PLOT refund of " + amount + " coppets ("
+                        + reason + ") " + (refunded ? "OK" : "FAILED"));
+                if (!refunded) {
+                    plugin.getLogger().severe("Failed to refund plot rent of " + amount + " coppets to " + uuid);
+                }
             }
-            boolean refunded = refund.succeeded();
-            TransactionLogger.logNote(player, "MARKET PLOT refund of " + amount + " coppets ("
-                    + reason + ") " + (refunded ? "OK" : "FAILED"));
-            if (!refunded) {
-                plugin.getLogger().severe("Failed to refund plot rent of " + amount + " coppets to " + uuid);
-            }
+            MysterriaAuditBridge.emit("plots.rent.refunded", refunded, uuid, uuid, null, identity,
+                    reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
+                            balanceBefore, VaultUtil.balance(uuid), MysterriaAuditBridge.metadata(
+                                    Map.of("plot_id", plotId, "operation", operation,
+                                            "payment", payment.name()), location)));
         });
+    }
+
+    /** World-restoration outcome of an eviction whose DB stage already committed. */
+    private static void emitRestoration(PlotRental rental, String plotId, MysterriaAuditBridge.AuditIdentity identity,
+                                        String reason, @Nullable AuditActor actor, @Nullable String adminReason,
+                                        boolean restored, @Nullable String failure) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("plot_id", plotId);
+        metadata.put("stage", "world_restoration");
+        metadata.put("eviction_reason", reason);
+        if (restored) {
+            emitEviction("plots.eviction.restored", true, actor, adminReason, rental, identity,
+                    "plot restored to snapshot", metadata);
+        } else {
+            emitEviction("plots.eviction.restore_failed", false, actor, adminReason, rental, identity,
+                    failure, metadata);
+        }
+    }
+
+    /**
+     * Eviction row. Staff-run evictions carry the staff member as actor (with {@code actor_name}
+     * and the optional {@code admin_reason}); upkeep and voluntary hand-backs keep a null actor.
+     */
+    private static void emitEviction(String operation, boolean success, @Nullable AuditActor actor,
+                                     @Nullable String adminReason, PlotRental rental,
+                                     MysterriaAuditBridge.AuditIdentity identity, @Nullable String reason,
+                                     Map<String, Object> metadata) {
+        if (actor == null) {
+            MysterriaAuditBridge.emit(operation, success, null, rental.renterUuid(), null, identity, reason, metadata);
+            return;
+        }
+        if (adminReason != null) metadata.put("admin_reason", adminReason);
+        actor.emit(operation, success ? AuditOutcome.COMMITTED : AuditOutcome.FAILED, AuditRisk.HIGH,
+                rental.renterUuid(), identity, reason, metadata);
+    }
+
+    private static Map<String, Object> evictionStaffMetadata(String plotId, @Nullable String adminReason) {
+        return AuditActor.fields("plot_id", plotId, "stage", "refused", "admin_reason", adminReason);
+    }
+
+    private static Map<String, Object> evictionMetadata(String plotId, @Nullable List<StashItem> harvested) {
+        Map<String, Object> metadata = new LinkedHashMap<>();
+        metadata.put("plot_id", plotId);
+        metadata.put("harvested_stacks", harvested == null ? 0 : harvested.size());
+        Map<String, Long> totals = new LinkedHashMap<>();
+        List<Map<String, Object>> summaries = new ArrayList<>();
+        if (harvested != null) {
+            for (StashItem item : harvested) {
+                String material = item.material().name().toLowerCase();
+                if (totals.size() < 64 || totals.containsKey(material)) {
+                    totals.merge(material, (long) item.amount(), Long::sum);
+                } else {
+                    totals.merge("other", (long) item.amount(), Long::sum);
+                }
+                // The audit client flattens a list to 1024 characters, which fits about 7 of these.
+                if (summaries.size() < MAX_ITEM_SUMMARIES) {
+                    Map<String, Object> summary = new LinkedHashMap<>();
+                    summary.put("material", material);
+                    summary.put("amount", item.amount());
+                    summaries.add(summary);
+                }
+            }
+        }
+        metadata.put("harvested_items", totals);
+        metadata.put("harvested_item_summaries", summaries);
+        metadata.put("harvested_item_summaries_truncated",
+                harvested != null && harvested.size() > summaries.size());
+        return metadata;
     }
 
     /** Expected rent/upkeep rejections decided inside the DB transaction, not failures. */

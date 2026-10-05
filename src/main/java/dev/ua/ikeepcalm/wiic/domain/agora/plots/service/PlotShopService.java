@@ -18,6 +18,8 @@ import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
 import dev.ua.ikeepcalm.wiic.utils.WorldUtil;
+import dev.ua.ikeepcalm.wiic.utils.AuditSampler;
+import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
@@ -33,6 +35,7 @@ import org.jetbrains.annotations.Nullable;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.math.BigDecimal;
 
 /**
  * Stall counters: a sign on a chest, in a plot somebody rents, selling one kind of goods
@@ -90,6 +93,7 @@ public class PlotShopService {
 
     private static final Set<UUID> BUYERS_IN_FLIGHT = ConcurrentHashMap.newKeySet();
     private static final Set<UUID> SHOPS_IN_FLIGHT = ConcurrentHashMap.newKeySet();
+    private static final AuditSampler REJECTION_AUDIT = new AuditSampler(1_000L, 4_096);
 
     private final WIIC plugin;
     private final MarketConfig config;
@@ -250,15 +254,22 @@ public class PlotShopService {
                 container.getX(), container.getY(), container.getZ(),
                 owner.getUniqueId(), owner.getName(), null, null, null,
                 price, Math.max(1, bundle), 0, System.currentTimeMillis());
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("plot-shop", shop.id());
 
         db.transactionThenMain(conn -> {
             PlotShopDao.insert(conn, shop);
             return true;
         }, ignored -> {
             bySign.put(signKey, shop);
+            MysterriaAuditBridge.emit("plot_shop.created", true, owner.getUniqueId(), owner.getUniqueId(), shop.id(), identity,
+                    "plot shop created", MysterriaAuditBridge.moneyMetadata(0,
+                            Map.of("plot_id", region.id(), "price", price, "bundle", Math.max(1, bundle))));
             callback.accept(CreateResult.SUCCESS);
         }, error -> {
             plugin.getLogger().severe("Stall counter insert failed for " + owner.getName() + ": " + error);
+            MysterriaAuditBridge.emit("plot_shop.create_failed", false, owner.getUniqueId(), owner.getUniqueId(), shop.id(), identity,
+                    "plot shop create failed", MysterriaAuditBridge.moneyMetadata(0,
+                            Map.of("plot_id", region.id(), "price", price)));
             callback.accept(CreateResult.ERROR);
         });
     }
@@ -319,15 +330,22 @@ public class PlotShopService {
     }
 
     private void persistGoods(PlotShop shop, Consumer<Boolean> callback) {
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("plot-shop", shop.id());
         db.transactionThenMain(conn -> {
             PlotShopDao.updateGoods(conn, shop);
             return true;
         }, ignored -> {
             bySign.put(shop.signKey(), shop);
             renderSign(shop);
+            MysterriaAuditBridge.emit("plot_shop.updated", true, shop.ownerUuid(), shop.ownerUuid(), shop.id(), identity,
+                    "plot shop configuration updated", MysterriaAuditBridge.moneyMetadata(0,
+                            MysterriaAuditBridge.metadata(Map.of("plot_id", shop.plotId(), "price", shop.price(),
+                                            "stocked", shop.isStocked()), MysterriaAuditBridge.itemMetadata(shop.material(), 0))));
             callback.accept(true);
         }, error -> {
             plugin.getLogger().severe("Stall counter update failed for " + shop.id() + ": " + error);
+            MysterriaAuditBridge.emit("plot_shop.update_failed", false, shop.ownerUuid(), shop.ownerUuid(), shop.id(), identity,
+                    "plot shop update failed", Map.of("plot_id", shop.plotId()));
             callback.accept(false);
         });
     }
@@ -381,16 +399,20 @@ public class PlotShopService {
     }
 
     public void purchase(Player buyer, PlotShop shop, Consumer<Purchase> callback) {
+        UUID buyerId = buyer.getUniqueId();
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.randomIdentity("plot-shop-purchase");
         if (!enabled()) {
+            emitPurchaseRejected(buyerId, shop, identity, "disabled");
             callback.accept(Purchase.of(BuyResult.DISABLED));
             return;
         }
-        UUID buyerId = buyer.getUniqueId();
         if (shop.ownerUuid().equals(buyerId)) {
+            emitPurchaseRejected(buyerId, shop, identity, "self purchase");
             callback.accept(Purchase.of(BuyResult.SELF_PURCHASE));
             return;
         }
         if (!shop.isStocked()) {
+            emitPurchaseRejected(buyerId, shop, identity, "unstocked");
             callback.accept(Purchase.of(BuyResult.UNSTOCKED));
             return;
         }
@@ -398,17 +420,20 @@ public class PlotShopService {
         PlotRental rental = plots.rental(shop.plotId());
         if (rental == null || !rental.renterUuid().equals(shop.ownerUuid())) {
             remove(shop, "the plot is no longer rented by its owner");
+            emitPurchaseRejected(buyerId, shop, identity, "closed");
             callback.accept(Purchase.of(BuyResult.CLOSED));
             return;
         }
         ItemStack template = shop.template();
         Inventory inventory = containerOf(shop);
         if (template == null || inventory == null) {
+            emitPurchaseRejected(buyerId, shop, identity, "closed");
             callback.accept(Purchase.of(BuyResult.CLOSED));
             return;
         }
         int wanted = Math.max(1, Math.min(shop.bundle(), template.getMaxStackSize()));
         if (countStock(inventory, template) < wanted) {
+            emitPurchaseRejected(buyerId, shop, identity, "out of stock");
             callback.accept(Purchase.of(BuyResult.OUT_OF_STOCK));
             return;
         }
@@ -424,7 +449,12 @@ public class PlotShopService {
 
         long price = shop.price();
         String itemName = shop.displayName() != null ? shop.displayName() : String.valueOf(shop.material());
+        // Entity position may only be read on the main thread; the async rows below reuse it.
+        Map<String, Object> location = MysterriaAuditBridge.playerLocation(buyer);
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+            // The serialized item is parsed here, off the main thread; the later rows reuse it.
+            Map<String, Object> itemAudit = MysterriaAuditBridge.itemMetadata(shop.itemBytes());
+            BigDecimal balanceBefore = VaultUtil.balance(buyerId);
             // Indeterminate counts as not paid: no goods, no refund, locks released.
             VaultUtil.Payment payment = VaultUtil.withdrawChecked(buyerId, price, "stall purchase at shop " + shop.id());
             if (!payment.succeeded()) {
@@ -434,22 +464,39 @@ public class PlotShopService {
                         + (uncertain ? ", manual reconciliation needed" : ""));
                 finish(buyerId, shop.id(), callback,
                         Purchase.of(uncertain ? BuyResult.UNCERTAIN : BuyResult.INSUFFICIENT_FUNDS));
+                if (uncertain) MysterriaAuditBridge.emitPaymentIndeterminate(
+                        "plot_shop.purchase", buyerId, shop.ownerUuid(), shop.id(), identity, price,
+                        balanceBefore, VaultUtil.balance(buyerId), MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
+                                Map.of("plot_id", shop.plotId(), "quantity", wanted), location), itemAudit));
+                else MysterriaAuditBridge.emit("plot_shop.purchase_failed", false, buyerId, shop.ownerUuid(), shop.id(), identity,
+                        "insufficient funds", MysterriaAuditBridge.moneyMetadata(0, balanceBefore, VaultUtil.balance(buyerId),
+                                MysterriaAuditBridge.metadata(MysterriaAuditBridge.metadata(
+                                                Map.of("plot_id", shop.plotId(), "quantity", wanted), location),
+                                        itemAudit)));
                 return;
             }
+            BigDecimal balanceAfterCharge = VaultUtil.balance(buyerId);
             Bukkit.getScheduler().runTask(plugin, () -> {
                 // Re-read the container on the main thread: the async hop is exactly where
                 // the owner can have emptied it, and taking a partial handful would be the
                 // one outcome worse than refusing the sale.
                 Inventory live = containerOf(shop);
                 if (live == null || !takeStock(live, template, wanted)) {
-                    refund(buyer, buyerId, price, "stock gone before the counter could hand it over");
+                    MysterriaAuditBridge.emit("plot_shop.purchase_failed", false, buyerId, shop.ownerUuid(), shop.id(), identity,
+                            "stock unavailable", MysterriaAuditBridge.moneyMetadata(-price,
+                                    balanceBefore, balanceAfterCharge, Map.of("plot_id", shop.plotId(),
+                                            "quantity", wanted)));
+                    refund(buyer, buyerId, shop.id(), shop.plotId(), price,
+                            "stock gone before the counter could hand it over", identity,
+                            MysterriaAuditBridge.playerLocation(buyer));
                     finish(buyerId, shop.id(), callback, Purchase.of(BuyResult.OUT_OF_STOCK));
                     return;
                 }
                 ItemStack payload = template.clone();
                 payload.setAmount(wanted);
                 ItemUtil.giveOrDrop(buyer, payload);
-                creditOwner(buyer, shop, price, wanted, itemName, callback);
+                creditOwner(buyer, shop, price, wanted, itemName, identity, itemAudit,
+                        balanceBefore, balanceAfterCharge, callback);
             });
         });
     }
@@ -458,6 +505,8 @@ public class PlotShopService {
      * Sale tax to the sink, the rest to the owner's ledger — the broker's money path.
      */
     private void creditOwner(Player buyer, PlotShop shop, long price, int amount, String itemName,
+                             MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> itemAudit,
+                             BigDecimal balanceBefore, BigDecimal balanceAfterCharge,
                              Consumer<Purchase> callback) {
         long tax = config.saleTax(price);
         long net = price - tax;
@@ -477,6 +526,12 @@ public class PlotShopService {
         }, done -> {
             TransactionLogger.logNote(buyer, "MARKET STALL bought " + itemName + " x" + amount
                     + " for " + price + " coppets from " + shop.ownerName() + " (" + shop.plotId() + ")");
+            MysterriaAuditBridge.emit("plot_shop.purchase_completed", true, buyerId, shop.ownerUuid(), shop.id(), identity,
+                    "plot shop purchase committed", MysterriaAuditBridge.moneyMetadata(-price,
+                            balanceBefore, balanceAfterCharge, MysterriaAuditBridge.metadata(
+                                    Map.of("plot_id", shop.plotId(), "tax", tax, "net", net,
+                                            "item_name", itemName, "quantity", amount),
+                                    itemAudit)));
             notifier.sold(shop.ownerUuid());
             feedback.dealStruck(buyer);
             finish(buyerId, shop.id(), callback, new Purchase(BuyResult.SUCCESS, price, amount, itemName));
@@ -487,6 +542,10 @@ public class PlotShopService {
             plugin.getLogger().severe("Stall counter ledger write failed for " + shop.id() + ": " + error);
             plugin.getLogger().severe("  OWED " + net + " coppets to " + shop.ownerName()
                     + " (" + shop.ownerUuid() + ") for " + itemName + " x" + amount);
+            MysterriaAuditBridge.emit("plot_shop.ledger_failed", false, buyerId, shop.ownerUuid(), shop.id(), identity,
+                    "plot shop ledger write failed", MysterriaAuditBridge.moneyMetadata(-price,
+                            balanceBefore, balanceAfterCharge, Map.of("plot_id", shop.plotId(), "net", net,
+                                    "quantity", amount)));
             finish(buyerId, shop.id(), callback, new Purchase(BuyResult.SUCCESS, price, amount, itemName));
         });
     }
@@ -579,23 +638,39 @@ public class PlotShopService {
     // Plumbing
     // -------------------------------------------------------------------------
 
-    private void refund(Player buyer, UUID buyerId, long amount, String reason) {
+    /** {@code location} is captured on the main thread; the refund row is emitted async. */
+    private void refund(Player buyer, UUID buyerId, UUID shopId, String plotId, long amount, String reason,
+                        MysterriaAuditBridge.AuditIdentity identity, Map<String, Object> location) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            VaultUtil.Payment refund = VaultUtil.depositChecked(buyerId, amount, "stall refund (" + reason + ")");
-            if (refund == VaultUtil.Payment.INDETERMINATE) {
+            BigDecimal balanceBefore = VaultUtil.balance(buyerId);
+            VaultUtil.Payment payment = VaultUtil.depositChecked(buyerId, amount, "stall refund (" + reason + ")");
+            boolean refunded = payment.succeeded();
+            if (payment == VaultUtil.Payment.INDETERMINATE) {
                 TransactionLogger.logNote(buyer, "MARKET STALL refund of " + amount + " coppets ("
                         + reason + ") UNCERTAIN, manual reconciliation needed");
                 plugin.getLogger().severe("UNCERTAIN: stall refund of " + amount + " coppets to " + buyerId
                         + " may or may not have landed; check the balance before compensating by hand.");
-                return;
+            } else {
+                TransactionLogger.logNote(buyer, "MARKET STALL refund of " + amount + " coppets ("
+                        + reason + ") " + (refunded ? "OK" : "FAILED"));
+                if (!refunded) {
+                    plugin.getLogger().severe("Failed to refund " + amount + " coppets to " + buyerId);
+                }
             }
-            boolean refunded = refund.succeeded();
-            TransactionLogger.logNote(buyer, "MARKET STALL refund of " + amount + " coppets ("
-                    + reason + ") " + (refunded ? "OK" : "FAILED"));
-            if (!refunded) {
-                plugin.getLogger().severe("Failed to refund " + amount + " coppets to " + buyerId);
-            }
+            MysterriaAuditBridge.emit("plot_shop.refunded", refunded, buyerId, buyerId, shopId, identity,
+                    reason, MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
+                            balanceBefore, VaultUtil.balance(buyerId), MysterriaAuditBridge.metadata(Map.of("plot_id", plotId,
+                                    "shop_id", shopId.toString(), "payment", payment.name()), location)));
         });
+    }
+
+    private void emitPurchaseRejected(UUID buyerId, PlotShop shop,
+                                      MysterriaAuditBridge.AuditIdentity identity,
+                                      String reason) {
+        if (!REJECTION_AUDIT.shouldEmit(List.of(buyerId, shop.id(), reason))) return;
+        MysterriaAuditBridge.emit("plot_shop.purchase_failed", false, buyerId, shop.ownerUuid(),
+                shop.id(), identity, reason, MysterriaAuditBridge.moneyMetadata(0,
+                        Map.of("plot_id", shop.plotId())));
     }
 
     private void finish(UUID buyerId, UUID shopId, Consumer<Purchase> callback, Purchase outcome) {

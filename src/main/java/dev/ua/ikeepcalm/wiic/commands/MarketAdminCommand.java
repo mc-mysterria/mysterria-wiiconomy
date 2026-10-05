@@ -1,5 +1,7 @@
 package dev.ua.ikeepcalm.wiic.commands;
 
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditRisk;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.model.EntranceItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.EntranceService;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketBounds;
@@ -10,7 +12,9 @@ import dev.ua.ikeepcalm.wiic.domain.agora.plots.listener.PlotWandListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.model.PlotRegion;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.model.PlotRental;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.service.PlotService;
+import dev.ua.ikeepcalm.wiic.utils.AuditActor;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.block.Block;
@@ -23,6 +27,7 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Stream;
@@ -44,6 +49,9 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command,
                              @NotNull String label, @NotNull String[] args) {
+        AuditActor actor = AuditActor.of(sender);
+        // One row per invocation whatever the subcommand does; the rows below carry the detail.
+        actor.observed(label, args);
         if (!(sender instanceof Player player)) {
             sender.sendMessage(Component.text("Players only.").color(NamedTextColor.RED));
             return true;
@@ -53,21 +61,34 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
             return true;
         }
         switch (args[0].toLowerCase(Locale.ROOT)) {
-            case "npc" -> handleNpc(player, args);
-            case "entrance" -> handleEntrance(player, args);
-            case "plot" -> handlePlot(player, args);
-            case "bounds" -> handleBounds(player, args);
+            case "npc" -> handleNpc(player, args, actor);
+            case "entrance" -> handleEntrance(player, args, actor);
+            case "plot" -> handlePlot(player, args, actor);
+            case "bounds" -> handleBounds(player, args, actor);
             case "open" -> handleOpen(player, args);
             case "give-entrance" -> {
-                ItemUtil.giveOrDrop(player, EntranceItem.create(module.getConfig()));
+                ItemStack entranceItem = EntranceItem.create(module.getConfig());
+                boolean given = ItemUtil.giveOrDrop(player, entranceItem);
                 player.sendMessage(Component.text("Secret entrance item given.").color(NamedTextColor.GREEN));
+                actor.emit("admin.entrance_item.given", given ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                        AuditRisk.HIGH, player.getUniqueId(), given ? null : "recipient no longer online",
+                        AuditActor.fields("material", entranceItem.getType().name().toLowerCase(Locale.ROOT),
+                                "item_amount", entranceItem.getAmount()));
             }
             case "appraise" -> handleAppraise(player);
             case "reload" -> {
-                module.getConfig().reload();
-                module.getServices().plots().reloadRegions();
-                module.getServices().prices().invalidate();
+                try {
+                    module.getConfig().reload();
+                    module.getServices().plots().reloadRegions();
+                    module.getServices().prices().invalidate();
+                } catch (RuntimeException failure) {
+                    actor.emit("admin.market.reloaded", AuditOutcome.FAILED, AuditRisk.LOW, null,
+                            failure.getClass().getSimpleName(), AuditActor.fields());
+                    throw failure;
+                }
                 player.sendMessage(Component.text("market.yml reloaded.").color(NamedTextColor.GREEN));
+                actor.emit("admin.market.reloaded", AuditOutcome.COMMITTED, AuditRisk.LOW, null, null,
+                        AuditActor.fields());
             }
             default -> usage(player);
         }
@@ -109,7 +130,7 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
         });
     }
 
-    private void handleNpc(Player player, String[] args) {
+    private void handleNpc(Player player, String[] args, AuditActor actor) {
         if (module.getNpcService() == null) {
             player.sendMessage(Component.text("Citizens is not installed.").color(NamedTextColor.RED));
             return;
@@ -122,16 +143,30 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
             }
             String plotId = args.length >= 4 ? args[3] : null;
             if (role == MarketNpcRole.PLOT_VENDOR) {
-                createPlotVendor(player, plotId);
+                createPlotVendor(player, plotId, actor);
                 return;
             }
-            module.getNpcService().create(role, plotId, player.getLocation());
+            int npcId;
+            try {
+                npcId = module.getNpcService().create(role, plotId, player.getLocation()).getId();
+            } catch (RuntimeException failure) {
+                actor.emit("admin.npc.created", AuditOutcome.FAILED, AuditRisk.NORMAL, null,
+                        failure.getClass().getSimpleName(),
+                        AuditActor.fields("role", role.name(), "plot_id", plotId));
+                throw failure;
+            }
             player.sendMessage(Component.text("Market NPC (" + role + ") created.").color(NamedTextColor.GREEN));
+            actor.emit("admin.npc.created", AuditOutcome.COMMITTED, AuditRisk.NORMAL, null, null,
+                    AuditActor.fields("role", role.name(), "npc_id", npcId, "plot_id", plotId));
         } else if (args.length >= 2 && args[1].equalsIgnoreCase("remove")) {
-            boolean removed = module.getNpcService().removeNearest(player.getLocation(), 5);
-            player.sendMessage(removed
+            var removed = module.getNpcService().removeNearestNpc(player.getLocation(), 5);
+            player.sendMessage(removed != null
                     ? Component.text("Nearest market NPC removed.").color(NamedTextColor.GREEN)
                     : Component.text("No market NPC within 5 blocks.").color(NamedTextColor.RED));
+            if (removed != null) {
+                actor.emit("admin.npc.removed", AuditOutcome.COMMITTED, AuditRisk.NORMAL, null, null,
+                        AuditActor.fields("npc_id", removed.id()));
+            }
         } else {
             player.sendMessage(Component.text("Usage: /wiicmarket npc <create|remove>").color(NamedTextColor.RED));
         }
@@ -146,7 +181,7 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
      * an unregistered one would outlive the tenancy it belongs to, so both are refused here
      * rather than left to be discovered as an NPC that silently does nothing.
      */
-    private void createPlotVendor(Player player, @Nullable String plotId) {
+    private void createPlotVendor(Player player, @Nullable String plotId, AuditActor actor) {
         if (plotId == null) {
             player.sendMessage(Component.text("A stall vendor needs the plot it serves: "
                     + "/wiicmarket npc create plot_vendor <plotId>").color(NamedTextColor.RED));
@@ -158,16 +193,32 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                     + "'. Define it first with /wiicmarket plot define.").color(NamedTextColor.RED));
             return;
         }
-        int npcId = module.getNpcService().spawnPlotVendor(plotId, player.getLocation());
-        plots.bindVendor(plotId, npcId);
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.randomIdentity("admin-plot-vendor");
+        int npcId;
+        try {
+            npcId = module.getNpcService().spawnPlotVendor(plotId, player.getLocation());
+        } catch (RuntimeException failure) {
+            actor.emit("admin.npc.plot_vendor_created", AuditOutcome.FAILED, AuditRisk.NORMAL, null, identity,
+                    failure.getClass().getSimpleName(), AuditActor.fields("plot_id", plotId));
+            throw failure;
+        }
+        // The saved binding finishes later on the DB thread; it gets its own row.
+        plots.bindVendor(plotId, npcId, persisted -> actor.emit("admin.npc.plot_vendor_bound",
+                persisted ? AuditOutcome.COMMITTED : AuditOutcome.FAILED, AuditRisk.NORMAL, null, identity,
+                persisted ? null : "vendor binding was not saved; it will not be removed on eviction",
+                AuditActor.fields("plot_id", plotId, "npc_id", npcId)));
         PlotRental rental = plots.rental(plotId);
+        actor.emit("admin.npc.plot_vendor_created", AuditOutcome.COMMITTED, AuditRisk.NORMAL,
+                rental == null ? null : rental.renterUuid(), identity, null,
+                AuditActor.fields("plot_id", plotId, "npc_id", npcId,
+                        "renter_name", rental == null ? null : rental.renterName()));
         player.sendMessage(Component.text("Stall vendor for " + plotId + " placed"
                 + (rental == null
                 ? " — the plot is unrented, so it will show an empty storefront until someone takes it."
                 : " and bound to " + rental.renterName() + ".")).color(NamedTextColor.GREEN));
     }
 
-    private void handleEntrance(Player player, String[] args) {
+    private void handleEntrance(Player player, String[] args, AuditActor actor) {
         if (args.length < 2) {
             player.sendMessage(Component.text("Usage: /wiicmarket entrance <hub-here|exit-here|list|remove>").color(NamedTextColor.RED));
             return;
@@ -195,11 +246,18 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                     return;
                 }
                 Block door = EntranceService.resolveLowerDoorBlock(target);
+                List<Integer> previousExit = module.getConfig().raw().getIntegerList("entrance.exit-door");
                 module.getConfig().raw().set("entrance.exit-door",
                         List.of(door.getX(), door.getY(), door.getZ()));
                 module.getConfig().save();
+                boolean saved = module.getConfig().lastSaveSucceeded();
                 player.sendMessage(Component.text("Exit door set at " + door.getX() + " " + door.getY()
                         + " " + door.getZ() + ".").color(NamedTextColor.GREEN));
+                actor.emit("admin.entrance.exit_door_set", saved ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                        AuditRisk.LOW, null, saved ? null : "market.yml save failed",
+                        AuditActor.fields("old_exit_door", previousExit.size() < 3 ? "unset"
+                                        : previousExit.get(0) + " " + previousExit.get(1) + " " + previousExit.get(2),
+                                "new_exit_door", door.getX() + " " + door.getY() + " " + door.getZ()));
             }
             case "list" -> {
                 List<MarketEntrance> all = module.getServices().entrances().all();
@@ -218,7 +276,8 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(Component.text("Look at a registered entrance door.").color(NamedTextColor.RED));
                     return;
                 }
-                module.getServices().entrances().remove(entrance, "admin remove by " + player.getName());
+                module.getServices().entrances().remove(entrance, "admin remove by " + player.getName(),
+                        actor, trailing(args, 2));
                 player.sendMessage(Component.text("Entrance removed.").color(NamedTextColor.GREEN));
             }
             default -> player.sendMessage(Component.text("Usage: /wiicmarket entrance <hub-here|exit-here|list|remove>").color(NamedTextColor.RED));
@@ -230,7 +289,7 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
      * (writes market.yml and captures the pristine snapshot) → {@code vendorspot <id>}
      * → optionally {@code evict <id>} / {@code list}.
      */
-    private void handlePlot(Player player, String[] args) {
+    private void handlePlot(Player player, String[] args, AuditActor actor) {
         PlotService plots = module.getServices().plots();
         if (args.length < 2) {
             player.sendMessage(Component.text(
@@ -239,9 +298,12 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
         }
         switch (args[1].toLowerCase(Locale.ROOT)) {
             case "wand" -> {
-                ItemUtil.giveOrDrop(player, PlotWandListener.create());
+                boolean given = ItemUtil.giveOrDrop(player, PlotWandListener.create());
                 player.sendMessage(Component.text(
                         "Plot wand given. Left-click and right-click the two corners.").color(NamedTextColor.GREEN));
+                actor.emit("admin.plot_wand.given", given ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                        AuditRisk.LOW, player.getUniqueId(), given ? null : "recipient no longer online",
+                        AuditActor.fields());
             }
             case "define" -> {
                 if (args.length < 3) {
@@ -273,17 +335,26 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                             + maxVolume + " (plots.max-volume). Pick a smaller stall.").color(NamedTextColor.RED));
                     return;
                 }
+                PlotRegion previous = plots.region(plotId);
                 module.getConfig().savePlotRegion(plotId, selection.first(), selection.second());
+                boolean saved = module.getConfig().lastSaveSucceeded();
                 plots.reloadRegions();
                 module.getPlotWand().clear(player);
                 PlotRegion region = plots.region(plotId);
+                boolean parsed = region != null;
+                actor.emit("admin.plot.defined", saved && parsed ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                        AuditRisk.NORMAL, null,
+                        !saved ? "market.yml save failed" : parsed ? null : "saved but could not be parsed back",
+                        AuditActor.fields("plot_id", plotId, "volume", volume,
+                                "old_region", previous == null ? "none" : corners(previous),
+                                "new_region", parsed ? corners(region) : "unparsed"));
                 if (region == null) {
                     player.sendMessage(Component.text("Plot saved but could not be parsed back.").color(NamedTextColor.RED));
                     return;
                 }
                 player.sendMessage(Component.text("Plot '" + plotId + "' defined (" + region.volume()
                         + " blocks). Capturing snapshot...").color(NamedTextColor.GREEN));
-                captureSnapshot(player, plots, region);
+                captureSnapshot(player, plots, region, actor, "define");
             }
             case "vendorspot" -> {
                 if (args.length < 3) {
@@ -291,14 +362,24 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                     return;
                 }
                 String id = args[2].toLowerCase(Locale.ROOT);
-                if (plots.region(id) == null) {
+                PlotRegion existing = plots.region(id);
+                if (existing == null) {
                     player.sendMessage(Component.text("No such plot: " + id).color(NamedTextColor.RED));
                     return;
                 }
-                module.getConfig().savePlotVendorSpot(id, player.getLocation());
+                var oldSpot = existing.vendorSpot();
+                var here = player.getLocation();
+                module.getConfig().savePlotVendorSpot(id, here);
+                boolean saved = module.getConfig().lastSaveSucceeded();
                 plots.reloadRegions();
                 player.sendMessage(Component.text("Vendor spot for '" + id
                         + "' set where you stand.").color(NamedTextColor.GREEN));
+                actor.emit("admin.plot.vendorspot_set", saved ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                        AuditRisk.LOW, null, saved ? null : "market.yml save failed",
+                        AuditActor.fields("plot_id", id,
+                                "old_spot", oldSpot == null ? "none"
+                                        : spot(oldSpot.x(), oldSpot.y(), oldSpot.z(), oldSpot.yaw()),
+                                "new_spot", spot(here.getX(), here.getY(), here.getZ(), here.getYaw())));
             }
             case "snapshot" -> {
                 if (args.length < 3) {
@@ -311,7 +392,7 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                     return;
                 }
                 if (rentedWarning(player, plots, region.id(), "snapshot")) return;
-                captureSnapshot(player, plots, region);
+                captureSnapshot(player, plots, region, actor, "snapshot");
             }
             case "list" -> {
                 var regions = plots.allRegions();
@@ -336,7 +417,7 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(Component.text("That plot is not rented.").color(NamedTextColor.RED));
                     return;
                 }
-                plots.evict(rental, "admin evict by " + player.getName(), success ->
+                plots.evict(rental, "admin evict by " + player.getName(), actor, trailing(args, 3), success ->
                         player.sendMessage(success
                                 ? Component.text("Plot evicted; contents moved to " + rental.renterName()
                                 + "'s stash.").color(NamedTextColor.GREEN)
@@ -352,7 +433,7 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
      * the plot wand rather than adding a second tool — an admin defining the market's outer
      * box is doing the same thing as defining a stall, at a different scale.
      */
-    private void handleBounds(Player player, String[] args) {
+    private void handleBounds(Player player, String[] args, AuditActor actor) {
         String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "show";
         switch (action) {
             case "set" -> {
@@ -367,9 +448,16 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                             "Select both corners with the plot wand first (/wiicmarket plot wand).").color(NamedTextColor.RED));
                     return;
                 }
+                MarketBounds previous = module.getConfig().bounds();
                 module.getConfig().saveBounds(selection.first(), selection.second());
+                boolean saved = module.getConfig().lastSaveSucceeded();
                 module.getPlotWand().clear(player);
                 MarketBounds bounds = module.getConfig().bounds();
+                actor.emit("admin.bounds.set", saved && bounds != null ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                        AuditRisk.NORMAL, null,
+                        !saved ? "market.yml save failed" : bounds != null ? null : "saved but could not be parsed back",
+                        AuditActor.fields("old_bounds", previous == null ? "none" : previous.describe(),
+                                "new_bounds", bounds == null ? "unparsed" : bounds.describe()));
                 if (bounds == null) {
                     player.sendMessage(Component.text("Bounds saved but could not be parsed back.").color(NamedTextColor.RED));
                     return;
@@ -379,9 +467,14 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                 warnIfArrivalOutside(player, bounds);
             }
             case "clear" -> {
+                MarketBounds previous = module.getConfig().bounds();
                 module.getConfig().clearBounds();
+                boolean saved = module.getConfig().lastSaveSucceeded();
                 player.sendMessage(Component.text("Containment envelope cleared — only the void floor is "
                         + "enforced now.").color(NamedTextColor.YELLOW));
+                actor.emit("admin.bounds.cleared", saved ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                        AuditRisk.NORMAL, null, saved ? null : "market.yml save failed",
+                        AuditActor.fields("old_bounds", previous == null ? "none" : previous.describe()));
             }
             default -> {
                 MarketBounds bounds = module.getConfig().bounds();
@@ -440,12 +533,36 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
         return (Math.abs(a[0] - b[0]) + 1) * (Math.abs(a[1] - b[1]) + 1) * (Math.abs(a[2] - b[2]) + 1);
     }
 
-    private void captureSnapshot(Player player, PlotService plots, PlotRegion region) {
-        plots.captureSnapshot(region, success -> player.sendMessage(success
-                ? Component.text("Snapshot stored for '" + region.id()
-                + "' — evictions will restore this state.").color(NamedTextColor.GREEN)
-                : Component.text("Snapshot failed for '" + region.id()
-                + "' — see console.").color(NamedTextColor.RED)));
+    private void captureSnapshot(Player player, PlotService plots, PlotRegion region, AuditActor actor,
+                                 String trigger) {
+        plots.captureSnapshot(region, success -> {
+            player.sendMessage(success
+                    ? Component.text("Snapshot stored for '" + region.id()
+                    + "' — evictions will restore this state.").color(NamedTextColor.GREEN)
+                    : Component.text("Snapshot failed for '" + region.id()
+                    + "' — see console.").color(NamedTextColor.RED));
+            // The stored blob it replaces is not read back, so the row cannot carry the old one.
+            actor.emit("admin.plot.snapshot", success ? AuditOutcome.COMMITTED : AuditOutcome.FAILED,
+                    AuditRisk.NORMAL, null, success ? null : "snapshot capture or store failed",
+                    AuditActor.fields("plot_id", region.id(), "trigger", trigger, "volume", region.volume()));
+        });
+    }
+
+    private static String corners(PlotRegion region) {
+        return region.minX() + " " + region.minY() + " " + region.minZ() + " -> "
+                + region.maxX() + " " + region.maxY() + " " + region.maxZ();
+    }
+
+    private static String spot(double x, double y, double z, float yaw) {
+        return String.format(Locale.ROOT, "%.1f %.1f %.1f yaw %.0f", x, y, z, yaw);
+    }
+
+    /** The optional free-text reason after the fixed arguments, or null when none was given. */
+    private static @Nullable String trailing(String[] args, int from) {
+        if (args.length <= from) return null;
+        String text = String.join(" ", Arrays.copyOfRange(args, from, args.length)).trim();
+        if (text.isEmpty()) return null;
+        return text.length() > 200 ? text.substring(0, 200) : text;
     }
 
     private void handleOpen(Player player, String[] args) {

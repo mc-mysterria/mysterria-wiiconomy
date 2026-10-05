@@ -150,11 +150,11 @@ public class VaultGUI {
                                 // before the coppets behind it are gone — a failed withdraw after
                                 // an unconditional addItem would mint currency out of nothing.
                                 ItemStack snapshot = confirmed.clone();
-                                long value = coinValue(snapshot);
+                                WalletAudit audit = WalletAudit.capture(player, snapshot, "wallet-withdrawal");
                                 Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                    boolean debited = withdraw(player, snapshot, value);
+                                    Debit debit = withdraw(player, snapshot, audit);
                                     Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
-                                        if (debited) ItemUtil.giveOrDrop(player, snapshot);
+                                        if (debit.payment().succeeded()) handOverCoin(player, snapshot, audit, debit);
                                         openVault(player, onClose);
                                     });
                                 });
@@ -200,9 +200,9 @@ public class VaultGUI {
                                         openVault(player, onClose);
                                         return;
                                     }
-                                    long value = coinValue(snapshot);
+                                    WalletAudit audit = WalletAudit.capture(player, snapshot, "wallet-deposit");
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                        deposit(player, snapshot, value);
+                                        deposit(player, snapshot, audit);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
                                     });
                                 }
@@ -234,9 +234,10 @@ public class VaultGUI {
                                         openVault(player, onClose);
                                         return;
                                     }
+                                    WalletAudit audit = WalletAudit.capture(player, snapshot, "wallet-sale");
                                     int value = priceAppraiser.appraise(snapshot);
                                     Bukkit.getScheduler().runTaskAsynchronously(WIIC.INSTANCE, () -> {
-                                        sell(player, snapshot, value);
+                                        sell(player, snapshot, value, audit);
                                         Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> openVault(player, onClose));
                                     });
                                 }
@@ -273,7 +274,41 @@ public class VaultGUI {
     // Economy operations
     // -------------------------------------------------------------------------
 
-    /** Coppet value of a coin stack. Called on the main thread before any async hop. */
+    /**
+     * Main-thread capture of everything the async wallet rows need: the player's UUID and
+     * position, the coin's coppet value and an immutable item projection. Nothing in here
+     * touches Bukkit once the task has hopped threads.
+     */
+    private record WalletAudit(UUID playerId, long coinValue, Map<String, Object> item,
+                               Map<String, Object> location, MysterriaAuditBridge.AuditIdentity identity) {
+        static WalletAudit capture(Player player, ItemStack item, String domain) {
+            return new WalletAudit(player.getUniqueId(), VaultGUI.coinValue(item),
+                    Map.copyOf(MysterriaAuditBridge.itemMetadata(item)),
+                    Map.copyOf(MysterriaAuditBridge.playerLocation(player)),
+                    MysterriaAuditBridge.randomIdentity(domain));
+        }
+
+        void emit(String operation, long amount, boolean success, String reason, BigDecimal before, BigDecimal after) {
+            emit(operation, amount, success, success, reason, before, after);
+        }
+
+        /** {@code moneyMoved} is true when the balance changed even though the operation failed. */
+        void emit(String operation, long amount, boolean success, boolean moneyMoved, String reason,
+                  BigDecimal before, BigDecimal after) {
+            MysterriaAuditBridge.emitWallet(operation, playerId, item, amount, success, moneyMoved, reason,
+                    before, after, identity, location);
+        }
+
+        void emitIndeterminate(String operation, long amount, BigDecimal before, BigDecimal after) {
+            MysterriaAuditBridge.emitPaymentIndeterminate("wallet." + operation, playerId, playerId, null,
+                    identity, amount, before, after, MysterriaAuditBridge.metadata(item, location));
+        }
+    }
+
+    /** Result of the async debit, carried to the main-thread coin handoff. */
+    private record Debit(VaultUtil.Payment payment, BigDecimal before, BigDecimal after) {
+    }
+
     private static long coinValue(ItemStack item) {
         String type = ItemUtil.getType(item);
         if (type == null) return 0L;
@@ -285,24 +320,28 @@ public class VaultGUI {
         };
     }
 
-    private void deposit(Player player, ItemStack item, long amount) {
+    private void deposit(Player player, ItemStack item, WalletAudit audit) {
+        long amount = audit.coinValue();
         if (amount == 0) return;
-        UUID playerId = player.getUniqueId();
-        BigDecimal before = currentBalance(playerId);
+        BigDecimal before = currentBalance(audit.playerId());
         TransactionLogger.logBalance(player, before, "before deposit");
-        VaultUtil.Payment payment = VaultUtil.depositChecked(playerId, amount, "wallet deposit");
+        VaultUtil.Payment payment = VaultUtil.depositChecked(audit.playerId(), amount, "wallet deposit");
         if (payment == VaultUtil.Payment.INDETERMINATE) {
             // The credit may have landed; handing the coins back too could duplicate them.
             TransactionLogger.logNote(player, "DEPOSIT " + item.getType() + " x" + item.getAmount() + " for " + amount
                     + " coppets UNCERTAIN, coins withheld, manual reconciliation needed");
-            TransactionLogger.logBalance(player, currentBalance(playerId), "after uncertain deposit");
+            BigDecimal after = currentBalance(audit.playerId());
+            TransactionLogger.logBalance(player, after, "after uncertain deposit");
+            audit.emitIndeterminate("deposited", amount, before, after);
             uncertain(player, "<yellow>We could not confirm your deposit. Your coins were kept back so they"
                     + " cannot be counted twice; please contact staff to check your balance.");
             return;
         }
         boolean success = payment.succeeded();
         TransactionLogger.logDeposit(player, item, amount, success);
-        TransactionLogger.logBalance(player, currentBalance(playerId), "after deposit");
+        BigDecimal after = currentBalance(audit.playerId());
+        TransactionLogger.logBalance(player, after, "after deposit");
+        audit.emit("deposited", amount, success, null, before, after);
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
                 if (ItemUtil.giveOrDrop(player, item)) {
@@ -315,56 +354,71 @@ public class VaultGUI {
                             + " (" + player.getUniqueId() + ") — deposit failed and they had already left");
                 }
             });
-            WIIC.INSTANCE.getLogger().warning("Deposit of " + amount + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
+            WIIC.INSTANCE.getLogger().warning("Deposit of " + amount + " coppets failed for " + player.getName() + " (" + audit.playerId() + ")");
         }
     }
 
     /**
-     * @return true only if the coppets were provably taken; only then may the coin be handed
-     * over. An uncertain debit also returns false, since the coin must not exist unpaid.
+     * Debits the coin's value. Only {@code SUCCESS} lets the coin be handed over; the
+     * committed wallet.withdrawn row is emitted by {@link #handOverCoin} once it has been.
+     * An uncertain debit is not a success either, since the coin must not exist unpaid.
      */
-    private boolean withdraw(Player player, ItemStack item, long amount) {
-        if (amount == 0) return false;
-        UUID playerId = player.getUniqueId();
-        BigDecimal before = currentBalance(playerId);
+    private Debit withdraw(Player player, ItemStack item, WalletAudit audit) {
+        long amount = audit.coinValue();
+        if (amount == 0) return new Debit(VaultUtil.Payment.FAILED, null, null);
+        BigDecimal before = currentBalance(audit.playerId());
         TransactionLogger.logBalance(player, before, "before withdraw");
-        VaultUtil.Payment payment = VaultUtil.withdrawChecked(playerId, amount, "wallet withdrawal");
+        VaultUtil.Payment payment = VaultUtil.withdrawChecked(audit.playerId(), amount, "wallet withdrawal");
         if (payment == VaultUtil.Payment.INDETERMINATE) {
             TransactionLogger.logNote(player, "WITHDRAW " + item.getType() + " x" + item.getAmount() + " for " + amount
                     + " coppets UNCERTAIN, no coins handed out, manual reconciliation needed");
-            TransactionLogger.logBalance(player, currentBalance(playerId), "after uncertain withdraw");
+            BigDecimal after = currentBalance(audit.playerId());
+            TransactionLogger.logBalance(player, after, "after uncertain withdraw");
+            audit.emitIndeterminate("withdrawn", amount, before, after);
             uncertain(player, "<yellow>We could not confirm your withdrawal, so no coins were handed out."
                     + " Please contact staff to check your balance.");
-            return false;
+            return new Debit(payment, before, after);
         }
         boolean success = payment.succeeded();
         TransactionLogger.logWithdraw(player, item, amount, success);
-        TransactionLogger.logBalance(player, currentBalance(playerId), "after withdraw");
+        BigDecimal after = currentBalance(audit.playerId());
+        TransactionLogger.logBalance(player, after, "after withdraw");
         if (!success) {
+            audit.emit("withdrawn", amount, false, null, before, after);
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () ->
                     player.sendMessage(MM.deserialize("<red>Withdrawal failed — please contact an administrator.")));
-            WIIC.INSTANCE.getLogger().warning("Withdraw of " + amount + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
+            WIIC.INSTANCE.getLogger().warning("Withdraw of " + amount + " coppets failed for " + player.getName() + " (" + audit.playerId() + ")");
         }
-        return success;
+        return new Debit(payment, before, after);
     }
 
-    private void sell(Player player, ItemStack item, int value) {
-        UUID playerId = player.getUniqueId();
-        BigDecimal before = currentBalance(playerId);
+    /** Main thread: hands the paid-for coin over, then records the withdrawal's real outcome. */
+    private static void handOverCoin(Player player, ItemStack coin, WalletAudit audit, Debit debit) {
+        boolean delivered = ItemUtil.giveOrDrop(player, coin);
+        audit.emit("withdrawn", audit.coinValue(), delivered, true,
+                delivered ? null : "debited; coin handoff failed: player offline", debit.before(), debit.after());
+    }
+
+    private void sell(Player player, ItemStack item, int value, WalletAudit audit) {
+        BigDecimal before = currentBalance(audit.playerId());
         TransactionLogger.logBalance(player, before, "before sell");
-        VaultUtil.Payment payment = VaultUtil.depositChecked(playerId, value, "wallet sale");
+        VaultUtil.Payment payment = VaultUtil.depositChecked(audit.playerId(), value, "wallet sale");
         if (payment == VaultUtil.Payment.INDETERMINATE) {
             // The payout may have landed; returning the goods too could duplicate them.
             TransactionLogger.logNote(player, "SELL " + item.getType() + " x" + item.getAmount() + " for " + value
                     + " coppets UNCERTAIN, items withheld, manual reconciliation needed");
-            TransactionLogger.logBalance(player, currentBalance(playerId), "after uncertain sell");
+            BigDecimal after = currentBalance(audit.playerId());
+            TransactionLogger.logBalance(player, after, "after uncertain sell");
+            audit.emitIndeterminate("sold", value, before, after);
             uncertain(player, "<yellow>We could not confirm your sale. Your items were kept back so they"
                     + " cannot be paid for twice; please contact staff to check your balance.");
             return;
         }
         boolean success = payment.succeeded();
         TransactionLogger.logSell(player, item, value, success);
-        TransactionLogger.logBalance(player, currentBalance(playerId), "after sell");
+        BigDecimal after = currentBalance(audit.playerId());
+        TransactionLogger.logBalance(player, after, "after sell");
+        audit.emit("sold", value, success, null, before, after);
         if (!success) {
             Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
                 if (ItemUtil.giveOrDrop(player, item)) {
@@ -375,7 +429,7 @@ public class VaultGUI {
                             + ") — sale failed and they had already left");
                 }
             });
-            WIIC.INSTANCE.getLogger().warning("Deposit of " + value + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
+            WIIC.INSTANCE.getLogger().warning("Deposit of " + value + " coppets failed for " + player.getName() + " (" + audit.playerId() + ")");
             return;
         }
         soldItemsManager.addSoldValue(player, value);

@@ -12,6 +12,7 @@ import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.Listing;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.source.ListingState;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.StashItem;
 import dev.ua.ikeepcalm.wiic.utils.VaultUtil;
+import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.Nullable;
 
@@ -19,6 +20,8 @@ import java.sql.Connection;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.Map;
+import java.math.BigDecimal;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -146,7 +149,7 @@ public class JournalRecovery {
      * What a committed repair leaves behind.
      *
      * @param prune      whether the entry is settled and may leave the journal now
-     * @param afterCommit work to run after the repair commits (a Vault refund), or null
+     * @param afterCommit work to run after the repair commits (a Vault refund or an audit row), or null
      */
     private record Repair(boolean prune, @Nullable Runnable afterCommit) {
         static final Repair DONE = new Repair(true, null);
@@ -157,24 +160,18 @@ public class JournalRecovery {
                            Set<String> paidAttempts, Set<String> refundAttempts,
                            Set<String> refusedAttempts) throws Exception {
         return switch (entry.type()) {
-            case LIST -> {
-                recoverList(conn, entry);
-                yield Repair.DONE;
-            }
+            case LIST -> new Repair(true, recoverList(conn, entry));
             case BUY -> recoverBuy(conn, entry, paidAttempts, refundAttempts, refusedAttempts);
-            case CLAIM -> {
-                recoverClaim(conn, entry, depositedBatches);
-                yield Repair.DONE;
-            }
+            case CLAIM -> new Repair(true, recoverClaim(conn, entry, depositedBatches));
             case BUY_PAID, BUY_REFUND, BUY_REFUND_REFUSED, CLAIM_DEPOSITED, STASH_CLAIM -> Repair.DONE;
         };
     }
 
     /** Crash between fee withdraw and listing insert: the item exists only in the journal payload. */
-    private void recoverList(Connection conn, MarketJournal.Entry entry) throws Exception {
+    private @Nullable Runnable recoverList(Connection conn, MarketJournal.Entry entry) throws Exception {
         UUID listingId = UUID.fromString(entry.id());
-        if (ListingDao.findById(conn, listingId) != null) return; // committed before the crash
-        if (entry.payload() == null) return;
+        if (ListingDao.findById(conn, listingId) != null) return null; // committed before the crash
+        if (entry.payload() == null) return null;
         ItemStack item = ItemStack.deserializeBytes(entry.payload());
         StashDao.insert(conn, new StashItem(UUID.randomUUID(), entry.player(), entry.payload(),
                 item.getType(), item.getAmount(), null,
@@ -182,6 +179,11 @@ public class JournalRecovery {
         TransactionDao.log(conn, "RECOVERY", entry.player(), null, listingId, entry.amount(),
                 "unlisted item restored to stash");
         plugin.getLogger().warning("Recovered unlisted item for " + entry.player() + " into their stash");
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("agora-listing", listingId);
+        return () -> MysterriaAuditBridge.emit("agora.listing.item_recovered", true,
+                entry.player(), entry.player(), listingId, identity, "unlisted item restored to stash",
+                MysterriaAuditBridge.metadata(Map.of("listing_id", listingId.toString()),
+                        MysterriaAuditBridge.itemMetadata(entry.payload())));
     }
 
     /** Crash between the buyer's withdraw and the sale commit: finish the sale, refund, or hold. */
@@ -200,18 +202,19 @@ public class JournalRecovery {
                     + " is gone. Entry kept; the refund will not be retried automatically; repay the buyer by hand.");
             return Repair.KEEP;
         }
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("agora-purchase", entry.id());
         UUID buyer = entry.player();
         boolean ownedByBuyer = buyer.equals(listing.buyerUuid());
 
         if (refused) {
             // The buyer paid and the provider refused the refund: a known debt. Repeating the
             // deposit is for staff to decide, and the goods must not follow a refund attempt.
-            return holdForStaff(conn, entry, listing, true, "refund refused");
+            return holdForStaff(conn, entry, listing, identity, true, "refund refused");
         }
         if (refundAttempts.contains(entry.id())) {
             // A refund was attempted and its outcome never reached disk. Refunding again could
             // pay twice; completing the sale would hand over goods that may already be paid back.
-            return holdForStaff(conn, entry, listing, false, "refund outcome unknown");
+            return holdForStaff(conn, entry, listing, identity, false, "refund outcome unknown");
         }
 
         if (!legacy && !paidAttempts.contains(entry.id())) {
@@ -220,7 +223,7 @@ public class JournalRecovery {
             // refund, since either would invent value, and keep the goods off the market. A
             // listing that was already released (older builds did that here) cannot be held,
             // but the entry is still kept so the attempt stays on record for staff.
-            return holdForStaff(conn, entry, listing, false, "withdraw outcome unknown");
+            return holdForStaff(conn, entry, listing, identity, false, "withdraw outcome unknown");
         }
 
         if (listing.state() == ListingState.SOLD && ownedByBuyer) {
@@ -240,19 +243,24 @@ public class JournalRecovery {
                     price, tax, price - tax, listingId, now));
             TransactionDao.log(conn, "BUY", buyer, listing.sellerUuid(), listingId, price, "journal recovery");
             plugin.getLogger().warning("Recovered interrupted sale " + listingId + " for buyer " + buyer);
-            return Repair.DONE;
+            return new Repair(true, () -> MysterriaAuditBridge.emit("agora.purchase.recovered", true,
+                    buyer, listing.sellerUuid(), listingId, identity,
+                    "interrupted sale committed by recovery", MysterriaAuditBridge.moneyMetadata(-price,
+                            MysterriaAuditBridge.metadata(Map.of("listing_id", listingId.toString(),
+                                            "tax", tax, "net", price - tax),
+                                    MysterriaAuditBridge.itemMetadata(listing.itemBytes())))));
         }
         if (listing.state() == ListingState.PAYMENT_HELD && ownedByBuyer) {
             // Paid but held: nothing in this build holds a paid attempt without a refund
             // marker, so this is outside what recovery can reason about. Leave it for staff.
-            return holdForStaff(conn, entry, listing, false, "paid purchase found held");
+            return holdForStaff(conn, entry, listing, identity, false, "paid purchase found held");
         }
         // Reservation was already released (sweeper or unknown state), so the withdraw must be
         // refunded. The audit row commits first; the money moves in the post-commit hook so a
         // rollback can never leave a refund nothing accounts for.
         TransactionDao.log(conn, "RECOVERY", buyer, null, listingId, entry.amount(),
                 "buy refund attempt " + entry.id());
-        return new Repair(false, () -> refundReleased(entry, listingId));
+        return new Repair(false, () -> refundReleased(entry, listingId, identity));
     }
 
     /**
@@ -261,7 +269,8 @@ public class JournalRecovery {
      * again: the next startup finds the marker and holds instead. A refused deposit adds a
      * {@code BUY_REFUND_REFUSED} marker and keeps the entry as the record of what is owed.
      */
-    private void refundReleased(MarketJournal.Entry entry, UUID listingId) {
+    private void refundReleased(MarketJournal.Entry entry, UUID listingId,
+                                MysterriaAuditBridge.AuditIdentity identity) {
         UUID buyer = entry.player();
         long amount = entry.amount();
         try {
@@ -275,7 +284,19 @@ public class JournalRecovery {
         }
         // A provider exception is reported by the checked helper and must not abort the
         // remaining recovery entries.
-        switch (VaultUtil.depositChecked(buyer, amount, "recovery refund for listing " + listingId)) {
+        BigDecimal balanceBefore = VaultUtil.balance(buyer);
+        VaultUtil.Payment payment = VaultUtil.depositChecked(buyer, amount, "recovery refund for listing " + listingId);
+        boolean refunded = payment.succeeded();
+        MysterriaAuditBridge.emit("agora.purchase.recovery_refunded", refunded,
+                buyer, buyer, listingId, identity,
+                refunded ? "interrupted purchase refunded by recovery"
+                        : payment == VaultUtil.Payment.INDETERMINATE
+                        ? "recovery refund outcome unknown; manual reconciliation needed"
+                        : "recovery refund failed; manual repair needed",
+                MysterriaAuditBridge.moneyMetadata(refunded ? amount : 0,
+                        balanceBefore, VaultUtil.balance(buyer), Map.of("listing_id", listingId.toString(),
+                        "payment", payment.name())));
+        switch (payment) {
             case SUCCESS -> {
                 plugin.getLogger().warning("Recovery refunded " + amount + " coppets to " + buyer);
                 journal.remove(entry.id());
@@ -305,20 +326,23 @@ public class JournalRecovery {
     /**
      * Keeps an attempt whose money outcome is unknown, or whose refund was refused
      * ({@code refundOwed}): holds the listing if this buyer still has it reserved, and keeps the
-     * journal entry so the next startup reports it again. The audit row is written once, on
+     * journal entry so the next startup reports it again. The audit rows are written once, on
      * the transition, rather than on every startup.
      */
     private Repair holdForStaff(Connection conn, MarketJournal.Entry entry, Listing listing,
+                                MysterriaAuditBridge.AuditIdentity identity,
                                 boolean refundOwed, String reason) throws Exception {
         UUID buyer = entry.player();
         boolean ownedByBuyer = buyer.equals(listing.buyerUuid());
         boolean held = ownedByBuyer && listing.state() == ListingState.PAYMENT_HELD;
+        boolean heldNow = false;
         if (ownedByBuyer && listing.state() == ListingState.PENDING_PAYMENT
                 && ListingDao.hold(conn, listing.id(), buyer)) {
             TransactionDao.log(conn, "HOLD", buyer, listing.sellerUuid(), listing.id(), entry.amount(), refundOwed
                     ? "REFUND OWED " + reason + ", attempt " + entry.id() + " - repay buyer by hand"
                     : "UNCERTAIN " + reason + ", attempt " + entry.id() + " - verify buyer balance");
             held = true;
+            heldNow = true;
         }
         String listingStatus = held ? "Listing held as PAYMENT_HELD"
                 : "Listing is " + listing.state() + " and could not be held";
@@ -332,18 +356,31 @@ public class JournalRecovery {
                         + " coppets (attempt " + entry.id() + "): " + reason + ". " + listingStatus
                         + "; journal entry kept. No goods delivered, no refund confirmed and no further refund"
                         + " attempted; check the buyer's balance and settle by hand.");
-        return Repair.KEEP;
+        if (!heldNow) return Repair.KEEP;
+        UUID listingId = listing.id();
+        long amount = entry.amount();
+        return new Repair(false, () -> MysterriaAuditBridge.emit(refundOwed
+                        ? "agora.purchase.recovery_refunded" : "agora.purchase.recovery_unproven", false,
+                buyer, buyer, listingId, identity,
+                (refundOwed ? "refund owed: " : "payment unproven: ") + reason + "; listing held",
+                MysterriaAuditBridge.moneyMetadata(0, Map.of("listing_id", listingId.toString(),
+                        "attempted_amount", amount))));
     }
 
     /** Crash during a ledger claim: the CLAIM_DEPOSITED marker decides the direction. */
-    private void recoverClaim(Connection conn, MarketJournal.Entry entry,
-                              Set<String> depositedBatches) throws Exception {
+    private @Nullable Runnable recoverClaim(Connection conn, MarketJournal.Entry entry,
+                                            Set<String> depositedBatches) throws Exception {
         UUID owner = entry.player();
-        if (!LedgerDao.hasClaiming(conn, owner)) return; // claim finished or was settled already
+        if (!LedgerDao.hasClaiming(conn, owner)) return null; // claim finished or was settled already
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("ledger-claim", entry.id());
         if (depositedBatches.contains(entry.id())) {
             LedgerDao.finishClaim(conn, owner, System.currentTimeMillis());
             TransactionDao.log(conn, "CLAIM_PROCEEDS", owner, null, null, entry.amount(), "journal recovery");
             plugin.getLogger().warning("Recovered deposited ledger claim of " + entry.amount() + " for " + owner);
+            return () -> MysterriaAuditBridge.emit("ledger.claim_recovered", true,
+                    owner, owner, null, identity, "deposited claim finalized by recovery",
+                    MysterriaAuditBridge.moneyMetadata(entry.amount(),
+                            Map.of("claim_id", entry.id())));
         } else {
             // Intent with no proof: the crash or a provider failure landed around the deposit
             // and nothing can say whether the money arrived. Reverting would let the owner
@@ -355,6 +392,10 @@ public class JournalRecovery {
             plugin.getLogger().severe("Ledger claim " + entry.id() + " of " + entry.amount() + " coppets for "
                     + owner + " was interrupted before the deposit could be proven. Rows left CLAIMING and"
                     + " no payout repeated. Check whether the deposit landed.");
+            return () -> MysterriaAuditBridge.emit("ledger.claim_recovery_unproven", false,
+                    owner, owner, null, identity, "deposit unproven; claim withheld",
+                    MysterriaAuditBridge.moneyMetadata(0, Map.of("claim_id", entry.id(),
+                            "claim_sum", entry.amount())));
         }
     }
 }

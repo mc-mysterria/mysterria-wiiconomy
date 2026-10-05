@@ -1,10 +1,13 @@
 package dev.ua.ikeepcalm.wiic.commands;
 
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditRisk;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopCatalog;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopEntry;
 import dev.ua.ikeepcalm.wiic.domain.shop.service.ShopServices;
 import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
+import dev.ua.ikeepcalm.wiic.utils.AuditActor;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
@@ -53,6 +56,10 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        AuditActor actor = AuditActor.of(sender);
+        // One row per invocation whatever the subcommand does; the rows below carry the detail.
+        actor.observed(label, args);
+
         if (args.length == 0) {
             sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit>")
                     .color(NamedTextColor.YELLOW));
@@ -61,30 +68,42 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
 
         switch (args[0].toLowerCase()) {
             case "reload":
-                plugin.reloadConfig();
-                PriceAppraiser.loadConfig();
-                if (plugin.getShopServices() != null) {
-                    plugin.getShopServices().config().reload();
-                    plugin.getShopServices().catalog().rebuild();
-                }
-                // The Fence's derived prices are built on the catalogue that just changed
-                // underneath them, so they have to go with it.
-                if (plugin.getMarketModule() != null) {
-                    plugin.getMarketModule().getServices().prices().invalidate();
+                try {
+                    plugin.reloadConfig();
+                    PriceAppraiser.loadConfig();
+                    if (plugin.getShopServices() != null) {
+                        plugin.getShopServices().config().reload();
+                        plugin.getShopServices().catalog().rebuild();
+                    }
+                    // The Fence's derived prices are built on the catalogue that just changed
+                    // underneath them, so they have to go with it.
+                    if (plugin.getMarketModule() != null) {
+                        plugin.getMarketModule().getServices().prices().invalidate();
+                    }
+                } catch (RuntimeException failure) {
+                    actor.emit("admin.wiic.reloaded", AuditOutcome.FAILED, AuditRisk.LOW, null,
+                            failure.getClass().getSimpleName(), AuditActor.fields());
+                    throw failure;
                 }
                 sender.sendMessage(Component.text("Configuration reloaded!")
                         .color(NamedTextColor.GREEN));
                 plugin.getLogger().log(Level.INFO, "Configuration reloaded by " + sender.getName());
+                actor.emit("admin.wiic.reloaded", AuditOutcome.COMMITTED, AuditRisk.LOW, null, null,
+                        AuditActor.fields());
                 break;
 
             case "restore":
-                restoreVillagerTrades(sender);
+                restoreVillagerTrades(sender, actor);
                 break;
 
             case "debug":
                 boolean currentState = plugin.getConfig().getBoolean("debug.villager-listener", false);
                 plugin.getConfig().set("debug.villager-listener", !currentState);
                 plugin.saveConfig();
+                // saveConfig reports no result, so the flag change is observed, not committed.
+                actor.emit("admin.debug.toggled", AuditOutcome.OBSERVED, AuditRisk.LOW, null, null,
+                        AuditActor.fields("flag", "debug.villager-listener", "old_value", currentState,
+                                "new_value", !currentState));
                 sender.sendMessage(Component.text("Debug mode ")
                         .color(NamedTextColor.YELLOW)
                         .append(Component.text(!currentState ? "enabled" : "disabled")
@@ -151,7 +170,7 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
         }
     }
 
-    private void restoreVillagerTrades(CommandSender sender) {
+    private void restoreVillagerTrades(CommandSender sender, AuditActor actor) {
         int restoredCount = 0;
         int totalVillagers = 0;
 
@@ -173,6 +192,8 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
                 .append(Component.text(totalVillagers).color(NamedTextColor.YELLOW))
                 .append(Component.text(" villagers!").color(NamedTextColor.GREEN)));
         plugin.getLogger().log(Level.INFO, "Restored trades for " + restoredCount + " out of " + totalVillagers + " villagers by " + sender.getName());
+        actor.emit("admin.villager_trades.restored", AuditOutcome.COMMITTED, AuditRisk.NORMAL, null, null,
+                AuditActor.fields("restored", restoredCount, "villagers_seen", totalVillagers));
     }
 
     private boolean restoreVillagerTrades(AbstractVillager villager) {

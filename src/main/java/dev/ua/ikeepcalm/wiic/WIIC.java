@@ -12,6 +12,8 @@ import dev.ua.ikeepcalm.wiic.domain.shop.service.ShopServices;
 import dev.ua.ikeepcalm.wiic.domain.wallet.models.WalletRecipe;
 import dev.ua.ikeepcalm.wiic.listeners.VillagerListener;
 import dev.ua.ikeepcalm.wiic.listeners.WalletListener;
+import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
+import dev.ua.ikeepcalm.wiic.utils.TransactionLogger;
 import lombok.Getter;
 import lombok.Setter;
 import net.milkbowl.vault2.economy.Economy;
@@ -50,6 +52,8 @@ public class WIIC extends JavaPlugin {
 
     @Override
     public void onEnable() {
+        MysterriaAuditBridge.initialize(this);
+        TransactionLogger.start();
         INSTANCE = this;
         pluginNamespace = new NamespacedKey(this, "dummy").getNamespace();
 
@@ -114,6 +118,8 @@ public class WIIC extends JavaPlugin {
         // Static, so it survives a plugin reload. A purchase whose callback was dropped
         // during shutdown would otherwise leave that player permanently unable to buy.
         PurchaseService.releaseAll();
+        MysterriaAuditBridge.close();
+        TransactionLogger.shutdown();
         getLogger().info("WIIC plugin disabled...");
     }
 
