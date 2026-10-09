@@ -1,5 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.entrance.service;
 
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditOutcome;
+import dev.ua.ikeepcalm.mysterria.audit.client.api.AuditRisk;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketFeedback;
@@ -7,6 +9,8 @@ import dev.ua.ikeepcalm.wiic.domain.agora.db.EntranceDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.MarketDatabase;
 import dev.ua.ikeepcalm.wiic.domain.agora.integration.LandsHook;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketEntrance;
+import dev.ua.ikeepcalm.wiic.utils.AuditActor;
+import dev.ua.ikeepcalm.wiic.utils.MysterriaAuditBridge;
 import dev.ua.ikeepcalm.wiic.utils.WorldUtil;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Bukkit;
@@ -175,14 +179,20 @@ public class EntranceService {
         MarketEntrance entrance = new MarketEntrance(UUID.randomUUID(), null,
                 WorldUtil.id(loc.getWorld()), loc.getBlockX(), loc.getBlockY(), loc.getBlockZ(),
                 admin.getUniqueId(), System.currentTimeMillis());
+        AuditActor actor = AuditActor.of(admin);
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("entrance", entrance.id());
         db.transactionThenMain(conn -> {
             EntranceDao.insert(conn, entrance);
             return true;
         }, inserted -> {
             byLocation.put(key(entrance), entrance);
+            actor.emit("admin.entrance.hub_registered", AuditOutcome.COMMITTED, AuditRisk.NORMAL, null, identity,
+                    null, entranceFields(entrance));
             callback.accept(true);
         }, error -> {
             plugin.getLogger().severe("Hub entrance insert failed: " + error);
+            actor.emit("admin.entrance.hub_registered", AuditOutcome.FAILED, AuditRisk.NORMAL, null, identity,
+                    "hub entrance insert failed", entranceFields(entrance));
             callback.accept(false);
         });
     }
@@ -217,13 +227,50 @@ public class EntranceService {
     }
 
     public void remove(MarketEntrance entrance, String reason) {
-        byLocation.remove(key(entrance));
+        remove(entrance, reason, null, null);
+    }
+
+    /**
+     * As {@link #remove(MarketEntrance, String)}. {@code actor} is whoever took the door down
+     * (staff, or the player who broke it; null for the sweeper and explosions) and
+     * {@code adminReason} the optional reason staff gave. The row is emitted once the
+     * database delete has finished, from the DB thread.
+     */
+    public void remove(MarketEntrance entrance, String reason, @Nullable AuditActor actor,
+                       @Nullable String adminReason) {
+        boolean registered = byLocation.remove(key(entrance)) != null;
         unclaimedStrikes.remove(entrance.id());
+        MysterriaAuditBridge.AuditIdentity identity = MysterriaAuditBridge.identity("entrance", entrance.id());
         db.submit(conn -> {
             EntranceDao.delete(conn, entrance.id());
             return null;
+        }).whenComplete((ignored, error) -> {
+            // A second removal of the same door (sweeper racing a break) deletes nothing new.
+            if (!registered) return;
+            Map<String, Object> metadata = entranceFields(entrance);
+            metadata.put("removal_cause", reason);
+            if (adminReason != null) metadata.put("admin_reason", adminReason);
+            boolean deleted = error == null;
+            String failure = deleted ? null
+                    : "registry entry removed; database delete failed: " + error.getClass().getSimpleName();
+            AuditOutcome outcome = deleted ? AuditOutcome.COMMITTED : AuditOutcome.FAILED;
+            if (actor != null) {
+                actor.emit("entrance.removed", outcome, AuditRisk.NORMAL, entrance.createdBy(), identity,
+                        deleted ? reason : failure, metadata);
+            } else {
+                MysterriaAuditBridge.emit("entrance.removed", outcome, AuditRisk.NORMAL, null, entrance.createdBy(),
+                        null, identity, deleted ? reason : failure, metadata);
+            }
         });
         plugin.getLogger().info("Market entrance " + entrance.id() + " removed (" + reason + ")");
+    }
+
+    /** Row fields for an entrance; door coordinates use their own keys so they never read as a position. */
+    private static Map<String, Object> entranceFields(MarketEntrance entrance) {
+        return AuditActor.fields("entrance_id", entrance.id().toString(), "land_id", entrance.landId(),
+                "hub", entrance.isHub(), "created_by", entrance.createdBy().toString(),
+                "door_world", entrance.world(), "door_x", entrance.x(), "door_y", entrance.y(),
+                "door_z", entrance.z());
     }
 
     public List<MarketEntrance> all() {

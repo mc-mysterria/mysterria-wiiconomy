@@ -37,10 +37,18 @@ public class MarketJournal {
     /**
      * {@code BUY}/{@code CLAIM} are <i>intents</i>, written before money moves;
      * {@code BUY_PAID}/{@code CLAIM_DEPOSITED} are the matching proofs, written after.
-     * Recovery only ever completes a flow it can prove was paid for — an intent with no
-     * proof is unwound, never guessed at.
+     * Recovery only ever completes a flow it can prove was paid for. An intent with no
+     * proof is neither completed nor refunded: its goods or proceeds stay withheld for staff.
+     *
+     * <p>{@code BUY_REFUND} is written before a purchase refund is attempted. Once it is on
+     * disk the attempt can never be refunded again or completed as a sale; unless the
+     * refund's outcome is settled and the entry pruned, recovery holds the goods for staff.
+     *
+     * <p>{@code BUY_REFUND_REFUSED} is written after the economy provider refused that refund.
+     * The buyer paid and got neither goods nor money back, so the attempt is a known debt: it
+     * is never pruned, retried or completed, and recovery reports it as owed until staff repay it.
      */
-    public enum Type { LIST, BUY, BUY_PAID, CLAIM, CLAIM_DEPOSITED, STASH_CLAIM }
+    public enum Type { LIST, BUY, BUY_PAID, CLAIM, CLAIM_DEPOSITED, STASH_CLAIM, BUY_REFUND, BUY_REFUND_REFUSED }
 
     /**
      * @param id  identifies this <i>attempt</i>, not the thing it acts on. A listing can be

@@ -227,6 +227,9 @@ public class PlotShopListener implements Listener {
                 case BUSY -> send(buyer, "stall-busy", "<gray>Someone is already at the counter. A moment.");
                 case DISABLED, ERROR -> send(buyer, "stall-error",
                         "<red>The counter refuses to trade. Try again later.");
+                case UNCERTAIN -> send(buyer, "stall-payment-uncertain",
+                        "<yellow>The counter could not confirm whether you paid, so nothing was handed over."
+                                + " Please contact staff to check your balance before trying again.");
             }
             if (outcome.result() != PlotShopService.BuyResult.SUCCESS) feedback.refused(buyer);
         });

@@ -6,6 +6,7 @@ import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketFeedback;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.model.EntranceItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.EntranceService;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketEntrance;
+import dev.ua.ikeepcalm.wiic.utils.AuditActor;
 import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Location;
 import org.bukkit.block.Block;
@@ -151,7 +152,7 @@ public class EntranceListener implements Listener {
             send(breaker, "entrance-protected", "<red>The door resists your attempts.");
             return;
         }
-        entrances.remove(entrance, "broken by " + breaker.getName());
+        entrances.remove(entrance, "broken by " + breaker.getName(), AuditActor.of(breaker), null);
         // Handing the item back is what makes a door movable at all: without it, relocating
         // one costs a fresh set of echo shards, so nobody ever does.
         if (config.entranceRefundOnBreak()) {
