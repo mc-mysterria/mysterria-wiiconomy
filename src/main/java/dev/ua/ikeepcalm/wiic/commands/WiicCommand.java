@@ -54,7 +54,7 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 0) {
-            sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit>")
+            sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit|money>")
                     .color(NamedTextColor.YELLOW));
             return true;
         }
@@ -101,8 +101,12 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
                 dumpShopAudit(sender);
                 break;
 
+            case "money":
+                showMoneyFlow(sender, args);
+                break;
+
             default:
-                sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit>")
+                sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit|money>")
                         .color(NamedTextColor.YELLOW));
                 break;
         }
@@ -149,6 +153,27 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
             sender.sendMessage(Component.text("Failed to write shop-audit.txt: " + e.getMessage()).color(NamedTextColor.RED));
             plugin.getLogger().warning("Failed to write shop-audit.txt: " + e.getMessage());
         }
+    }
+
+    private void showMoneyFlow(CommandSender sender, String[] args) {
+        if (plugin.getMoneyFlow() == null) {
+            sender.sendMessage(Component.text("Money flow log is not running (needs iConomyUnlocked).").color(NamedTextColor.RED));
+            return;
+        }
+        int days;
+        try {
+            days = args.length > 1 ? Math.clamp(Integer.parseInt(args[1]), 1, 90) : 1;
+        } catch (NumberFormatException e) {
+            sender.sendMessage(Component.text("Usage: /wiic money [days]").color(NamedTextColor.YELLOW));
+            return;
+        }
+        plugin.getMoneyFlow().summarize(days).thenAccept(lines -> Bukkit.getScheduler().runTask(plugin,
+                () -> lines.forEach(line -> sender.sendMessage(Component.text(line).color(NamedTextColor.GOLD)))))
+                .exceptionally(e -> {
+                    plugin.getLogger().warning("Money flow summary failed: " + e);
+                    sender.sendMessage(Component.text("Money flow summary failed, see console.").color(NamedTextColor.RED));
+                    return null;
+                });
     }
 
     private void restoreVillagerTrades(CommandSender sender) {
@@ -312,7 +337,7 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("reload", "restore", "debug", "version", "shop-audit");
+            return Arrays.asList("reload", "restore", "debug", "version", "shop-audit", "money");
         }
         return null;
     }

@@ -254,7 +254,7 @@ public class VaultGUI {
                 Window.builder()
                         .setViewer(player)
                         .setUpperGui(gui)
-                        .setTitle(titleStr)
+                        .setTitle(GuiUtil.title(player, titleStr, Map.of(), gui.getHeight()))
                         .addCloseHandler(_ -> {
                             if (!actionClose[0]) {
                                 Bukkit.getScheduler().runTaskLaterAsynchronously(WIIC.INSTANCE, onClose, 5L);
@@ -326,6 +326,19 @@ public class VaultGUI {
 
     private void sell(Player player, ItemStack item) {
         int value = priceAppraiser.appraise(item);
+        if (!soldItemsManager.tryReserve(player, value)) {
+            String limit = WIIC.INSTANCE.getConfig().getString("selling-gui.lore.daily-limit", "<gold>ᴅᴀɪʟʏ ʟɪᴍɪᴛ ʀᴇᴀᴄʜᴇᴅ");
+            Bukkit.getScheduler().runTask(WIIC.INSTANCE, () -> {
+                if (!ItemUtil.giveOrDrop(player, item)) {
+                    WIIC.INSTANCE.getLogger().severe("OWED: " + item.getType() + " x" + item.getAmount()
+                            + " to " + player.getName() + " (" + player.getUniqueId()
+                            + ") — sale refused over the daily limit and they had already left");
+                    return;
+                }
+                player.sendMessage(MM.deserialize(limit));
+            });
+            return;
+        }
         BigDecimal before = currentBalance(player);
         TransactionLogger.logBalance(player, before, "before sell");
         boolean success = VaultUtil.deposit(player.getUniqueId(), value);
@@ -342,9 +355,8 @@ public class VaultGUI {
                 }
             });
             WIIC.INSTANCE.getLogger().warning("Deposit of " + value + " coppets failed for " + player.getName() + " (" + player.getUniqueId() + ")");
-            return;
+            soldItemsManager.addSoldValue(player, -value);
         }
-        soldItemsManager.addSoldValue(player, value);
     }
 
     private static BigDecimal currentBalance(Player player) {

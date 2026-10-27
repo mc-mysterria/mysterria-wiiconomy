@@ -114,8 +114,8 @@ public class PlotManageGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player,
-                        config != null ? config.getString("title", "Stalls to let") : "Stalls to let", Map.of())))
+                .setTitle(GuiUtil.title(player,
+                        config != null ? config.getString("title", "Stalls to let") : "Stalls to let", Map.of(), gui.getHeight()))
                 .build()
                 .open();
     }
@@ -170,9 +170,9 @@ public class PlotManageGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player,
+                .setTitle(GuiUtil.title(player,
                         config != null ? config.getString("rent-title", "Take the stall?") : "Take the stall?",
-                        extras)))
+                        extras, gui.getHeight()))
                 .build()
                 .open();
     }
@@ -241,8 +241,8 @@ public class PlotManageGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player,
-                        config != null ? config.getString("manage-title", "Your stall") : "Your stall", extras)))
+                .setTitle(GuiUtil.title(player,
+                        config != null ? config.getString("manage-title", "Your stall") : "Your stall", extras, gui.getHeight()))
                 .build()
                 .open();
     }
@@ -279,10 +279,10 @@ public class PlotManageGUI {
 
     private static List<String> defaultLore(@Nullable PlotRental rental, boolean mine) {
         if (rental == null) {
-            return List.of("", "<green>ᴀᴠᴀɪʟᴀʙʟᴇ", "<gray>%price% <dark_gray>/ %period%", "", "<dark_gray>ᴄʟɪᴄᴋ ᴛᴏ ʀᴇɴᴛ");
+            return List.of("", "<green>ᴀᴠᴀɪʟᴀʙʟᴇ", "<gray>%price% / %period%", "", "<gray>ᴄʟɪᴄᴋ ᴛᴏ ʀᴇɴᴛ");
         }
         if (mine) {
-            return List.of("", "<gold>ʏᴏᴜʀ sᴛᴀʟʟ", "<gray>ᴘᴀɪᴅ ꜰᴏʀ %expires%", "", "<dark_gray>ᴄʟɪᴄᴋ ᴛᴏ ᴍᴀɴᴀɢᴇ");
+            return List.of("", "<gold>ʏᴏᴜʀ sᴛᴀʟʟ", "<gray>ᴘᴀɪᴅ ꜰᴏʀ %expires%", "", "<gray>ᴄʟɪᴄᴋ ᴛᴏ ᴍᴀɴᴀɢᴇ");
         }
         return List.of("", "<red>ᴛᴀᴋᴇɴ", "<gray>ʀᴇɴᴛᴇᴅ ʙʏ <white>%renter%");
     }

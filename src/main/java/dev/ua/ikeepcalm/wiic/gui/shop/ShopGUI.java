@@ -103,7 +103,7 @@ public class ShopGUI {
             }
         }
 
-        Component title = MM.deserialize(GuiUtil.replacePlaceholders(player, config.getString("title", "Shop"), Map.of()));
+        Component title = GuiUtil.title(player, config.getString("title", "Shop"), Map.of(), gui.getHeight());
 
         Window.builder()
                 .setViewer(player)

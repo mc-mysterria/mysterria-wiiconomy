@@ -389,6 +389,12 @@ courier:
   enabled: true
   delivery-fee: 0               # optional coppet sink per delivery; the horn is the price
 
+dealer:
+  enabled: true
+  offers-per-rotation: 5        # 1-9
+  rotation-hours: 24
+  per-player-daily-limit: 2     # dealer purchases per player per day, 0 = no limit
+
 # ---------------------------------------------------------------------------
 # Sound cues — "<sound id>:<volume>:<pitch>", volume and pitch optional.
 # Sounds are addressed by vanilla string id, so a resource pack's own sounds
@@ -420,7 +426,7 @@ npcs:
     name: "<gold>ʟᴇᴅɢᴇʀ ᴋᴇᴇᴘᴇʀ"
     skin: ""
   shopkeeper:
-    name: "<gold>ǫᴜᴀʀᴛᴇʀᴍᴀsᴛᴇʀ"
+    name: "<gold>ꞯᴜᴀʀᴛᴇʀᴍᴀsᴛᴇʀ"
     skin: ""
   informant:
     name: "<dark_purple>ᴛʜᴇ ɪɴꜰᴏʀᴍᴀɴᴛ"
@@ -433,6 +439,9 @@ npcs:
     skin: ""
   courier_post:
     name: "<gray>ᴄᴏᴜʀɪᴇʀ ᴘᴏsᴛ"
+    skin: ""
+  dealer:
+    name: "<dark_purple>ᴛʜᴇ ᴄᴜʀɪᴏ ᴅᴇᴀʟᴇʀ"
     skin: ""
 
 messages:
@@ -462,8 +471,8 @@ messages:
   entrance-recovered: "<gray>You work the door free of the wall. The passage closes behind it."
   # What %seller% resolves to on a listing. Never set this to a name: anonymity is
   # what the market's sale tax is charging for.
-  listing-seller-anonymous: "<dark_gray>sᴏᴍᴇᴏɴᴇ"
-  listing-seller-self: "<dark_gray>ʏᴏᴜʀ ᴏᴡɴ ᴏꜰꜰᴇʀ"
+  listing-seller-anonymous: "<gray>sᴏᴍᴇᴏɴᴇ"
+  listing-seller-self: "<gray>ʏᴏᴜʀ ᴏᴡɴ ᴏꜰꜰᴇʀ"
   # The market's single exit door — breaking it would strand everyone inside.
   exit-protected: "<red>The way out will not be moved."
   # containment — the market refusing a shortcut. Written as things the place does
@@ -490,9 +499,10 @@ messages:
   listing-bad-price: "<red>No one would pay that. Pick a saner price."
   # Typing a price outright, instead of stepping to it. The anvil's own text field
   # is prefilled with the current price, so these are only the hints beneath it.
-  listing-price-hint-plain: "<dark_gray>A number is coppets: <gray>1200"
-  listing-price-hint-coins: "<dark_gray>Or coins: <gray>3v 10l 5c"
-  listing-price-hint-range: "<dark_gray>Between <gray>%min%<dark_gray> and <gray>%max%"
+  listing-price-hint-plain: "<gray>A number is coppets: 1200"
+  listing-price-hint-coins: "<gray>Or coins: 3v 10l 5c"
+  listing-price-hint-range: "<gray>Between %min% and %max%"
+  listing-price-payout: "<gray>You receive after tax: <gold>%payout%"
   listing-price-unreadable: "<red>That isn't a price. Try a number, or something like \"3v 10l\"."
   listing-price-range: "<red>The fence deals between %min% and %max%."
   listing-daily-limit: "<red>The fence waves you off — come back tomorrow."
@@ -507,16 +517,16 @@ messages:
   # the Fence's appraisal, shown on the goods in the price screen
   appraisal-header: "<gray>ᴛʜᴇ ꜰᴇɴᴄᴇ ʀᴇᴄᴋᴏɴs: <gold>%worth%"
   # Per-unit breakdown, shown only on a stack. %amount% %unit%
-  appraisal-unit: "<dark_gray>%amount% x <gray>%unit%"
-  appraisal-observed: "<dark_gray>\"%count% have crossed my counter lately.\""
+  appraisal-unit: "<gray>%amount% x %unit%"
+  appraisal-observed: "<gray>\"%count% have crossed my counter lately.\""
   appraisal-sequence: "<dark_purple>\"Sequence %sequence% goods. I know what that means.\""
-  appraisal-ingredient: "<dark_gray>\"Not much alone. Part of something a great deal more.\""
+  appraisal-ingredient: "<gray>\"Not much alone. Part of something a great deal more.\""
   # Beyonder goods whose depth the index could not place - openly a guess.
   appraisal-estimated: "<dark_purple>\"Of the Order, but I cannot place it. A guess — name your own.\""
-  appraisal-mundane: "<dark_gray>\"Ordinary stock. I know the going rate.\""
+  appraisal-mundane: "<gray>\"Ordinary stock. I know the going rate.\""
   # Priced from what it takes to make one.
-  appraisal-crafted: "<dark_gray>\"I know what goes into one of these.\""
-  appraisal-unknown: "<dark_gray>\"Never seen its like. Name your own price.\""
+  appraisal-crafted: "<gray>\"I know what goes into one of these.\""
+  appraisal-unknown: "<gray>\"Never seen its like. Name your own price.\""
   # sale rumours
   sale-rumour: "<dark_gray><i>Somewhere beneath the streets, a coin is set aside in your name.</i>"
   sale-rumour-market: "<dark_gray><i>The Ledger Keeper catches your eye and taps the ledger.</i>"
@@ -579,6 +589,12 @@ messages:
   courier-not-a-horn: "<red>That is no summoning horn."
   courier-already: "<gray>Your horn already hangs on the wall."
   courier-item-missing: "<red>The horn slipped out of your hands."
+  dealer-bought: "<green>The dealer wraps it up and slips it into your pack."
+  dealer-bought-stash: "<green>Paid. The dealer left it with the Ledger Keeper — collect it from your stash."
+  dealer-closed: "<gray>The dealer's shutters are down."
+  dealer-empty: "<gray>\"Nothing worth your coin today. Come back after the next shipment.\""
+  dealer-sold-out: "<gray>\"Gone. Someone was quicker. Come back after the next shipment.\""
+  dealer-limit: "<red>\"That's enough for one day, friend.\""
 
 # ---------------------------------------------------------------------------
 # GUI screens — same item-config schema as shop.yml
@@ -597,7 +613,7 @@ browse-gui:
       lore:
         - ""
         - "<gold>%price%"
-        - "<dark_gray>ᴇxᴘɪʀᴇs ɪɴ %expires%"
+        - "<gray>ᴇxᴘɪʀᴇs ɪɴ %expires%"
 
 detail-gui:
   title: "ɪɴsᴘᴇᴄᴛ ᴏꜰꜰᴇʀ"
@@ -616,8 +632,8 @@ price-gui:
       material: WRITABLE_BOOK
       name: "<yellow>ɴᴀᴍᴇ ɪᴛ ʏᴏᴜʀsᴇʟꜰ"
       lore:
-        - "<dark_gray>Type an exact figure instead of"
-        - "<dark_gray>stepping to it."
+        - "<gray>Type an exact figure instead of"
+        - "<gray>stepping to it."
 
 my-listings-gui:
   title: "ʏᴏᴜʀ ʟɪsᴛɪɴɢs"
@@ -646,7 +662,7 @@ informant-gui:
     # Ingredients have no pathway, so they get their own shelf; %count%
     ingredients:
       material: GLOW_BERRIES
-      name: "<dark_purple>ɪɴɢʀᴇᴅɪᴇɴᴛs <dark_gray>(%count%)"
+      name: "<dark_purple>ɪɴɢʀᴇᴅɪᴇɴᴛs <gray>(%count%)"
       lore:
         - ""
         - "<gray>ᴄᴏᴍᴘᴏɴᴇɴᴛs ᴡɪᴛʜ ɴᴏ ᴘᴀᴛʜᴡᴀʏ"
@@ -654,6 +670,26 @@ informant-gui:
     nothing:
       material: GLASS_BOTTLE
       name: "<gray>\"ɴᴏᴛʜɪɴɢ ᴍʏsᴛɪᴄᴀʟ ᴏɴ ᴛʜᴇ sʜᴇʟᴠᴇs ᴛᴏᴅᴀʏ...\""
+
+dealer-gui:
+  title: "ᴛʜᴇ ᴄᴜʀɪᴏ ᴅᴇᴀʟᴇʀ"
+  confirm-title: "sᴇᴀʟ ᴛʜᴇ ᴅᴇᴀʟ?"
+  background: GRAY_STAINED_GLASS_PANE
+  items:
+    offer:
+      lore:
+        - ""
+        - "<gold>%price%"
+        - "<gray>ʟᴇꜰᴛ ɪɴ sᴛᴏᴄᴋ: <white>%stock%"
+    sold-out:
+      lore:
+        - ""
+        - "<gray>sᴏʟᴅ ᴏᴜᴛ"
+    info:
+      material: CLOCK
+      name: "<dark_purple>ɴᴇxᴛ sʜɪᴘᴍᴇɴᴛ ɪɴ %next%"
+      lore:
+        - "<gray>ʏᴏᴜ ᴍᴀʏ ʙᴜʏ <white>%left%<gray> ᴍᴏʀᴇ ᴛᴏᴅᴀʏ"
 
 courier-gui:
   title: "ᴛʜᴇ ᴄᴏᴜʀɪᴇʀ ᴘᴏsᴛ"
@@ -666,7 +702,7 @@ courier-gui:
       - "<gray>ᴛɪᴇʀ: <white>%tier%"
       - "<gray>ᴅᴇʟɪᴠᴇʀʏ: <white>%seconds%s"
       - ""
-      - "<dark_gray>ᴘᴜʀᴄʜᴀsᴇs ꜰʟʏ sᴛʀᴀɪɢʜᴛ ᴛᴏ ʏᴏᴜ"
+      - "<gray>ᴘᴜʀᴄʜᴀsᴇs ꜰʟʏ sᴛʀᴀɪɢʜᴛ ᴛᴏ ʏᴏᴜ"
 
 plot-gui:
   title: "sᴛᴀʟʟs ᴛᴏ ʟᴇᴛ"
@@ -678,15 +714,15 @@ plot-gui:
     available:
       - ""
       - "<green>ᴀᴠᴀɪʟᴀʙʟᴇ"
-      - "<gray>%price% <dark_gray>/ %period%"
+      - "<gray>%price% / %period%"
       - ""
-      - "<dark_gray>ᴄʟɪᴄᴋ ᴛᴏ ʀᴇɴᴛ"
+      - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ʀᴇɴᴛ"
     yours:
       - ""
       - "<gold>ʏᴏᴜʀ sᴛᴀʟʟ"
       - "<gray>ᴘᴀɪᴅ ꜰᴏʀ %expires%"
       - ""
-      - "<dark_gray>ᴄʟɪᴄᴋ ᴛᴏ ᴍᴀɴᴀɢᴇ"
+      - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ᴍᴀɴᴀɢᴇ"
     taken:
       - ""
       - "<red>ᴛᴀᴋᴇɴ"

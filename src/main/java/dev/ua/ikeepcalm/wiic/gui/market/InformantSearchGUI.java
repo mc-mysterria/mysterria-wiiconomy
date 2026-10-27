@@ -86,7 +86,7 @@ public class InformantSearchGUI {
         if (index.unaligned() > 0 && slot < 36) {
             Map<String, String> extras = Map.of("%count%", String.valueOf(index.unaligned()));
             var icon = MarketBrowseGUI.configItem(config, "items.ingredients", player,
-                    Material.GLOW_BERRIES, "<dark_purple>ɪɴɢʀᴇᴅɪᴇɴᴛs <dark_gray>(%count%)", extras);
+                    Material.GLOW_BERRIES, "<dark_purple>ɪɴɢʀᴇᴅɪᴇɴᴛs <gray>(%count%)", extras);
             gui.setItem(slot, Item.builder().setItemProvider(icon)
                     .addClickHandler(_ -> new MarketBrowseGUI(services, () -> open(player))
                             .open(player, MarketBrowseGUI.Filter.ingredients(), ListingDao.Sort.NEWEST, 0))
@@ -97,7 +97,7 @@ public class InformantSearchGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of())))
+                .setTitle(GuiUtil.title(player, titleStr, Map.of(), gui.getHeight()))
                 .build()
                 .open();
     }

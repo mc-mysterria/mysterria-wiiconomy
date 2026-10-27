@@ -94,7 +94,7 @@ public class MyListingsGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of())))
+                .setTitle(GuiUtil.title(player, titleStr, Map.of(), gui.getHeight()))
                 .build()
                 .open();
     }
@@ -110,7 +110,7 @@ public class MyListingsGUI {
             }
             List<Component> lore = new ArrayList<>();
             List<String> template = loreTemplate.isEmpty()
-                    ? List.of("", "<gold>%price%", "<dark_gray>ᴇxᴘɪʀᴇs ɪɴ %expires%", "", "<red>ᴄʟɪᴄᴋ ᴛᴏ ᴡɪᴛʜᴅʀᴀᴡ")
+                    ? List.of("", "<gold>%price%", "<gray>ᴇxᴘɪʀᴇs ɪɴ %expires%", "", "<red>ᴄʟɪᴄᴋ ᴛᴏ ᴡɪᴛʜᴅʀᴀᴡ")
                     : loreTemplate;
             for (String line : template) {
                 String resolved = line.replace("%price%", price).replace("%expires%", expires);

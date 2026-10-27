@@ -74,7 +74,7 @@ public class LedgerGUI {
                     "%tax%", MarketBrowseGUI.plain(CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(entry.tax()))),
                     "%gross%", MarketBrowseGUI.plain(CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(entry.gross()))));
             ItemStack icon = MarketBrowseGUI.configItem(config, "items.entry", player,
-                    Material.PAPER, "<gold>+%net% <dark_gray>(ᴛᴀx %tax%)", extras);
+                    Material.PAPER, "<gold>+%net% <gray>(ᴛᴀx %tax%)", extras);
             gui.setItem(slot, Item.builder().setItemProvider(icon).build());
             slot++;
         }
@@ -112,7 +112,7 @@ public class LedgerGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of())))
+                .setTitle(GuiUtil.title(player, titleStr, Map.of(), gui.getHeight()))
                 .build()
                 .open();
     }

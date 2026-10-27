@@ -130,7 +130,7 @@ public class QuantityGUI {
 
         String titleStr = config != null ? config.getString("title", "Quantity") : "Quantity";
         Map<String, String> titleExtras = Map.of("%item%", entry.displayName());
-        Component title = MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, titleExtras));
+        Component title = GuiUtil.title(player, titleStr, titleExtras, gui.getHeight());
 
         Window.builder()
                 .setViewer(player)
@@ -146,6 +146,7 @@ public class QuantityGUI {
         int slot = GuiUtil.itemSlot(section);
         if (slot < 0 || slot >= 54) return;
         ItemStack btn = GuiUtil.createConfigItem(section, player);
+        if (Math.abs(delta) <= btn.getMaxStackSize()) btn.setAmount(Math.abs(delta));
         gui.setItem(slot, Item.builder().setItemProvider(btn)
                 .addClickHandler(_ -> open(player, entry, currentAmount + delta))
                 .build());
@@ -157,6 +158,7 @@ public class QuantityGUI {
         int slot = GuiUtil.itemSlot(section);
         if (slot < 0 || slot >= 54) return;
         ItemStack btn = GuiUtil.createConfigItem(section, player);
+        if (amount <= btn.getMaxStackSize()) btn.setAmount(amount);
         gui.setItem(slot, Item.builder().setItemProvider(btn)
                 .addClickHandler(_ -> open(player, entry, amount))
                 .build());

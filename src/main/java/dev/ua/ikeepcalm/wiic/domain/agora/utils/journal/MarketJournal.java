@@ -1,13 +1,13 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.utils.journal;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.utils.FileUtil;
 
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Base64;
@@ -40,7 +40,7 @@ public class MarketJournal {
      * Recovery only ever completes a flow it can prove was paid for — an intent with no
      * proof is unwound, never guessed at.
      */
-    public enum Type { LIST, BUY, BUY_PAID, CLAIM, CLAIM_DEPOSITED, STASH_CLAIM }
+    public enum Type { LIST, BUY, BUY_PAID, CLAIM, CLAIM_DEPOSITED, STASH_CLAIM, DEALER_BUY, DEALER_PAID }
 
     /**
      * @param id  identifies this <i>attempt</i>, not the thing it acts on. A listing can be
@@ -157,14 +157,7 @@ public class MarketJournal {
         StringBuilder sb = new StringBuilder();
         for (Entry entry : entries.values()) sb.append(format(entry)).append(System.lineSeparator());
         try {
-            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-            Files.writeString(tmp, sb.toString(), StandardCharsets.UTF_8,
-                    StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING, StandardOpenOption.WRITE, StandardOpenOption.SYNC);
-            try {
-                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (IOException atomicFailed) {
-                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
-            }
+            FileUtil.writeAtomically(file, sb.toString());
         } catch (IOException e) {
             throw new IllegalStateException("Market journal rewrite failed", e);
         }

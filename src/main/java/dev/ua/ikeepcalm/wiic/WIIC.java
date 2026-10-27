@@ -3,6 +3,7 @@ package dev.ua.ikeepcalm.wiic;
 import dev.ua.ikeepcalm.wiic.commands.*;
 import dev.ua.ikeepcalm.wiic.config.ShopConfig;
 import dev.ua.ikeepcalm.wiic.config.WalletConfig;
+import dev.ua.ikeepcalm.wiic.domain.money.service.MoneyFlowService;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketModule;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopCatalog;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopPricing;
@@ -44,6 +45,9 @@ public class WIIC extends JavaPlugin {
     @Getter
     private MarketModule marketModule;
 
+    @Getter
+    private MoneyFlowService moneyFlow;
+
     public static String getNamespace() {
         return pluginNamespace;
     }
@@ -76,6 +80,9 @@ public class WIIC extends JavaPlugin {
             getServer().getPluginManager().disablePlugin(this);
             return;
         }
+
+        moneyFlow = new MoneyFlowService(this);
+        if (!moneyFlow.start()) moneyFlow = null;
 
         // Underground Market — optional module; needs Vault, so wired after setupEconomy().
         marketModule = MarketModule.enableIfConfigured(this);
@@ -110,6 +117,7 @@ public class WIIC extends JavaPlugin {
     @Override
     public void onDisable() {
         if (marketModule != null) marketModule.shutdown();
+        if (moneyFlow != null) moneyFlow.stop();
         if (shopServices != null) shopServices.marketIndex().stop();
         // Static, so it survives a plugin reload. A purchase whose callback was dropped
         // during shutdown would otherwise leave that player permanently unable to buy.

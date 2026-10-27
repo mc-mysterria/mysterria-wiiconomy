@@ -140,7 +140,7 @@ public class ItemsGUI {
         }
 
         String titleStr = config != null ? config.getString("title", "Shop") : "Shop";
-        Component title = MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, titleExtras));
+        Component title = GuiUtil.title(player, titleStr, titleExtras, gui.getHeight());
 
         Window.builder()
                 .setViewer(player)

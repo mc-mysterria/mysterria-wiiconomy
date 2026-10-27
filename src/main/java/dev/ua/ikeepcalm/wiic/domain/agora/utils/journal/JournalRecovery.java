@@ -60,7 +60,8 @@ public class JournalRecovery {
                 .map(MarketJournal.Entry::id)
                 .collect(Collectors.toSet());
         Set<String> paidAttempts = entries.stream()
-                .filter(entry -> entry.type() == MarketJournal.Type.BUY_PAID)
+                .filter(entry -> entry.type() == MarketJournal.Type.BUY_PAID
+                        || entry.type() == MarketJournal.Type.DEALER_PAID)
                 .map(MarketJournal.Entry::id)
                 .collect(Collectors.toSet());
 
@@ -71,6 +72,7 @@ public class JournalRecovery {
                     // through their parent entry and pruned with it.
                     if (entry.type() == MarketJournal.Type.CLAIM_DEPOSITED
                             || entry.type() == MarketJournal.Type.BUY_PAID
+                            || entry.type() == MarketJournal.Type.DEALER_PAID
                             || entry.type() == MarketJournal.Type.STASH_CLAIM) {
                         continue;
                     }
@@ -118,7 +120,11 @@ public class JournalRecovery {
                 recoverClaim(conn, entry, depositedBatches);
                 yield null;
             }
-            case BUY_PAID, CLAIM_DEPOSITED, STASH_CLAIM -> null;
+            case DEALER_BUY -> {
+                recoverDealerBuy(conn, entry, paidAttempts);
+                yield null;
+            }
+            case BUY_PAID, CLAIM_DEPOSITED, STASH_CLAIM, DEALER_PAID -> null;
         };
     }
 
@@ -194,6 +200,26 @@ public class JournalRecovery {
                 plugin.getLogger().warning("Recovery refunded " + amount + " coppets to " + buyer);
             }
         };
+    }
+
+    /** Crash between the dealer's withdraw and handing the goods over: paid goods go to the stash. */
+    private void recoverDealerBuy(Connection conn, MarketJournal.Entry entry, Set<String> paidAttempts) throws Exception {
+        if (!paidAttempts.contains(entry.id())) {
+            TransactionDao.log(conn, "RECOVERY", entry.player(), null, null, entry.amount(),
+                    "unproven dealer purchase of offer " + entry.ref() + " - verify buyer balance");
+            plugin.getLogger().severe("Dealer purchase of offer " + entry.ref() + " by " + entry.player()
+                    + " for " + entry.amount() + " coppets was interrupted before payment could be proven."
+                    + " No goods delivered and no refund issued — check whether the withdraw landed.");
+            return;
+        }
+        UUID stashId = UUID.fromString(entry.id());
+        if (StashDao.exists(conn, stashId)) return;
+        ItemStack item = ItemStack.deserializeBytes(entry.payload());
+        StashDao.insert(conn, new StashItem(stashId, entry.player(), entry.payload(), item.getType(), item.getAmount(),
+                null, StashItem.SOURCE_DEALER, entry.ref(), System.currentTimeMillis()));
+        TransactionDao.log(conn, "RECOVERY", entry.player(), null, null, entry.amount(),
+                "paid dealer offer " + entry.ref() + " restored to stash");
+        plugin.getLogger().warning("Recovered paid dealer goods for " + entry.player() + " into their stash");
     }
 
     /** Crash during a ledger claim: the CLAIM_DEPOSITED marker decides the direction. */

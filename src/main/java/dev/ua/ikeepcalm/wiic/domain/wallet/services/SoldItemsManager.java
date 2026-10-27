@@ -58,6 +58,12 @@ public class SoldItemsManager {
         return updated;
     }
 
+    public synchronized boolean tryReserve(Player player, int value) {
+        if (value > getAvailableSellingAmount(player)) return false;
+        addSoldValue(player, value);
+        return true;
+    }
+
     public synchronized int getSoldValue(Player player) {
         return soldItemsConfig.getInt(player.getUniqueId() + "." + getCurrentDate(), 0);
     }

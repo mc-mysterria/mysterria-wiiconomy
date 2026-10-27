@@ -22,4 +22,5 @@ public record StashItem(
     public static final String SOURCE_CANCELLED = "CANCELLED";
     public static final String SOURCE_EVICTION = "EVICTION";
     public static final String SOURCE_RECOVERY = "RECOVERY";
+    public static final String SOURCE_DEALER = "DEALER";
 }

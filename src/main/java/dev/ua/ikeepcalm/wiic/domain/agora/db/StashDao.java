@@ -36,6 +36,15 @@ public class StashDao {
         }
     }
 
+    public static boolean exists(Connection c, UUID id) throws SQLException {
+        try (PreparedStatement ps = c.prepareStatement("SELECT 1 FROM stash_items WHERE id = ?")) {
+            ps.setString(1, id.toString());
+            try (ResultSet rs = ps.executeQuery()) {
+                return rs.next();
+            }
+        }
+    }
+
     public static List<StashItem> unclaimedByOwner(Connection c, UUID owner, int limit) throws SQLException {
         try (PreparedStatement ps = c.prepareStatement("""
                 SELECT * FROM stash_items WHERE owner_uuid = ? AND claimed_at IS NULL

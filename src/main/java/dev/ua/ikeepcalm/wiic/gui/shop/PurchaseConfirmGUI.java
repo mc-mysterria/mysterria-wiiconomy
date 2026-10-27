@@ -116,7 +116,7 @@ public class PurchaseConfirmGUI {
         }
 
         String titleStr = config != null ? config.getString("title", "Confirm purchase") : "Confirm purchase";
-        Component title = MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of()));
+        Component title = GuiUtil.title(player, titleStr, Map.of(), gui.getHeight());
 
         Window.builder()
                 .setViewer(player)

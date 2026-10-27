@@ -1,7 +1,7 @@
 name: WIIC
 version: '${version}'
 main: dev.ua.ikeepcalm.wiic.WIIC
-api-version: '1.21'
+api-version: '26.3'
 depend: [ iConomyUnlocked, Vault ]
 softdepend: [ Citizens, Lands, Worlds, UndeadPostmans, CircleOfImagination ]
 commands:

@@ -94,6 +94,11 @@ public class SellingGUI {
         String unavailLabel = appraisal <= 0
                 ? (config != null ? config.getString("lore.not-sellable", "<red>ɴᴏᴛ sᴇʟʟᴀʙʟᴇ") : "<red>ɴᴏᴛ sᴇʟʟᴀʙʟᴇ")
                 : (config != null ? config.getString("lore.daily-limit", "<gold>ᴅᴀɪʟʏ ʟɪᴍɪᴛ ʀᴇᴀᴄʜᴇᴅ") : "<gold>ᴅᴀɪʟʏ ʟɪᴍɪᴛ ʀᴇᴀᴄʜᴇᴅ");
+        if (!canSell && appraisal > 0) {
+            String fits = config != null ? config.getString("lore.daily-limit-fits", "<gray>sᴛɪʟʟ sᴇʟʟᴀʙʟᴇ ᴛᴏᴅᴀʏ: <white>%fits%")
+                    : "<gray>sᴛɪʟʟ sᴇʟʟᴀʙʟᴇ ᴛᴏᴅᴀʏ: <white>%fits%";
+            unavailLabel += "\n" + fits.replace("%fits%", String.valueOf(countSellable(item, available)));
+        }
 
         // Preview — clone the item and append appraisal details to its lore
         int previewSlot = config != null ? GuiUtil.slotIndex(config, "preview-slot") : 13;
@@ -142,7 +147,7 @@ public class SellingGUI {
         }
 
         String titleStr = config != null ? config.getString("title", "") : "";
-        var title = MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of()));
+        var title = GuiUtil.title(player, titleStr, Map.of(), gui.getHeight());
 
         Window.builder()
                 .setViewer(player)
@@ -177,7 +182,9 @@ public class SellingGUI {
             lore.addAll(appraisalDetails);
             if (!canSell) {
                 lore.add(Component.empty());
-                lore.add(MM.deserialize(unavailLabel).decoration(TextDecoration.ITALIC, false));
+                for (String line : unavailLabel.split("\n")) {
+                    lore.add(MM.deserialize(line).decoration(TextDecoration.ITALIC, false));
+                }
             }
             meta.lore(lore);
         });
@@ -187,5 +194,16 @@ public class SellingGUI {
     public interface ConfirmationCallback {
         void onConfirm(ItemStack item);
         void onCancel();
+    }
+
+    private int countSellable(ItemStack item, int available) {
+        ItemStack probe = item.asOne();
+        int unit = priceAppraiser.appraise(probe);
+        int guess = unit > 0 ? Math.min(item.getAmount() - 1, available / unit) : item.getAmount() - 1;
+        for (int amount = guess; amount > 0; amount--) {
+            probe.setAmount(amount);
+            if (priceAppraiser.appraise(probe) <= available) return amount;
+        }
+        return 0;
     }
 }

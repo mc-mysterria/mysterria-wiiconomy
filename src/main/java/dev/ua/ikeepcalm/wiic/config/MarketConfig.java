@@ -741,6 +741,22 @@ public class MarketConfig {
         return Math.max(0, config.getLong("courier.delivery-fee", 0));
     }
 
+    public boolean dealerEnabled() {
+        return config.getBoolean("dealer.enabled", true);
+    }
+
+    public int dealerOffersPerRotation() {
+        return Math.clamp(config.getInt("dealer.offers-per-rotation", 5), 1, 9);
+    }
+
+    public long dealerRotationMs() {
+        return Math.max(1, config.getLong("dealer.rotation-hours", 24)) * 60L * 60L * 1000L;
+    }
+
+    public int dealerPlayerDailyLimit() {
+        return Math.max(0, config.getInt("dealer.per-player-daily-limit", 2));
+    }
+
     // -------------------------------------------------------------------------
     // NPC defaults / GUI sections / messages
     // -------------------------------------------------------------------------

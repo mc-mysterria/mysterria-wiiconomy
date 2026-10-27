@@ -1,5 +1,7 @@
 package dev.ua.ikeepcalm.wiic.commands;
 
+import dev.ua.ikeepcalm.wiic.domain.agora.dealer.model.DealerItem;
+import dev.ua.ikeepcalm.wiic.domain.agora.dealer.service.DealerService;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.model.EntranceItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.EntranceService;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketBounds;
@@ -10,7 +12,10 @@ import dev.ua.ikeepcalm.wiic.domain.agora.plots.listener.PlotWandListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.model.PlotRegion;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.model.PlotRental;
 import dev.ua.ikeepcalm.wiic.domain.agora.plots.service.PlotService;
+import dev.ua.ikeepcalm.wiic.gui.market.MarketBrowseGUI;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
+import dev.ua.ikeepcalm.wiic.utils.PriceInput;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.block.Block;
@@ -63,6 +68,7 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                 player.sendMessage(Component.text("Secret entrance item given.").color(NamedTextColor.GREEN));
             }
             case "appraise" -> handleAppraise(player);
+            case "dealer" -> handleDealer(player, args);
             case "reload" -> {
                 module.getConfig().reload();
                 module.getServices().plots().reloadRegions();
@@ -107,6 +113,69 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                     .color(NamedTextColor.DARK_GRAY));
             player.sendMessage(Component.text("  value key " + facts.valueKey()).color(NamedTextColor.DARK_GRAY));
         });
+    }
+
+    private void handleDealer(Player player, String[] args) {
+        DealerService dealer = module.getServices().dealer();
+        String action = args.length >= 2 ? args[1].toLowerCase(Locale.ROOT) : "list";
+        switch (action) {
+            case "add" -> {
+                ItemStack held = player.getInventory().getItemInMainHand();
+                long price = args.length >= 3 ? PriceInput.parse(args[2]) : 0;
+                long stock = args.length >= 4 ? parseOr(args[3], 0) : 0;
+                long weight = args.length >= 5 ? parseOr(args[4], 0) : 1;
+                if (held.getType().isAir() || price < 1 || stock < 1 || weight < 1 || stock > Integer.MAX_VALUE || weight > Integer.MAX_VALUE) {
+                    player.sendMessage(Component.text("Hold the item, then: /wiicmarket dealer add <price, e.g. 2v or 4096> <daily-stock> [weight]")
+                            .color(NamedTextColor.RED));
+                    return;
+                }
+                String id = dealer.add(held.clone(), price, (int) stock, (int) weight);
+                player.sendMessage(Component.text("Dealer offer #" + id + " added: " + describe(held) + " for ")
+                        .append(CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(price)))
+                        .append(Component.text(", " + stock + " per rotation, weight " + weight
+                                + ". It joins the next rotation (/wiicmarket dealer roll to restock now)."))
+                        .color(NamedTextColor.GREEN));
+            }
+            case "remove" -> {
+                boolean removed = args.length >= 3 && dealer.remove(args[2]);
+                player.sendMessage(removed
+                        ? Component.text("Dealer offer #" + args[2] + " removed from the pool and the shelf.").color(NamedTextColor.GREEN)
+                        : Component.text("Usage: /wiicmarket dealer remove <id> (see /wiicmarket dealer list)").color(NamedTextColor.RED));
+            }
+            case "roll" -> {
+                dealer.roll();
+                player.sendMessage(Component.text("The dealer restocked: " + dealer.offers().size() + " offer(s) on the shelf.")
+                        .color(NamedTextColor.GREEN));
+            }
+            default -> {
+                long totalWeight = dealer.pool().stream().mapToLong(DealerItem::getWeight).sum();
+                var shelf = dealer.offers();
+                player.sendMessage(Component.text("Dealer pool (" + dealer.pool().size() + "), next restock in "
+                        + MarketBrowseGUI.formatRemaining(dealer.getNextRollAt() - System.currentTimeMillis())
+                        + ":").color(NamedTextColor.GOLD));
+                for (DealerItem item : dealer.pool()) {
+                    Integer remaining = shelf.get(item);
+                    player.sendMessage(Component.text(" #" + item.getId() + " " + describe(item.item()) + " — ")
+                            .append(CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(item.getPrice())))
+                            .append(Component.text(" — stock " + item.getDailyStock() + ", weight " + item.getWeight()
+                                    + " (" + Math.round(100.0 * item.getWeight() / totalWeight) + "%)"
+                                    + (remaining == null ? "" : " — ON SHELF, " + remaining + " left")))
+                            .color(NamedTextColor.GRAY));
+                }
+            }
+        }
+    }
+
+    private static String describe(ItemStack item) {
+        return MarketBrowseGUI.plain(item.effectiveName()) + " x" + item.getAmount();
+    }
+
+    private static long parseOr(String value, long fallback) {
+        try {
+            return Long.parseLong(value);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
     }
 
     private void handleNpc(Player player, String[] args) {
@@ -457,6 +526,7 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
             case "shop" -> MarketNpcRole.SHOPKEEPER;
             case "plots", "warden" -> MarketNpcRole.PLOT_WARDEN;
             case "courier" -> MarketNpcRole.COURIER_POST;
+            case "dealer" -> MarketNpcRole.DEALER;
             default -> MarketNpcRole.CLERK;
         };
         module.openGui(player, role, null);
@@ -464,14 +534,14 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
 
     private void usage(Player player) {
         player.sendMessage(Component.text(
-                "/wiicmarket <npc|entrance|plot|bounds|open|give-entrance|appraise|reload>").color(NamedTextColor.GOLD));
+                "/wiicmarket <npc|entrance|plot|bounds|open|dealer|give-entrance|appraise|reload>").color(NamedTextColor.GOLD));
     }
 
     @Override
     public @Nullable List<String> onTabComplete(@NotNull CommandSender sender, @NotNull Command command,
                                                 @NotNull String alias, @NotNull String[] args) {
         if (args.length == 1) {
-            return filter(args[0], Stream.of("npc", "entrance", "plot", "bounds", "open", "give-entrance", "appraise", "reload"));
+            return filter(args[0], Stream.of("npc", "entrance", "plot", "bounds", "open", "dealer", "give-entrance", "appraise", "reload"));
         }
         if (args.length == 2) {
             return switch (args[0].toLowerCase(Locale.ROOT)) {
@@ -479,13 +549,17 @@ public class MarketAdminCommand implements CommandExecutor, TabCompleter {
                 case "entrance" -> filter(args[1], Stream.of("hub-here", "exit-here", "list", "remove"));
                 case "plot" -> filter(args[1], Stream.of("wand", "define", "vendorspot", "snapshot", "list", "evict"));
                 case "bounds" -> filter(args[1], Stream.of("show", "set", "clear"));
+                case "dealer" -> filter(args[1], Stream.of("add", "list", "remove", "roll"));
                 case "open" -> filter(args[1],
-                        Stream.of("browse", "broker", "banker", "informant", "shop", "plots", "courier"));
+                        Stream.of("browse", "broker", "banker", "informant", "shop", "plots", "courier", "dealer"));
                 default -> List.of();
             };
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("npc") && args[1].equalsIgnoreCase("create")) {
             return filter(args[2], Stream.of(MarketNpcRole.values()).map(r -> r.name().toLowerCase(Locale.ROOT)));
+        }
+        if (args.length == 3 && args[0].equalsIgnoreCase("dealer") && args[1].equalsIgnoreCase("remove")) {
+            return filter(args[2], module.getServices().dealer().pool().stream().map(DealerItem::getId));
         }
         if (args.length == 3 && args[0].equalsIgnoreCase("plot")
                 && Stream.of("vendorspot", "snapshot", "evict").anyMatch(args[1]::equalsIgnoreCase)) {

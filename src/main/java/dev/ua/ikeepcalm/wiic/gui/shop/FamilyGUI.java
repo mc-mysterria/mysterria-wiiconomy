@@ -86,7 +86,7 @@ public class FamilyGUI {
                 meta.lore(List.of(
                         MM.deserialize("<gray>" + entries.size() + " items")
                                 .decoration(TextDecoration.ITALIC, false),
-                        MM.deserialize("<dark_gray>ᴄʟɪᴄᴋ ᴛᴏ ʙʀᴏᴡsᴇ")
+                        MM.deserialize("<gray>ᴄʟɪᴄᴋ ᴛᴏ ʙʀᴏᴡsᴇ")
                                 .decoration(TextDecoration.ITALIC, false)
                 ));
             });
@@ -100,7 +100,7 @@ public class FamilyGUI {
 
         String titleStr = config != null ? config.getString("title", "Shop") : "Shop";
         Map<String, String> extras = Map.of("%category%", GuiUtil.prettify(category.configKey()));
-        Component title = MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, extras));
+        Component title = GuiUtil.title(player, titleStr, extras, gui.getHeight());
 
         Window.builder()
                 .setViewer(player)

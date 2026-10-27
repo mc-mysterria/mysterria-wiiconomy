@@ -4,6 +4,7 @@ import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.config.WalletConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.MarketDatabase;
+import dev.ua.ikeepcalm.wiic.domain.agora.dealer.service.DealerService;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.listener.EntranceListener;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.model.EntranceItem;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.ContainmentService;
@@ -129,8 +130,14 @@ public class MarketModule {
         plots.onEvicted(shops::forgetPlot);
 
         PriceGuide prices = new PriceGuide(plugin, config, db, inspector);
+        DealerService dealer = new DealerService(plugin, config, db, journal);
+        try {
+            dealer.start();
+        } catch (Exception e) {
+            plugin.getLogger().severe("Curio dealer disabled, fix dealer.yml and restart (it will not be overwritten): " + e);
+        }
         this.services = new MarketServices(config, db, journal, inspector, listings, purchases, stash, ledger,
-                entrances, containment, plots, shops, courier, feedback, prices);
+                entrances, containment, plots, shops, courier, feedback, prices, dealer);
 
         Bukkit.getPluginManager().registerEvents(new EntranceListener(config, entrances, feedback), plugin);
         Bukkit.getPluginManager().registerEvents(new MarketProtectionListener(config, plots), plugin);
@@ -258,6 +265,7 @@ public class MarketModule {
 
     public void shutdown() {
         sweeper.stop();
+        services.dealer().stop();
         services.plots().shutdown();
         services.containment().shutdown();
         services.entrances().shutdown();
@@ -272,6 +280,7 @@ public class MarketModule {
         LedgerService.releaseAll();
         PlotService.releaseAll();
         PlotShopService.releaseAll();
+        DealerService.releaseAll();
     }
 
     /** GUI dispatch for market NPCs and {@code /wiicmarket open}. */
@@ -296,6 +305,7 @@ public class MarketModule {
                 }
             }
             case COURIER_POST -> new CourierPostGUI(services, player::closeInventory).open(player);
+            case DEALER -> new DealerGUI(services).open(player);
         }
     }
 

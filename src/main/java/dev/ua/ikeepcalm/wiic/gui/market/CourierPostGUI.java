@@ -90,7 +90,7 @@ public class CourierPostGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of())))
+                .setTitle(GuiUtil.title(player, titleStr, Map.of(), gui.getHeight()))
                 .build()
                 .open();
     }
@@ -114,7 +114,7 @@ public class CourierPostGUI {
         List<String> template = config != null ? config.getStringList("lore.contract") : List.of();
         if (template.isEmpty()) {
             template = List.of("", "<green>ᴏɴ ᴅᴜᴛʏ", "<gray>ᴛɪᴇʀ: <white>%tier%",
-                    "<gray>ᴅᴇʟɪᴠᴇʀʏ: <white>%seconds%s", "", "<dark_gray>ᴘᴜʀᴄʜᴀsᴇs ꜰʟʏ sᴛʀᴀɪɢʜᴛ ᴛᴏ ʏᴏᴜ");
+                    "<gray>ᴅᴇʟɪᴠᴇʀʏ: <white>%seconds%s", "", "<gray>ᴘᴜʀᴄʜᴀsᴇs ꜰʟʏ sᴛʀᴀɪɢʜᴛ ᴛᴏ ʏᴏᴜ");
         }
         List<String> lore = template;
         ItemStack display = horn.clone();

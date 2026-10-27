@@ -98,7 +98,7 @@ public class StashGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of())))
+                .setTitle(GuiUtil.title(player, titleStr, Map.of(), gui.getHeight()))
                 .build()
                 .open();
     }
@@ -132,7 +132,7 @@ public class StashGUI {
             List<Component> existing = meta.lore();
             if (existing != null) lore.addAll(existing);
             List<String> template = loreTemplate.isEmpty()
-                    ? List.of("", "<dark_gray>ꜰʀᴏᴍ: %source%", "<green>ᴄʟɪᴄᴋ ᴛᴏ ᴄʟᴀɪᴍ")
+                    ? List.of("", "<gray>ꜰʀᴏᴍ: %source%", "<green>ᴄʟɪᴄᴋ ᴛᴏ ᴄʟᴀɪᴍ")
                     : loreTemplate;
             for (String line : template) {
                 String resolved = line.replace("%source%", item.source().toLowerCase());

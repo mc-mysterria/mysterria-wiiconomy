@@ -3,7 +3,6 @@ package dev.ua.ikeepcalm.wiic.gui;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.config.WalletConfig;
 import dev.ua.ikeepcalm.wiic.utils.GuiUtil;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
@@ -28,7 +27,6 @@ import java.util.Map;
  */
 public class SettingsGUI {
 
-    private static final MiniMessage MM = MiniMessage.miniMessage();
 
     private final Player player;
     private final Runnable onBack;
@@ -98,7 +96,7 @@ public class SettingsGUI {
         }
 
         String titleStr = config != null ? config.getString("title", "") : "";
-        var title = MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of()));
+        var title = GuiUtil.title(player, titleStr, Map.of(), gui.getHeight());
 
         Window.builder()
                 .setViewer(player)

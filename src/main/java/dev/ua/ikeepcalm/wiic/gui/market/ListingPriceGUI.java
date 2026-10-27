@@ -104,8 +104,8 @@ public class ListingPriceGUI {
         // Steppers, coarsest outward: [-big .. -small] [preview] [+small .. +big].
         long[] steps = stepsFor(price[0]);
         for (int i = 0; i < steps.length; i++) {
-            gui.setItem(9 + i, stepperButton(gui, config, player, price, -steps[steps.length - 1 - i]));
-            gui.setItem(14 + i, stepperButton(gui, config, player, price, steps[i]));
+            gui.setItem(9 + i, stepperButton(gui, config, player, price, -steps[steps.length - 1 - i], steps.length - i));
+            gui.setItem(14 + i, stepperButton(gui, config, player, price, steps[i], i + 1));
         }
 
         boolean[] acted = {false};
@@ -150,7 +150,7 @@ public class ListingPriceGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of())))
+                .setTitle(GuiUtil.title(player, titleStr, Map.of(), gui.getHeight()))
                 .addCloseHandler(_ -> {
                     if (!acted[0]) onBack.run();
                     acted[0] = false;
@@ -237,12 +237,12 @@ public class ListingPriceGUI {
                     .decoration(TextDecoration.ITALIC, false));
             meta.lore(List.of(
                     line(services.config().message("listing-price-hint-plain",
-                            "<dark_gray>ᴀ ɴᴜᴍʙᴇʀ ɪs ᴄᴏᴘᴘᴇᴛs: <gray>1200")),
+                            "<gray>ᴀ ɴᴜᴍʙᴇʀ ɪs ᴄᴏᴘᴘᴇᴛs: 1200")),
                     line(services.config().message("listing-price-hint-coins",
-                            "<dark_gray>ᴏʀ ᴄᴏɪɴs: <gray>3v 10l 5c")),
+                            "<gray>ᴏʀ ᴄᴏɪɴs: 3v 10l 5c")),
                     Component.empty(),
                     line(services.config().message("listing-price-hint-range",
-                                    "<dark_gray>ʙᴇᴛᴡᴇᴇɴ <gray>%min%<dark_gray> ᴀɴᴅ <gray>%max%")
+                                    "<gray>ʙᴇᴛᴡᴇᴇɴ %min% ᴀɴᴅ %max%")
                             .replace("%min%", MarketBrowseGUI.plain(
                                     CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(min))))
                             .replace("%max%", MarketBrowseGUI.plain(
@@ -268,7 +268,7 @@ public class ListingPriceGUI {
             List<Component> existing = meta.lore();
             if (existing != null) lore.addAll(existing);
             lore.add(Component.empty());
-            lore.add(line("<dark_gray>──────────────"));
+            lore.add(line("<gray>──────────────"));
             lore.add(line(services.config().message("appraisal-header", "<gray>ᴛʜᴇ ꜰᴇɴᴄᴇ ʀᴇᴄᴋᴏɴs: <gold>%worth%")
                     .replace("%worth%", worth)));
             // On a stack the header is the total, which says nothing about whether the
@@ -276,7 +276,7 @@ public class ListingPriceGUI {
             // can actually check against what they know a single one is worth.
             if (item.getAmount() > 1) {
                 lore.add(line(services.config().message("appraisal-unit",
-                                "<dark_gray>%amount% x <gray>%unit%")
+                                "<gray>%amount% x %unit%")
                         .replace("%amount%", String.valueOf(item.getAmount()))
                         .replace("%unit%", MarketBrowseGUI.plain(CoinUtil.getFormattedPrice(
                                 MarketBrowseGUI.clampToInt(suggestion.unitPrice()))))));
@@ -284,17 +284,17 @@ public class ListingPriceGUI {
 
             switch (suggestion.basis()) {
                 case OBSERVED -> lore.add(line(services.config().message("appraisal-observed",
-                                "<dark_gray>\"%count% have crossed my counter lately.\"")
+                                "<gray>\"%count% have crossed my counter lately.\"")
                         .replace("%count%", String.valueOf(suggestion.sampled()))));
                 case BEYONDER -> {
                     if (facts.servedSequence() != null) {
                         lore.add(line(services.config().message("appraisal-sequence",
-                                        "<dark_purple>\"ꜱᴇǫᴜᴇɴᴄᴇ %sequence% ɢᴏᴏᴅꜱ. ɪ ᴋɴᴏᴡ ᴡʜᴀᴛ ᴛʜᴀᴛ ᴍᴇᴀɴꜱ.\"")
+                                        "<dark_purple>\"ꜱᴇꞯᴜᴇɴᴄᴇ %sequence% ɢᴏᴏᴅꜱ. ɪ ᴋɴᴏᴡ ᴡʜᴀᴛ ᴛʜᴀᴛ ᴍᴇᴀɴꜱ.\"")
                                 .replace("%sequence%", String.valueOf(facts.servedSequence()))));
                     }
                     if (facts.kind() == ItemType.INGREDIENT && facts.servedSequence() != null) {
                         lore.add(line(services.config().message("appraisal-ingredient",
-                                "<dark_gray>\"ɴᴏᴛ ᴍᴜᴄʜ ᴀʟᴏɴᴇ. ᴘᴀʀᴛ ᴏꜰ ꜱᴏᴍᴇᴛʜɪɴɢ ᴍᴜᴄʜ ᴍᴏʀᴇ.\"")));
+                                "<gray>\"ɴᴏᴛ ᴍᴜᴄʜ ᴀʟᴏɴᴇ. ᴘᴀʀᴛ ᴏꜰ ꜱᴏᴍᴇᴛʜɪɴɢ ᴍᴜᴄʜ ᴍᴏʀᴇ.\"")));
                     }
                 }
                 // He can tell they are of the Order, but not how deep they run. Said out
@@ -303,11 +303,11 @@ public class ListingPriceGUI {
                 case ESTIMATED -> lore.add(line(services.config().message("appraisal-estimated",
                         "<dark_purple>\"ᴏꜰ ᴛʜᴇ ᴏʀᴅᴇʀ, ʙᴜᴛ ɪ ᴄᴀɴɴᴏᴛ ᴘʟᴀᴄᴇ ɪᴛ. ᴀ ɢᴜᴇꜱꜱ — ɴᴀᴍᴇ ʏᴏᴜʀ ᴏᴡɴ.\"")));
                 case SHOP -> lore.add(line(services.config().message("appraisal-mundane",
-                        "<dark_gray>\"ᴏʀᴅɪɴᴀʀʏ ꜱᴛᴏᴄᴋ. ɪ ᴋɴᴏᴡ ᴛʜᴇ ɢᴏɪɴɢ ʀᴀᴛᴇ.\"")));
+                        "<gray>\"ᴏʀᴅɪɴᴀʀʏ ꜱᴛᴏᴄᴋ. ɪ ᴋɴᴏᴡ ᴛʜᴇ ɢᴏɪɴɢ ʀᴀᴛᴇ.\"")));
                 case CRAFTED -> lore.add(line(services.config().message("appraisal-crafted",
-                        "<dark_gray>\"ɪ ᴋɴᴏᴡ ᴡʜᴀᴛ ɢᴏᴇꜱ ɪɴᴛᴏ ᴏɴᴇ ᴏꜰ ᴛʜᴇꜱᴇ.\"")));
+                        "<gray>\"ɪ ᴋɴᴏᴡ ᴡʜᴀᴛ ɢᴏᴇꜱ ɪɴᴛᴏ ᴏɴᴇ ᴏꜰ ᴛʜᴇꜱᴇ.\"")));
                 case NONE -> lore.add(line(services.config().message("appraisal-unknown",
-                        "<dark_gray>\"ɴᴇᴠᴇʀ ꜱᴇᴇɴ ɪᴛꜱ ʟɪᴋᴇ. ɴᴀᴍᴇ ʏᴏᴜʀ ᴏᴡɴ ᴘʀɪᴄᴇ.\"")));
+                        "<gray>\"ɴᴇᴠᴇʀ ꜱᴇᴇɴ ɪᴛꜱ ʟɪᴋᴇ. ɴᴀᴍᴇ ʏᴏᴜʀ ᴏᴡɴ ᴘʀɪᴄᴇ.\"")));
             }
             meta.lore(lore);
         });
@@ -320,13 +320,22 @@ public class ListingPriceGUI {
 
     /** Repaints the asking-price/fee slot of an already-open window. */
     private void renderPrice(Gui gui, @Nullable ConfigurationSection config, Player player, long price) {
+        String payout = MarketBrowseGUI.plain(CoinUtil.getFormattedPrice(
+                MarketBrowseGUI.clampToInt(price - services.config().saleTax(price))));
         Map<String, String> extras = Map.of(
                 "%price%", MarketBrowseGUI.plain(CoinUtil.getFormattedPrice(MarketBrowseGUI.clampToInt(price))),
                 "%fee%", MarketBrowseGUI.plain(CoinUtil.getFormattedPrice(
-                        MarketBrowseGUI.clampToInt(services.config().listingFee(price)))));
-        gui.setItem(PRICE_SLOT, Item.builder().setItemProvider(
-                MarketBrowseGUI.configItem(config, "items.price-display", player, Material.GOLD_NUGGET,
-                        "<gold>ᴀsᴋɪɴɢ: %price% <dark_gray>(ꜰᴇᴇ %fee%)", extras)).build());
+                        MarketBrowseGUI.clampToInt(services.config().listingFee(price)))),
+                "%payout%", payout);
+        ItemStack display = MarketBrowseGUI.configItem(config, "items.price-display", player, Material.GOLD_NUGGET,
+                "<gold>ᴀsᴋɪɴɢ: %price% <gray>(ꜰᴇᴇ %fee%)", extras);
+        display.editMeta(meta -> {
+            List<Component> lore = meta.hasLore() ? new ArrayList<>(meta.lore()) : new ArrayList<>();
+            lore.add(line(services.config().message("listing-price-payout",
+                    "<gray>You receive after tax: <gold>%payout%").replace("%payout%", payout)));
+            meta.lore(lore);
+        });
+        gui.setItem(PRICE_SLOT, Item.builder().setItemProvider(display).build());
     }
 
     /**
@@ -356,12 +365,15 @@ public class ListingPriceGUI {
     }
 
     private Item stepperButton(Gui gui, @Nullable ConfigurationSection config, Player player,
-                               long[] price, long delta) {
+                               long[] price, long delta, int rank) {
         String label = (delta > 0 ? "<green>+" : "<red>-")
                 + MarketBrowseGUI.plain(CoinUtil.getFormattedPrice(
                         MarketBrowseGUI.clampToInt(Math.abs(delta))));
+        ItemStack button = MarketBrowseGUI.plainItem(delta > 0 ? Material.LIME_DYE : Material.RED_DYE, label);
+        GuiUtil.styleButton(button, delta > 0 ? "increase" : "decrease");
+        button.setAmount(rank);
         return Item.builder()
-                .setItemProvider(MarketBrowseGUI.plainItem(delta > 0 ? Material.LIME_DYE : Material.RED_DYE, label))
+                .setItemProvider(button)
                 .addClickHandler(_ -> {
                     long updated = Math.clamp(price[0] + delta,
                             services.config().minPrice(), services.config().maxPrice());

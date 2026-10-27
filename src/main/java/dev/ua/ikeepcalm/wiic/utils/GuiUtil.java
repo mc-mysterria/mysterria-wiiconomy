@@ -3,8 +3,10 @@ package dev.ua.ikeepcalm.wiic.utils;
 import dev.ua.ikeepcalm.wiic.WIIC;
 import me.clip.placeholderapi.PlaceholderAPI;
 import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import net.kyori.adventure.text.minimessage.MiniMessage;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
@@ -15,37 +17,107 @@ import org.bukkit.inventory.meta.SkullMeta;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
-/**
- * Shared GUI utilities — config item creation, placeholder parsing, slot math.
- * All methods are static; do not instantiate.
- */
 public class GuiUtil {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
+    private static final TextColor TITLE = TextColor.color(0xF0CC55);
+    private static final NamespacedKey TOOLTIP = new NamespacedKey("wiic", "ledger");
+    private static final int TITLE_WIDTH = 166;
+    private static final String ELLIPSIS = "…";
+    private static final Map<String, String> BUTTON_ICONS = Map.ofEntries(
+            Map.entry("back", "sacredorder:gui/back"),
+            Map.entry("previous-page", "sacredorder:gui/left"),
+            Map.entry("next-page", "sacredorder:gui/right"),
+            Map.entry("page-indicator", "sacredorder:gui/info"),
+            Map.entry("confirm", "sacredorder:gui/check"),
+            Map.entry("confirm-available", "sacredorder:gui/check"),
+            Map.entry("confirm-unavailable", "sacredorder:gui/lock"),
+            Map.entry("cancel", "sacredorder:gui/close"),
+            Map.entry("search", "wiic:gui/search"),
+            Map.entry("sort", "sacredorder:gui/stash_sort"),
+            Map.entry("claim-all", "sacredorder:gui/coin"),
+            Map.entry("claim", "sacredorder:gui/coin"),
+            Map.entry("my-listings", "sacredorder:gui/stash_log"),
+            Map.entry("allowance", "sacredorder:gui/goal"),
+            Map.entry("info", "sacredorder:gui/goal"),
+            Map.entry("withdraw", "sacredorder:gui/up"),
+            Map.entry("extend", "sacredorder:gui/coin"),
+            Map.entry("release", "sacredorder:gui/unlocks"),
+            Map.entry("price-display", "sacredorder:gui/coin"),
+            Map.entry("type-price", "sacredorder:gui/commissions"),
+            Map.entry("type-amount", "sacredorder:gui/commissions"),
+            Map.entry("balance", "wallet:balance"),
+            Map.entry("market-index", "wallet:pages"),
+            Map.entry("preset", "wallet:block_2"),
+            Map.entry("decrease", "sacredorder:gui/minus"),
+            Map.entry("increase", "sacredorder:gui/plus"));
 
     private GuiUtil() {}
 
-    // -------------------------------------------------------------------------
-    // Background helpers
-    // -------------------------------------------------------------------------
+    public static boolean textured() {
+        return Bukkit.getPluginManager().isPluginEnabled("Nexo");
+    }
 
-    /**
-     * Creates a nameless glass-pane filler item for GUI backgrounds.
-     */
+    public static Component title(Player player, String template, Map<String, String> extras, int rows) {
+        Component text = MM.deserialize(replacePlaceholders(player, template, fitTitle(player, template, extras)));
+        if (!textured() || template.contains("<glyph:")) return text;
+        return MM.deserialize("<shift:-15><glyph:wiic_board_" + rows + "><shift:-176>").append(text.colorIfAbsent(TITLE));
+    }
+
+    private static Map<String, String> fitTitle(Player player, String template, Map<String, String> extras) {
+        List<String> used = extras.keySet().stream().filter(template::contains).toList();
+        if (used.isEmpty()) return extras;
+        Map<String, String> blanks = new HashMap<>();
+        used.forEach(key -> blanks.put(key, ""));
+        int room = (TITLE_WIDTH - textWidth(plain(replacePlaceholders(player, template, blanks)))) / used.size();
+        Map<String, String> fitted = new HashMap<>(extras);
+        used.forEach(key -> fitted.put(key, ellipsize(extras.get(key), room)));
+        return fitted;
+    }
+
+    private static String ellipsize(String text, int room) {
+        if (textWidth(text) <= room) return text;
+        int budget = room - textWidth(ELLIPSIS);
+        StringBuilder kept = new StringBuilder();
+        for (int i = 0; i < text.length(); ) {
+            int cp = text.codePointAt(i);
+            if (textWidth(kept) + charWidth(cp) > budget) break;
+            kept.appendCodePoint(cp);
+            i += Character.charCount(cp);
+        }
+        return kept.toString().stripTrailing() + ELLIPSIS;
+    }
+
+    private static String plain(String miniMessage) {
+        return PlainTextComponentSerializer.plainText().serialize(MM.deserialize(miniMessage));
+    }
+
+    private static int textWidth(CharSequence text) {
+        return text.codePoints().map(GuiUtil::charWidth).sum();
+    }
+
+    private static int charWidth(int cp) {
+        if ("!',.:;i|".indexOf(cp) >= 0) return 2;
+        if ("`l".indexOf(cp) >= 0) return 3;
+        if (" \"()*I[]t{}ɪ".indexOf(cp) >= 0) return 4;
+        if ("<>fk".indexOf(cp) >= 0) return 5;
+        if ("@~«»".indexOf(cp) >= 0) return 7;
+        if (cp == '…') return 8;
+        return 6;
+    }
+
     public static ItemStack emptyPane(Material material) {
+        if (textured()) return ItemStack.empty();
         ItemStack pane = new ItemStack(material);
         pane.editMeta(meta -> meta.displayName(Component.empty()));
         return pane;
     }
 
-    /**
-     * Reads {@code background} key from a config section and returns the
-     * corresponding Material. Falls back to {@code GRAY_STAINED_GLASS_PANE}.
-     */
     public static Material backgroundMaterial(ConfigurationSection config) {
         if (config == null) return Material.GRAY_STAINED_GLASS_PANE;
         String name = config.getString("background", "GRAY_STAINED_GLASS_PANE");
@@ -53,24 +125,19 @@ public class GuiUtil {
         return m != null ? m : Material.AIR;
     }
 
-    // -------------------------------------------------------------------------
-    // Item creation
-    // -------------------------------------------------------------------------
+    public static void styleButton(ItemStack item, String key) {
+        if (!textured() || item.isEmpty()) return;
+        String icon = BUTTON_ICONS.get(key.replaceFirst("-\\d+$", ""));
+        item.editMeta(meta -> {
+            meta.setTooltipStyle(TOOLTIP);
+            if (icon != null && !meta.hasItemModel()) meta.setItemModel(NamespacedKey.fromString(icon));
+        });
+    }
 
-    /**
-     * Creates an ItemStack from a config section with no extra placeholders.
-     * Supported keys: {@code material}, {@code name}, {@code lore},
-     * {@code item-model}, {@code custom-model-data}.
-     * Player-head skull owner is set automatically.
-     */
     public static ItemStack createConfigItem(ConfigurationSection section, Player player) {
         return createConfigItem(section, player, Map.of());
     }
 
-    /**
-     * Creates an ItemStack from a config section, substituting {@code extras}
-     * placeholders in addition to the standard set (see {@link #replacePlaceholders}).
-     */
     public static ItemStack createConfigItem(ConfigurationSection section, Player player, Map<String, String> extras) {
         if (section == null) return new ItemStack(Material.STONE);
 
@@ -109,21 +176,10 @@ public class GuiUtil {
         if (meta instanceof SkullMeta skullMeta) skullMeta.setOwningPlayer(player);
 
         item.setItemMeta(meta);
+        styleButton(item, section.getName());
         return item;
     }
 
-    // -------------------------------------------------------------------------
-    // Placeholder parsing
-    // -------------------------------------------------------------------------
-
-    /**
-     * Replaces built-in placeholders in {@code text}, then delegates any remaining
-     * {@code %placeholder%} tokens to PlaceholderAPI if it is installed.
-     *
-     * <p>Built-in: {@code %player%}, {@code %balance%}, {@code %first-join%},
-     * {@code %tps%}, {@code %ping%}, {@code %ram-used%}, {@code %ram-max%},
-     * {@code %online%}, {@code %max-players%}, plus any entries in {@code extras}.
-     */
     public static String replacePlaceholders(Player player, String text, Map<String, String> extras) {
         if (text == null) return "";
 
@@ -152,40 +208,20 @@ public class GuiUtil {
         return text;
     }
 
-    // -------------------------------------------------------------------------
-    // Slot math
-    // -------------------------------------------------------------------------
-
-    /**
-     * Converts an {@code [x, y]} slot list (col, row, both 0-based) to an
-     * InvUI slot index {@code y * 9 + x}. Returns {@code -1} for invalid input.
-     */
     public static int slotIndex(List<Integer> slot) {
         if (slot == null || slot.size() < 2) return -1;
         return slot.get(1) * 9 + slot.get(0);
     }
 
-    /**
-     * Reads an {@code [x, y]} list at {@code key} from {@code section} and
-     * converts it to an InvUI slot index.
-     */
     public static int slotIndex(ConfigurationSection section, String key) {
         if (section == null) return -1;
         return slotIndex(section.getIntegerList(key));
     }
 
-    /**
-     * Reads an {@code [x, y]} list from an item sub-section's {@code slot} key.
-     */
     public static int itemSlot(ConfigurationSection itemSection) {
         return slotIndex(itemSection, "slot");
     }
 
-    // -------------------------------------------------------------------------
-    // Text helpers
-    // -------------------------------------------------------------------------
-
-    /** Turns an {@code UPPER_SNAKE_CASE} or {@code lower_snake_case} token into "Title Case Words". */
     public static String prettify(String token) {
         String[] parts = token.toLowerCase(java.util.Locale.ROOT).split("_");
         StringBuilder sb = new StringBuilder();

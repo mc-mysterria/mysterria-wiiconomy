@@ -43,7 +43,7 @@ public class PriceAppraiser {
 
         double value = basePrice * materialCoefficient * itemStack.getAmount();
 
-        if (config.contains("minimum-value")) {
+        if (value > 0 && config.contains("minimum-value")) {
             value = Math.max(value, config.getDouble("minimum-value"));
         }
 
@@ -75,9 +75,9 @@ public class PriceAppraiser {
             };
         }
 
-        details.add(line("appraiser.base-price",    "<dark_gray>ʙᴀsᴇ ᴘʀɪᴄᴇ: <gray>%value%",    num(basePrice)));
-        details.add(line("appraiser.uniqueness",     "<dark_gray>ᴜɴɪQᴜᴇɴᴇss: <gray>%value%",     num(materialCoefficient)));
-        details.add(line("appraiser.quantity",       "<dark_gray>Qᴜᴀɴᴛɪᴛʏ: <gray>%value%",       String.valueOf(itemStack.getAmount())));
+        details.add(line("appraiser.base-price",    "<gray>ʙᴀsᴇ ᴘʀɪᴄᴇ: %value%",    num(basePrice)));
+        details.add(line("appraiser.uniqueness",     "<gray>ᴜɴɪQᴜᴇɴᴇss: %value%",     num(materialCoefficient)));
+        details.add(line("appraiser.quantity",       "<gray>Qᴜᴀɴᴛɪᴛʏ: %value%",       String.valueOf(itemStack.getAmount())));
 
         double value = basePrice * materialCoefficient * itemStack.getAmount();
         details.add(line("appraiser.final-appraisal", "<#FFD700>ꜰɪɴᴀʟ: <white>%value%",         num(value)));

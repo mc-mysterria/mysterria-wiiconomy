@@ -107,8 +107,8 @@ shop-gui:
       name: "<aqua>ᴍᴀʀᴋᴇᴛ ɪɴᴅᴇx"
       lore:
         - "<gray>ᴄᴜʀʀᴇɴᴛ: <white>%market-index%"
-        - "<dark_gray>ᴘʀɪᴄᴇs ꜰʟᴜᴄᴛᴜᴀᴛᴇ ᴡɪᴛʜ"
-        - "<dark_gray>ᴛʜᴇ sᴇʀᴠᴇʀ'ѕ ᴛᴏᴛᴀʟ ᴡᴇᴀʟᴛʜ"
+        - "<gray>ᴘʀɪᴄᴇs ꜰʟᴜᴄᴛᴜᴀᴛᴇ ᴡɪᴛʜ"
+        - "<gray>ᴛʜᴇ sᴇʀᴠᴇʀ'ѕ ᴛᴏᴛᴀʟ ᴡᴇᴀʟᴛʜ"
     search:
       slot: [8, 0]
       material: COMPASS
@@ -166,7 +166,7 @@ shop-gui:
         - "<gray>ᴇᴠᴇʀʏᴛʜɪɴɢ ᴇʟsᴇ"
 
 family-gui:
-  title: "<gold>ᴍᴀʀᴋᴇᴛ <dark_gray>» <white>%category%"
+  title: "<gold>ᴍᴀʀᴋᴇᴛ <gray>» <white>%category%"
   background: GRAY_STAINED_GLASS_PANE
   items:
     back:
@@ -177,7 +177,7 @@ family-gui:
         - "<gray>ʀᴇᴛᴜʀɴ ᴛᴏ ᴄᴀᴛᴇɢᴏʀɪᴇs"
 
 items-gui:
-  title: "<gold>ᴍᴀʀᴋᴇᴛ <dark_gray>» <white>%family%"
+  title: "<gold>ᴍᴀʀᴋᴇᴛ <gray>» <white>%family%"
   background: GRAY_STAINED_GLASS_PANE
   items:
     back:
@@ -198,12 +198,12 @@ items-gui:
       # Appended below each catalogue item's own lore.
       lore:
         - ""
-        - "<dark_gray>──────────────"
+        - "<gray>──────────────"
         - "<gray>ᴘʀɪᴄᴇ ᴇᴀᴄʜ: <#FFD700>%unit-price%"
         - "<gray>ᴄʟɪᴄᴋ ᴛᴏ ʙᴜʏ"
 
 quantity-gui:
-  title: "<gold>ǫᴜᴀɴᴛɪᴛʏ <dark_gray>» <white>%item%"
+  title: "<gold>ꞯᴜᴀɴᴛɪᴛʏ <gray>» <white>%item%"
   background: GRAY_STAINED_GLASS_PANE
   items:
     preview:
@@ -243,15 +243,15 @@ quantity-gui:
     preset-64:
       slot: [3, 3]
       material: PAPER
-      name: "<white>64 <dark_gray>(1 sᴛᴀᴄᴋ)"
+      name: "<white>64 <gray>(1 sᴛᴀᴄᴋ)"
     preset-320:
       slot: [4, 3]
       material: PAPER
-      name: "<white>320 <dark_gray>(5 sᴛᴀᴄᴋs)"
+      name: "<white>320 <gray>(5 sᴛᴀᴄᴋs)"
     preset-640:
       slot: [5, 3]
       material: PAPER
-      name: "<white>640 <dark_gray>(10 sᴛᴀᴄᴋs)"
+      name: "<white>640 <gray>(10 sᴛᴀᴄᴋs)"
     type-amount:
       slot: [7, 3]
       material: WRITABLE_BOOK

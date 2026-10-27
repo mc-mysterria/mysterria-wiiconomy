@@ -23,7 +23,8 @@ public enum MarketNpcRole {
     /** A renter's stall vendor — browse listings attributed to one plot (phase 2). */
     PLOT_VENDOR,
     /** Courier Post — deposit a postman horn for auto-delivery (phase 3). */
-    COURIER_POST;
+    COURIER_POST,
+    DEALER;
 
     public static @Nullable MarketNpcRole fromString(@Nullable String value) {
         if (value == null) return null;

@@ -67,7 +67,7 @@ wallet-gui:
 #   wallet-coins-start:    start slot for wallet coins (VerlDor → Lick → Coppet), fills right
 #   inventory-items-start: start slot for actionable player inventory items, fills right
 vault-gui:
-  title: ""
+  title: "ʏᴏᴜʀ ᴠᴀᴜʟᴛ"
   background: NONE
   wallet-coins-start: [2, 0]
   inventory-items-start: [1, 1]
@@ -79,14 +79,14 @@ vault-gui:
       lore:
         - "<gray>sᴛᴏʀᴇᴅ: <#FFD700>%balance%"
         - ""
-        - "<dark_gray>ᴄʟɪᴄᴋ ᴀ ᴄᴏɪɴ ᴛᴏ ᴡɪᴛʜᴅʀᴀᴡ"
-        - "<dark_gray>ᴄʟɪᴄᴋ ᴀ ʙᴀɢ ɪᴛᴇᴍ ᴛᴏ sᴇʟʟ"
+        - "<gray>ᴄʟɪᴄᴋ ᴀ ᴄᴏɪɴ ᴛᴏ ᴡɪᴛʜᴅʀᴀᴡ"
+        - "<gray>ᴄʟɪᴄᴋ ᴀ ʙᴀɢ ɪᴛᴇᴍ ᴛᴏ sᴇʟʟ"
       item-model: "wallet:balance"
 
 # Action GUI — deposit / withdrawal confirmation
 # preview-slot: [col, row] for the coin preview item
 action-gui:
-  title: ""
+  title: "ᴄᴏɴꜰɪʀᴍ ᴀᴄᴛɪᴏɴ"
   background: GRAY_STAINED_GLASS_PANE
   preview-slot: [4, 1]
   items:
@@ -111,7 +111,7 @@ action-gui:
 # confirm-available:   shown when the daily limit allows the sale; supports %price%
 # confirm-unavailable: shown when the item cannot be sold (bad type or daily limit hit)
 selling-gui:
-  title: ""
+  title: "ᴀᴘᴘʀᴀɪsᴀʟ"
   background: GRAY_STAINED_GLASS_PANE
   preview-slot: [4, 1]
   items:
@@ -147,6 +147,7 @@ selling-gui:
     separator-unavailable: "<dark_red>──────────────"
     not-sellable: "<red>ɴᴏᴛ sᴇʟʟᴀʙʟᴇ"
     daily-limit: "<gold>ᴅᴀɪʟʏ ʟɪᴍɪᴛ ʀᴇᴀᴄʜᴇᴅ"
+    daily-limit-fits: "<gray>sᴛɪʟʟ sᴇʟʟᴀʙʟᴇ ᴛᴏᴅᴀʏ: <white>%fits%"
 
 # Settings GUI — theme picker shown when a player clicks the settings item in WalletGUI
 # Each entry under "themes" is a standard item config section plus a "wallet-title" key.
@@ -154,7 +155,7 @@ selling-gui:
 # WalletGUI window title when the player has this theme selected.
 # Use %selected% in name/lore to show "✔ " prefix for the currently active theme.
 settings-gui:
-  title: ""
+  title: "ᴡᴀʟʟᴇᴛ sᴇᴛᴛɪɴɢs"
   background: GRAY_STAINED_GLASS_PANE
   themes:
     theme-1:
@@ -201,7 +202,7 @@ rarities:
   RARE: 2.0
   EPIC: 3.0
 
-# Multipliers for each ore
+# Sell price in coppets per ore block (not a multiplier)
 ores:
   COAL_ORE: 0.0
   COPPER_ORE: 0.0
@@ -238,9 +239,9 @@ coins:
 # All values support MiniMessage formatting. Use %value% for the numeric placeholder.
 appraiser:
   cannot-appraise: "<red>ᴄᴀɴɴᴏᴛ ᴀᴘᴘʀᴀɪsᴇ"
-  base-price:      "<dark_gray>ʙᴀsᴇ ᴘʀɪᴄᴇ: <gray>%value%"
-  uniqueness:      "<dark_gray>ᴜɴɪQᴜᴇɴᴇss: <gray>%value%"
-  quantity:        "<dark_gray>Qᴜᴀɴᴛɪᴛʏ: <gray>%value%"
+  base-price:      "<gray>ʙᴀsᴇ ᴘʀɪᴄᴇ: %value%"
+  uniqueness:      "<gray>ᴜɴɪQᴜᴇɴᴇss: %value%"
+  quantity:        "<gray>Qᴜᴀɴᴛɪᴛʏ: %value%"
   final-appraisal: "<#FFD700>ꜰɪɴᴀʟ: <white>%value%"
   cannot-sell:     "<red>ᴄᴀɴɴᴏᴛ sᴇʟʟ"
   daily-limit:     "<red>ᴅᴀɪʟʏ ʟɪᴍɪᴛ: <gray>%value%"

@@ -173,7 +173,7 @@ public class MarketBrowseGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of())))
+                .setTitle(GuiUtil.title(player, titleStr, Map.of(), gui.getHeight()))
                 .build()
                 .open();
     }
@@ -193,6 +193,7 @@ public class MarketBrowseGUI {
                         ? materialOr(section.getString("icon"), Material.BOOK)
                         : Material.BOOK;
                 ItemStack tab = plainItem(icon, "<gray>" + GuiUtil.prettify(id));
+                GuiUtil.styleButton(tab, "tab");
                 gui.setItem(slot++, Item.builder().setItemProvider(tab)
                         .addClickHandler(_ -> open(player, Filter.category(id), sort, 0))
                         .build());
@@ -262,7 +263,7 @@ public class MarketBrowseGUI {
             // what a buyer is judging, and a beyonder item's lore is most of its identity.
             List<Component> lore = meta.hasLore() ? new ArrayList<>(meta.lore()) : new ArrayList<>();
             List<String> template = loreTemplate.isEmpty()
-                    ? List.of("", "<gold>%price%", "<dark_gray>ᴇxᴘɪʀᴇs ɪɴ %expires%")
+                    ? List.of("", "<gold>%price%", "<gray>ᴇxᴘɪʀᴇs ɪɴ %expires%")
                     : loreTemplate;
             String seller = sellerLabel(services.config(), listing, viewer);
             for (String line : template) {
@@ -274,7 +275,7 @@ public class MarketBrowseGUI {
             }
             if (listing.coiPathway() != null) {
                 lore.add(MM.deserialize("<dark_purple>" + GuiUtil.prettify(listing.coiPathway())
-                                + (listing.coiSequence() != null ? " <dark_gray>sᴇǫ " + listing.coiSequence() : ""))
+                                + (listing.coiSequence() != null ? " <gray>sᴇꞯ " + listing.coiSequence() : ""))
                         .decoration(TextDecoration.ITALIC, false));
             }
             meta.lore(lore);
@@ -322,8 +323,8 @@ public class MarketBrowseGUI {
      */
     static String sellerLabel(MarketConfig config, Listing listing, Player viewer) {
         return listing.sellerUuid().equals(viewer.getUniqueId())
-                ? config.message("listing-seller-self", "<dark_gray>ʏᴏᴜʀ ᴏᴡɴ ᴏꜰꜰᴇʀ")
-                : config.message("listing-seller-anonymous", "<dark_gray>sᴏᴍᴇᴏɴᴇ");
+                ? config.message("listing-seller-self", "<gray>ʏᴏᴜʀ ᴏᴡɴ ᴏꜰꜰᴇʀ")
+                : config.message("listing-seller-anonymous", "<gray>sᴏᴍᴇᴏɴᴇ");
     }
 
     public static Item configButton(@Nullable ConfigurationSection config, String path, Player player,
@@ -338,7 +339,9 @@ public class MarketBrowseGUI {
         if (section != null) return GuiUtil.createConfigItem(section, player, extras);
         String name = fallbackName;
         for (var entry : extras.entrySet()) name = name.replace(entry.getKey(), entry.getValue());
-        return plainItem(fallback, name);
+        ItemStack item = plainItem(fallback, name);
+        GuiUtil.styleButton(item, path.substring(path.lastIndexOf('.') + 1));
+        return item;
     }
 
     static ItemStack plainItem(Material material, String miniMessageName) {
@@ -354,7 +357,7 @@ public class MarketBrowseGUI {
         return material != null ? material : fallback;
     }
 
-    static String formatRemaining(long millis) {
+    public static String formatRemaining(long millis) {
         if (millis <= 0) return "0m";
         Duration duration = Duration.ofMillis(millis);
         long hours = duration.toHours();
@@ -363,11 +366,11 @@ public class MarketBrowseGUI {
         return Math.max(1, duration.toMinutes()) + "m";
     }
 
-    static int clampToInt(long value) {
+    public static int clampToInt(long value) {
         return Math.clamp(value, 0, Integer.MAX_VALUE);
     }
 
-    static String plain(Component component) {
+    public static String plain(Component component) {
         return PlainTextComponentSerializer.plainText().serialize(component);
     }
 }

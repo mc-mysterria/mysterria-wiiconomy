@@ -6,7 +6,6 @@ import dev.ua.ikeepcalm.wiic.domain.agora.db.DailyCounterDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.ListingDao;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.GuiUtil;
-import net.kyori.adventure.text.minimessage.MiniMessage;
 import org.bukkit.Material;
 import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.entity.Player;
@@ -32,7 +31,6 @@ import java.util.Map;
  */
 public class BrokerGUI {
 
-    private static final MiniMessage MM = MiniMessage.miniMessage();
     private static final int CONTENT_START = 9;
     private static final int CONTENT_SIZE = 27;
     private static final int MY_LISTINGS_SLOT = 4;
@@ -108,7 +106,7 @@ public class BrokerGUI {
         Window.builder()
                 .setViewer(player)
                 .setUpperGui(gui)
-                .setTitle(MM.deserialize(GuiUtil.replacePlaceholders(player, titleStr, Map.of())))
+                .setTitle(GuiUtil.title(player, titleStr, Map.of(), gui.getHeight()))
                 .build()
                 .open();
     }

@@ -3,6 +3,7 @@ package dev.ua.ikeepcalm.wiic.domain.agora.market.service;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.market.model.MarketFeedback;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.MarketDatabase;
+import dev.ua.ikeepcalm.wiic.domain.agora.dealer.service.DealerService;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.ContainmentService;
 import dev.ua.ikeepcalm.wiic.domain.agora.entrance.service.EntranceService;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
@@ -38,5 +39,6 @@ public record MarketServices(
         PlotShopService shops,
         @Nullable CourierService courier,
         MarketFeedback feedback,
-        PriceGuide prices
+        PriceGuide prices,
+        DealerService dealer
 ) {}
