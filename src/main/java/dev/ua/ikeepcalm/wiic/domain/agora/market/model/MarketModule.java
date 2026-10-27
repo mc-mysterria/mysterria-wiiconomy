@@ -35,6 +35,7 @@ import dev.ua.ikeepcalm.wiic.domain.agora.utils.SaleNotifier;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.coi.ItemInspector;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.JournalRecovery;
 import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.MarketJournal;
+import dev.ua.ikeepcalm.wiic.domain.transition.service.VeilService;
 import dev.ua.ikeepcalm.wiic.gui.market.*;
 import dev.ua.ikeepcalm.wiic.gui.shop.ShopGUI;
 import dev.ua.ikeepcalm.wiic.utils.GuiUtil;
@@ -95,7 +96,7 @@ public class MarketModule {
         MarketJournal journal = new MarketJournal(plugin);
         new JournalRecovery(plugin, config, db, journal).run();
 
-        MarketFeedback feedback = new MarketFeedback(config);
+        MarketFeedback feedback = new MarketFeedback(config, new VeilService(plugin));
         SaleNotifier notifier = new SaleNotifier(plugin, config, feedback);
         ItemInspector inspector = new ItemInspector(config);
         ListingService listings = new ListingService(plugin, config, db, journal, inspector);

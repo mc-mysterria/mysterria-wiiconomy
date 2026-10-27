@@ -363,7 +363,7 @@ public class EntranceService {
             }
             Location destination = target;
             boolean astray = strayed;
-            int ascent = config.entranceDescentTicks() / 2;
+            int ascent = config.entranceDescentTicks();
             feedback.departing(player, ascent);
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (!player.isOnline()) return;

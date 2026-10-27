@@ -4,6 +4,7 @@ import dev.ua.ikeepcalm.wiic.WIIC;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopCatalog;
 import dev.ua.ikeepcalm.wiic.domain.shop.model.ShopEntry;
 import dev.ua.ikeepcalm.wiic.domain.shop.service.ShopServices;
+import dev.ua.ikeepcalm.wiic.domain.transition.service.VeilService;
 import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import net.kyori.adventure.text.Component;
@@ -18,6 +19,7 @@ import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.AbstractVillager;
 import org.bukkit.entity.Entity;
+import org.bukkit.entity.Player;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.MerchantRecipe;
 import org.bukkit.persistence.PersistentDataContainer;
@@ -37,12 +39,14 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
     private final NamespacedKey originalCostsKey;
     private final NamespacedKey originalResultsKey;
     private final NamespacedKey villagerVersionKey;
+    private final VeilService veil;
 
     public WiicCommand(WIIC plugin) {
         this.plugin = plugin;
         this.originalCostsKey = new NamespacedKey(plugin, "original_costs");
         this.originalResultsKey = new NamespacedKey(plugin, "original_results");
         this.villagerVersionKey = new NamespacedKey(plugin, "version");
+        this.veil = new VeilService(plugin);
     }
 
     @Override
@@ -54,7 +58,7 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
         }
 
         if (args.length == 0) {
-            sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit|money>")
+            sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit|money|veil>")
                     .color(NamedTextColor.YELLOW));
             return true;
         }
@@ -105,13 +109,24 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
                 showMoneyFlow(sender, args);
                 break;
 
+            case "veil":
+                if (sender instanceof Player player) {
+                    playVeil(player);
+                }
+                break;
+
             default:
-                sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit|money>")
+                sender.sendMessage(Component.text("Usage: /wiic <reload|restore|debug|version|shop-audit|money|veil>")
                         .color(NamedTextColor.YELLOW));
                 break;
         }
 
         return true;
+    }
+
+    private void playVeil(Player player) {
+        veil.close(player, 30);
+        Bukkit.getScheduler().runTaskLater(plugin, () -> veil.open(player, 40), 42);
     }
 
     /**
@@ -337,7 +352,7 @@ public class WiicCommand implements CommandExecutor, TabCompleter {
     @Override
     public List<String> onTabComplete(CommandSender sender, Command command, String alias, String[] args) {
         if (args.length == 1) {
-            return Arrays.asList("reload", "restore", "debug", "version", "shop-audit", "money");
+            return Arrays.asList("reload", "restore", "debug", "version", "shop-audit", "money", "veil");
         }
         return null;
     }

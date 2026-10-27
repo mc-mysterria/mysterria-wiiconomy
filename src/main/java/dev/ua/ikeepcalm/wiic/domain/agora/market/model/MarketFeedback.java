@@ -1,6 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.market.model;
 
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
+import dev.ua.ikeepcalm.wiic.domain.transition.service.VeilService;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.World;
@@ -25,9 +26,11 @@ import java.util.Locale;
 public class MarketFeedback {
 
     private final MarketConfig config;
+    private final VeilService veil;
 
-    public MarketFeedback(MarketConfig config) {
+    public MarketFeedback(MarketConfig config, VeilService veil) {
         this.config = config;
+        this.veil = veil;
     }
 
     // -------------------------------------------------------------------------
@@ -37,9 +40,9 @@ public class MarketFeedback {
     /**
      * The door swings inward and the world goes dark — the first half of the descent.
      *
-     * <p>The blindness is the whole point of staging the arrival: without it the market
-     * is a coordinate change, and with it the player goes <i>down</i> somewhere. It runs
-     * a little past the teleport so the far side fades in rather than snapping into view.
+     * <p>The veil is the whole point of staging the arrival: without it the market
+     * is a coordinate change, and with it the player goes <i>down</i> somewhere. It holds
+     * closed until {@link #arrived} lifts it, so the far side fades in rather than snapping into view.
      *
      * @param descentTicks how long until the teleport fires.
      */
@@ -47,7 +50,7 @@ public class MarketFeedback {
         playAt(door, "entrance-open", "block.iron_door.open:0.7:0.5");
         spray(door, "SOUL", 18, 0.35);
         play(traveller, "descend", "ambient.cave:0.9:0.5");
-        blind(traveller, descentTicks + config.entranceFadeTicks());
+        veil.close(traveller, descentTicks);
         traveller.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS,
                 descentTicks + 10, 4, false, false, false));
     }
@@ -56,27 +59,24 @@ public class MarketFeedback {
     public void arrived(Player player) {
         play(player, "arrive", "block.sculk_catalyst.bloom:0.7:0.6");
         spray(player.getLocation(), "SOUL_FIRE_FLAME", 12, 0.4);
+        veil.open(player, config.entranceFadeTicks());
     }
 
     /** The descent was interrupted — give the player their eyes back immediately. */
     public void descentAborted(Player player) {
-        player.removePotionEffect(PotionEffectType.BLINDNESS);
+        veil.clear(player);
         player.removePotionEffect(PotionEffectType.SLOWNESS);
     }
 
-    /** Back out into daylight — a shorter fade, since nobody sneaks out slowly. */
+    /** Back out into daylight, through the same veil that brought them down. */
     public void departing(Player player, int descentTicks) {
         play(player, "depart", "block.iron_door.close:0.7:0.7");
-        blind(player, descentTicks + config.entranceFadeTicks() / 2);
+        veil.close(player, descentTicks);
     }
 
     public void departed(Player player) {
         play(player, "surface", "block.beacon.deactivate:0.5:1.4");
-    }
-
-    private void blind(Player player, int ticks) {
-        if (ticks <= 0) return;
-        player.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, ticks, 0, false, false, false));
+        veil.open(player, config.entranceFadeTicks());
     }
 
     /** A new secret entrance takes hold in someone's land. */
