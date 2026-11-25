@@ -5,6 +5,7 @@ import dev.ua.ikeepcalm.wiic.domain.wallet.models.WalletData;
 import dev.ua.ikeepcalm.wiic.domain.wallet.services.PriceAppraiser;
 import dev.ua.ikeepcalm.wiic.domain.wallet.services.SoldItemsManager;
 import dev.ua.ikeepcalm.wiic.gui.WalletGUI;
+import dev.ua.ikeepcalm.wiic.utils.CoinUtil;
 import dev.ua.ikeepcalm.wiic.utils.ItemUtil;
 import dev.ua.ikeepcalm.wiic.utils.WalletUtil;
 import org.bukkit.Bukkit;
@@ -159,9 +160,35 @@ public class WalletListener implements Listener {
 
     @EventHandler
     private void prepareCraftEvent(PrepareItemCraftEvent event) {
+        ItemStack split = coinSplitResult(event.getInventory().getMatrix());
+        if (split != null) {
+            event.getInventory().setResult(split);
+            return;
+        }
         if (containsSpecialItem(event.getInventory().getMatrix()) && isNotSpecialRecipe(event.getRecipe())) {
             event.getInventory().setResult(null);
         }
+    }
+
+    /**
+     * A lone Verl Dor splits into 64 Licks and a lone Lick into 64 Coppets. The registered recipes use
+     * an exact-item match, so a coin made before a name or model change (or by another plugin) no longer
+     * matched and fell through to the vanilla gold-nugget recipe, which is blocked for coins: nothing
+     * could be split until the coin went through the wallet. This matches by coin type instead.
+     */
+    private ItemStack coinSplitResult(ItemStack[] matrix) {
+        ItemStack coin = null;
+        for (ItemStack item : matrix) {
+            if (item == null || item.getType().isAir()) continue;
+            if (coin != null) return null;
+            coin = item;
+        }
+        if (!CoinUtil.isCoin(coin)) return null;
+        return switch (ItemUtil.getType(coin)) {
+            case "goldcoin" -> CoinUtil.getLick(64);
+            case "silvercoin" -> CoinUtil.getCoppet(64);
+            default -> null;
+        };
     }
 
     @EventHandler
@@ -173,7 +200,8 @@ public class WalletListener implements Listener {
 
     @EventHandler
     private void playerCraftEvent(CraftItemEvent event) {
-        if (containsSpecialItem(event.getInventory().getMatrix()) && isNotSpecialRecipe(event.getRecipe())) {
+        if (containsSpecialItem(event.getInventory().getMatrix()) && isNotSpecialRecipe(event.getRecipe())
+                && coinSplitResult(event.getInventory().getMatrix()) == null) {
             event.setCancelled(true);
             return;
         }
