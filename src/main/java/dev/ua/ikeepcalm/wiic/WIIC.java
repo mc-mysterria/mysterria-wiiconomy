@@ -1,5 +1,7 @@
 package dev.ua.ikeepcalm.wiic;
 
+import dev.ua.ikeepcalm.wiic.api.BukkitMarketPrices;
+import dev.ua.ikeepcalm.wiic.api.MarketPrices;
 import dev.ua.ikeepcalm.wiic.commands.*;
 import dev.ua.ikeepcalm.wiic.config.ShopConfig;
 import dev.ua.ikeepcalm.wiic.config.WalletConfig;
@@ -20,6 +22,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.event.Listener;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.RegisteredServiceProvider;
+import org.bukkit.plugin.ServicePriority;
 import org.bukkit.plugin.java.JavaPlugin;
 
 import java.io.File;
@@ -72,6 +75,8 @@ public class WIIC extends JavaPlugin {
         Objects.requireNonNull(getCommand("wiic")).setTabCompleter(wiicCommand);
 
         shopServices = buildShopServices();
+        getServer().getServicesManager().register(MarketPrices.class,
+                new BukkitMarketPrices(shopServices.pricing()), this, ServicePriority.Normal);
         Objects.requireNonNull(getCommand("shop")).setExecutor(new ShopCommand(shopServices));
         shopServices.marketIndex().start();
 

@@ -1,6 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.dealer.service;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.api.event.MarketTradeEvent;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.MarketDatabase;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.StashDao;
@@ -216,6 +217,7 @@ public class DealerService {
         // The journal entry must be gone before the item exists in an inventory, or recovery would stash a second copy.
         if (buyer.isOnline() && journal.remove(attemptId)) {
             ItemUtil.giveOrDrop(buyer, goods);
+            MarketTradeEvent.fire(uuid, null, goods.getType(), item.getItemBytes(), goods.getAmount(), item.getPrice());
             finish(uuid, callback, DealResult.DELIVERED);
             return;
         }
@@ -226,6 +228,7 @@ public class DealerService {
             return null;
         }, done -> {
             journal.remove(attemptId);
+            MarketTradeEvent.fire(uuid, null, goods.getType(), item.getItemBytes(), goods.getAmount(), item.getPrice());
             finish(uuid, callback, DealResult.STASHED);
         }, error -> {
             plugin.getLogger().severe("Dealer goods for " + uuid + " could not be stashed (" + error
