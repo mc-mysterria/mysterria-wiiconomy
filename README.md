@@ -50,15 +50,7 @@
 
 ## 🔌 **Hooks for other plugins**
 
-WIIC exposes two small, read-only hooks. Both are plain Bukkit APIs, so other plugins do not need a compile dependency on WIIC.
-
-- **Event** `dev.ua.ikeepcalm.wiic.api.event.MarketTradeEvent` fires on the main thread after a paid market trade completes, both when a player buys another player's listing and when a player buys from the curio dealer. Getters: `getBuyerUuid()`, `getSellerUuid()` (null when WIIC was the seller), `getMaterial()`, `getItemBytes()` (WIIC's serialized `ItemStack`), `getAmount()`, `getTotalPrice()` and `getCurrency()` (always `coppets`). The event is read-only and cannot be cancelled; failed, refunded or merely reserved purchases do not fire it.
-- **Service** `dev.ua.ikeepcalm.wiic.api.MarketPrices`, registered with Bukkit's `ServicesManager`: `OptionalDouble price(Material material)` returns the live `/shop` unit price in coppets for a material WIIC sells, or an empty `OptionalDouble` when WIIC has no price for that material. The price includes the current market index, so read it when needed instead of caching it.
-
-```java
-RegisteredServiceProvider<MarketPrices> provider = Bukkit.getServicesManager().getRegistration(MarketPrices.class);
-OptionalDouble price = provider == null ? OptionalDouble.empty() : provider.getProvider().price(Material.STONE);
-```
+`dev.ua.ikeepcalm.wiic.api.event.MarketTradeEvent` fires on the main thread after a paid market trade completes, both for player listings and the curio dealer. Getters: `getBuyerUuid()`, `getSellerUuid()` (null when WIIC was the seller), `getMaterial()`, `getItemBytes()`, `getAmount()`, `getTotalPrice()` and `getCurrency()` (always `coppets`). It is read-only and cannot be cancelled; failed, refunded or reserved purchases do not fire it. Other plugins can listen by name without a compile dependency.
 
 ### 🔧 **Installation**
 
