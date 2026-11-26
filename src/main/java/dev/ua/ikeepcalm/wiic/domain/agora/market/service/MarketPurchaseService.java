@@ -1,6 +1,7 @@
 package dev.ua.ikeepcalm.wiic.domain.agora.market.service;
 
 import dev.ua.ikeepcalm.wiic.WIIC;
+import dev.ua.ikeepcalm.wiic.api.event.MarketTradeEvent;
 import dev.ua.ikeepcalm.wiic.config.MarketConfig;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.LedgerDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.ListingDao;
@@ -210,6 +211,8 @@ public class MarketPurchaseService {
             // Word reaches the seller wherever they are — that something sold, never what
             // or for how much. Counting it is the Ledger Keeper's job, in person.
             notifier.sold(listing.sellerUuid());
+            MarketTradeEvent.fire(uuid, listing.sellerUuid(), listing.material(),
+                    listing.itemBytes(), listing.amount(), listing.price());
             // The sale is already final; courier delivery only decides where the goods wait.
             if (courier != null && courier.hasContract(uuid)) {
                 courier.tryDeliver(buyer, stashId, listing.itemBytes(), listing.sellerUuid(), listing.sellerName(),

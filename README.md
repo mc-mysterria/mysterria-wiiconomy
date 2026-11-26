@@ -48,6 +48,10 @@
 
 </div>
 
+## 🔌 **Hooks for other plugins**
+
+`dev.ua.ikeepcalm.wiic.api.event.MarketTradeEvent` fires on the main thread after a paid market trade completes, both for player listings and the curio dealer. Getters: `getBuyerUuid()`, `getSellerUuid()` (null when WIIC was the seller), `getMaterial()`, `getItemBytes()`, `getAmount()`, `getTotalPrice()` and `getCurrency()` (always `coppets`). It is read-only and cannot be cancelled; failed, refunded or reserved purchases do not fire it. Other plugins can listen by name without a compile dependency.
+
 ### 🔧 **Installation**
 
 1. Download the latest release
