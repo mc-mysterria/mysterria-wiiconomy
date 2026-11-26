@@ -69,7 +69,8 @@ public class PlotService {
 
     private static final MiniMessage MM = MiniMessage.miniMessage();
 
-    public enum RentResult { SUCCESS, DISABLED, UNKNOWN_PLOT, ALREADY_RENTED, MAX_PLOTS, INSUFFICIENT_FUNDS, IN_PROGRESS, ERROR }
+    /** {@code UNCERTAIN}: the rent or upkeep withdraw outcome is unknown; nothing was granted or refunded. */
+    public enum RentResult { SUCCESS, DISABLED, UNKNOWN_PLOT, ALREADY_RENTED, MAX_PLOTS, INSUFFICIENT_FUNDS, IN_PROGRESS, ERROR, UNCERTAIN }
 
     private static final Set<UUID> IN_FLIGHT = ConcurrentHashMap.newKeySet();
 
@@ -252,9 +253,15 @@ public class PlotService {
         long paidUntil = now + config.plotPeriodMs();
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (price > 0 && !VaultUtil.withdraw(uuid, price)) {
-                TransactionLogger.logNote(player, "MARKET PLOT rent withdraw of " + price + " coppets failed");
-                finish(uuid, callback, RentResult.INSUFFICIENT_FUNDS);
+            // Indeterminate counts as not paid: no plot, no refund, lock released.
+            VaultUtil.Payment payment = price > 0
+                    ? VaultUtil.withdrawChecked(uuid, price, "plot rent of " + plotId)
+                    : VaultUtil.Payment.SUCCESS;
+            if (!payment.succeeded()) {
+                boolean uncertain = payment == VaultUtil.Payment.INDETERMINATE;
+                TransactionLogger.logNote(player, "MARKET PLOT rent withdraw of " + price + " coppets "
+                        + (uncertain ? "UNCERTAIN for " + plotId + ", manual reconciliation needed" : "failed"));
+                finish(uuid, callback, uncertain ? RentResult.UNCERTAIN : RentResult.INSUFFICIENT_FUNDS);
                 return;
             }
             db.transactionThenMain(conn -> {
@@ -302,9 +309,15 @@ public class PlotService {
         long period = config.plotPeriodMs();
 
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (price > 0 && !VaultUtil.withdraw(uuid, price)) {
-                TransactionLogger.logNote(player, "MARKET PLOT upkeep withdraw of " + price + " coppets failed");
-                finish(uuid, callback, RentResult.INSUFFICIENT_FUNDS);
+            // Indeterminate counts as not paid: no extension, no refund, lock released.
+            VaultUtil.Payment payment = price > 0
+                    ? VaultUtil.withdrawChecked(uuid, price, "plot upkeep of " + plotId)
+                    : VaultUtil.Payment.SUCCESS;
+            if (!payment.succeeded()) {
+                boolean uncertain = payment == VaultUtil.Payment.INDETERMINATE;
+                TransactionLogger.logNote(player, "MARKET PLOT upkeep withdraw of " + price + " coppets "
+                        + (uncertain ? "UNCERTAIN for " + plotId + ", manual reconciliation needed" : "failed"));
+                finish(uuid, callback, uncertain ? RentResult.UNCERTAIN : RentResult.INSUFFICIENT_FUNDS);
                 return;
             }
             db.transactionThenMain(conn -> {
@@ -660,7 +673,15 @@ public class PlotService {
     private void refund(Player player, UUID uuid, long amount, String reason) {
         if (amount <= 0) return;
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            boolean refunded = VaultUtil.deposit(uuid, amount);
+            VaultUtil.Payment refund = VaultUtil.depositChecked(uuid, amount, "plot refund (" + reason + ")");
+            if (refund == VaultUtil.Payment.INDETERMINATE) {
+                TransactionLogger.logNote(player, "MARKET PLOT refund of " + amount + " coppets ("
+                        + reason + ") UNCERTAIN, manual reconciliation needed");
+                plugin.getLogger().severe("UNCERTAIN: plot rent refund of " + amount + " coppets to " + uuid
+                        + " may or may not have landed; check the balance before compensating by hand.");
+                return;
+            }
+            boolean refunded = refund.succeeded();
             TransactionLogger.logNote(player, "MARKET PLOT refund of " + amount + " coppets ("
                     + reason + ") " + (refunded ? "OK" : "FAILED"));
             if (!refunded) {

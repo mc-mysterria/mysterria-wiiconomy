@@ -9,12 +9,16 @@ import dev.ua.ikeepcalm.wiic.domain.agora.db.StashDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.db.TransactionDao;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.Listing;
 import dev.ua.ikeepcalm.wiic.domain.agora.ledger.model.StashItem;
+import dev.ua.ikeepcalm.wiic.domain.agora.utils.journal.MarketJournal;
 import org.bukkit.Bukkit;
 import org.bukkit.scheduler.BukkitTask;
+import org.jetbrains.annotations.Nullable;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Periodic market housekeeping: expires overdue listings into their sellers'
@@ -29,12 +33,19 @@ public class ExpirySweeper {
     private final WIIC plugin;
     private final MarketConfig config;
     private final MarketDatabase db;
+    /** When set, reservations whose purchase is still journaled are never released. */
+    private final @Nullable MarketJournal journal;
     private BukkitTask task;
 
     public ExpirySweeper(WIIC plugin, MarketConfig config, MarketDatabase db) {
+        this(plugin, config, db, null);
+    }
+
+    public ExpirySweeper(WIIC plugin, MarketConfig config, MarketDatabase db, @Nullable MarketJournal journal) {
         this.plugin = plugin;
         this.config = config;
         this.db = db;
+        this.journal = journal;
     }
 
     public void start() {
@@ -58,8 +69,16 @@ public class ExpirySweeper {
 
     private void sweep() {
         long now = System.currentTimeMillis();
+        // A surviving BUY entry means the purchase is still in flight, or its money outcome
+        // is unknown and waits for startup recovery to hold it. Releasing that listing would
+        // let a second buyer take goods the first one may have paid for.
+        Set<UUID> journaled = journal == null ? Set.of() : journal.all().stream()
+                .filter(entry -> entry.type() == MarketJournal.Type.BUY)
+                // Legacy BUY entries carried the listing id as their own id.
+                .map(entry -> UUID.fromString(entry.ref() != null ? entry.ref() : entry.id()))
+                .collect(Collectors.toSet());
         db.submit(conn -> {
-            int released = ListingDao.releaseStaleReservations(conn, now - config.reservationTimeoutMs());
+            int released = ListingDao.releaseStaleReservations(conn, now - config.reservationTimeoutMs(), journaled);
             if (released > 0) plugin.getLogger().warning("Market sweeper released " + released + " stale reservations");
 
             List<Listing> expirable = ListingDao.findExpirable(conn, now, EXPIRE_BATCH);

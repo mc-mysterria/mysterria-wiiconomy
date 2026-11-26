@@ -72,7 +72,9 @@ public class PlotShopService {
 
     public enum BuyResult {
         SUCCESS, DISABLED, UNSTOCKED, SELF_PURCHASE, CLOSED, OUT_OF_STOCK,
-        INSUFFICIENT_FUNDS, BUSY, ERROR
+        INSUFFICIENT_FUNDS, BUSY, ERROR,
+        /** The withdraw outcome is unknown; no goods were taken and no refund is issued. */
+        UNCERTAIN
     }
 
     /**
@@ -423,10 +425,15 @@ public class PlotShopService {
         long price = shop.price();
         String itemName = shop.displayName() != null ? shop.displayName() : String.valueOf(shop.material());
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            if (!VaultUtil.withdraw(buyerId, price)) {
-                TransactionLogger.logNote(buyer, "MARKET STALL withdraw of " + price
-                        + " coppets failed at " + shop.plotId());
-                finish(buyerId, shop.id(), callback, Purchase.of(BuyResult.INSUFFICIENT_FUNDS));
+            // Indeterminate counts as not paid: no goods, no refund, locks released.
+            VaultUtil.Payment payment = VaultUtil.withdrawChecked(buyerId, price, "stall purchase at shop " + shop.id());
+            if (!payment.succeeded()) {
+                boolean uncertain = payment == VaultUtil.Payment.INDETERMINATE;
+                TransactionLogger.logNote(buyer, "MARKET STALL withdraw of " + price + " coppets "
+                        + (uncertain ? "UNCERTAIN" : "failed") + " at " + shop.plotId()
+                        + (uncertain ? ", manual reconciliation needed" : ""));
+                finish(buyerId, shop.id(), callback,
+                        Purchase.of(uncertain ? BuyResult.UNCERTAIN : BuyResult.INSUFFICIENT_FUNDS));
                 return;
             }
             Bukkit.getScheduler().runTask(plugin, () -> {
@@ -574,7 +581,15 @@ public class PlotShopService {
 
     private void refund(Player buyer, UUID buyerId, long amount, String reason) {
         Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
-            boolean refunded = VaultUtil.deposit(buyerId, amount);
+            VaultUtil.Payment refund = VaultUtil.depositChecked(buyerId, amount, "stall refund (" + reason + ")");
+            if (refund == VaultUtil.Payment.INDETERMINATE) {
+                TransactionLogger.logNote(buyer, "MARKET STALL refund of " + amount + " coppets ("
+                        + reason + ") UNCERTAIN, manual reconciliation needed");
+                plugin.getLogger().severe("UNCERTAIN: stall refund of " + amount + " coppets to " + buyerId
+                        + " may or may not have landed; check the balance before compensating by hand.");
+                return;
+            }
+            boolean refunded = refund.succeeded();
             TransactionLogger.logNote(buyer, "MARKET STALL refund of " + amount + " coppets ("
                     + reason + ") " + (refunded ? "OK" : "FAILED"));
             if (!refunded) {
